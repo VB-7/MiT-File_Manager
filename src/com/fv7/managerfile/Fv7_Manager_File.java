@@ -8,6 +8,17 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.os.Environment;
 import android.util.Base64;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.media.MediaPlayer;
+import android.os.Handler;
+import android.view.GestureDetector;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.ImageView;
+import android.widget.MediaController;
+import android.widget.VideoView;
 
 import com.google.appinventor.components.annotations.DesignerComponent;
 import com.google.appinventor.components.annotations.PropertyCategory;
@@ -23,6 +34,7 @@ import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
 import com.google.appinventor.components.runtime.ComponentContainer;
 import com.google.appinventor.components.runtime.EventDispatcher;
 import com.google.appinventor.components.runtime.OnDestroyListener;
+import com.google.appinventor.components.runtime.AndroidViewComponent;
 import com.google.appinventor.components.runtime.util.AsynchUtil;
 import com.google.appinventor.components.runtime.util.JsonUtil;
 
@@ -30,6 +42,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
@@ -45,10 +58,11 @@ import java.util.List;
 import java.util.Map;
 
 @DesignerComponent(
-    version = 1,
+    version = 2,
     description = "File manager + download manager mandiri: unduh (pause/resume/cancel per ID), "
         + "salin/pindah dengan progres, baca/tulis/list, file picker, open media, base64, uri/json. "
-        + "Path pendek per scope (Legacy, App, Private, Cache, Shared, Asset). Satu error global.",
+        + "Path pendek per scope (Legacy, App, Private, Cache, Shared, Asset). Satu error global. "
+        + "Plus media player dalam layout: gambar mandiri (path/URL/base64), video + audio ala VLC.",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21)
@@ -70,6 +84,61 @@ public class Fv7_Manager_File extends AndroidNonvisibleComponent
   private final Map<Integer, Integer> picks = new HashMap<Integer, Integer>();
 
   private static final long PROGRESS_MIN_MS = 400;
+  // ================= media settings + state (v2) =================
+
+  private int progressInterval = 500;
+  private int skipSeconds = 10;
+  private boolean showVideoController = true;
+  private boolean videoLooping = false;
+  private boolean audioLooping = false;
+  private int mediaVolume = 100;
+  private boolean doubleTapSeek = true;
+
+  private MediaPlayer audioPlayer = null;
+  private int audioId = 0;
+  private boolean audioReady = false;
+
+  private VideoView videoView = null;
+  private MediaController videoController = null;
+  private int videoId = 0;
+  private boolean videoReadyFlag = false;
+
+  private ImageView imageView = null;
+  private Handler mediaTicks = null;
+
+  private final Runnable mediaTick = new Runnable() {
+    public void run() {
+      try {
+        if (videoView != null && videoReadyFlag) {
+          try {
+            if (videoView.isPlaying()) {
+              int pos = videoView.getCurrentPosition();
+              int dur = videoView.getDuration();
+              int pct = dur > 0 ? ((int) (pos * 100L / dur)) : 0;
+              VideoProgress(videoId, pos, dur, pct);
+            }
+          } catch (Exception e) {
+            // abaikan
+          }
+        }
+        if (audioPlayer != null && audioReady) {
+          try {
+            if (audioPlayer.isPlaying()) {
+              int pos = audioPlayer.getCurrentPosition();
+              int dur = audioPlayer.getDuration();
+              int pct = dur > 0 ? ((int) (pos * 100L / dur)) : 0;
+              AudioProgress(audioId, pos, dur, pct);
+            }
+          } catch (Exception e) {
+            // abaikan
+          }
+        }
+      } catch (Exception e) {
+        // abaikan
+      }
+      updateTickState();
+    }
+  };
 
   private static final Map<String, String> MIME_EXT = new HashMap<String, String>();
   static {
@@ -1633,6 +1702,1132 @@ public class Fv7_Manager_File extends AndroidNonvisibleComponent
     });
   }
 
+  // ================= MEDIA (v2): tampil + putar di layout =================
+
+  private void updateTickState() {
+    try {
+      boolean need = false;
+      try {
+        if (videoView != null && videoReadyFlag && videoView.isPlaying()) {
+          need = true;
+        }
+      } catch (Exception e) {
+        // abaikan
+      }
+      try {
+        if (audioPlayer != null && audioReady && audioPlayer.isPlaying()) {
+          need = true;
+        }
+      } catch (Exception e) {
+        // abaikan
+      }
+      if (mediaTicks == null) {
+        mediaTicks = new Handler(context.getMainLooper());
+      }
+      mediaTicks.removeCallbacks(mediaTick);
+      if (need) {
+        int every = progressInterval > 0 ? progressInterval : 500;
+        mediaTicks.postDelayed(mediaTick, every);
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  private float volFloat() {
+    int v = mediaVolume;
+    if (v < 0) {
+      v = 0;
+    }
+    if (v > 100) {
+      v = 100;
+    }
+    return v / 100.0f;
+  }
+
+  private ViewGroup groupOf(AndroidViewComponent container) {
+    if (container == null) {
+      return null;
+    }
+    try {
+      View v = container.getView();
+      if (v instanceof ViewGroup) {
+        return (ViewGroup) v;
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    return null;
+  }
+
+  private void detachFromParent(View v) {
+    try {
+      if (v != null && v.getParent() instanceof ViewGroup) {
+        ((ViewGroup) v.getParent()).removeView(v);
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  private static boolean looksBase64(String s) {
+    if (s == null) {
+      return false;
+    }
+    String t = s.trim();
+    if (t.length() < 100) {
+      return false;
+    }
+    if (t.indexOf((char) 46) >= 0 || t.indexOf((char) 32) >= 0 || t.indexOf((char) 92) >= 0
+        || t.indexOf((char) 58) >= 0 || t.indexOf((char) 47) == 0) {
+      return false;
+    }
+    for (int i = 0; i < t.length(); i = i + 1) {
+      char c = t.charAt(i);
+      boolean ok = (c >= (char) 65 && c <= (char) 90) || (c >= (char) 97 && c <= (char) 122)
+          || (c >= (char) 48 && c <= (char) 57) || c == (char) 43 || c == (char) 47
+          || c == (char) 61 || c == (char) 13 || c == (char) 10;
+      if (!ok) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private byte[] readAll(InputStream in) throws Exception {
+    ByteArrayOutputStream bos = new ByteArrayOutputStream();
+    byte[] buf = new byte[32768];
+    int n;
+    while ((n = in.read(buf)) > 0) {
+      bos.write(buf, 0, n);
+    }
+    bos.flush();
+    return bos.toByteArray();
+  }
+
+  private Bitmap boundedDecode(byte[] data) {
+    try {
+      BitmapFactory.Options o = new BitmapFactory.Options();
+      o.inJustDecodeBounds = true;
+      BitmapFactory.decodeByteArray(data, 0, data.length, o);
+      int w = o.outWidth;
+      int h = o.outHeight;
+      int sample = 1;
+      while (((w / sample) > 2048 || (h / sample) > 2048) && sample < 16) {
+        sample = sample * 2;
+      }
+      BitmapFactory.Options o2 = new BitmapFactory.Options();
+      o2.inSampleSize = sample;
+      return BitmapFactory.decodeByteArray(data, 0, data.length, o2);
+    } catch (Exception e) {
+      return null;
+    }
+  }
+
+  private void stopAudioInternal() {
+    try {
+      if (audioPlayer != null) {
+        try {
+          audioPlayer.stop();
+        } catch (Exception e) {
+          // abaikan
+        }
+        try {
+          audioPlayer.reset();
+        } catch (Exception e) {
+          // abaikan
+        }
+        try {
+          audioPlayer.release();
+        } catch (Exception e) {
+          // abaikan
+        }
+        audioPlayer = null;
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    audioReady = false;
+  }
+
+  // ================= MEDIA: pengaturan =================
+
+  @SimpleProperty(description = "Jeda event AudioProgress/VideoProgress dalam milidetik (default 500).",
+      category = PropertyCategory.BEHAVIOR)
+  public int ProgressInterval() {
+    return progressInterval;
+  }
+
+  @SimpleProperty(category = PropertyCategory.BEHAVIOR)
+  public void ProgressInterval(int interval) {
+    progressInterval = interval <= 0 ? 500 : interval;
+    updateTickState();
+  }
+
+  @SimpleProperty(description = "Lompatan Maju/Mundur + double-tap dalam detik (default 10).",
+      category = PropertyCategory.BEHAVIOR)
+  public int SkipSeconds() {
+    return skipSeconds;
+  }
+
+  @SimpleProperty(category = PropertyCategory.BEHAVIOR)
+  public void SkipSeconds(int seconds) {
+    skipSeconds = seconds <= 0 ? 10 : seconds;
+  }
+
+  @SimpleProperty(description = "Tampilkan kontrol bawaan video (play/pause/seek). Default true.",
+      category = PropertyCategory.BEHAVIOR)
+  public boolean ShowVideoController() {
+    return showVideoController;
+  }
+
+  @SimpleProperty(category = PropertyCategory.BEHAVIOR)
+  public void ShowVideoController(boolean show) {
+    showVideoController = show;
+  }
+
+  @SimpleProperty(description = "Video mengulang otomatis bila selesai. Default false.",
+      category = PropertyCategory.BEHAVIOR)
+  public boolean VideoLooping() {
+    return videoLooping;
+  }
+
+  @SimpleProperty(category = PropertyCategory.BEHAVIOR)
+  public void VideoLooping(boolean loop) {
+    videoLooping = loop;
+  }
+
+  @SimpleProperty(description = "Audio mengulang otomatis bila selesai. Default false.",
+      category = PropertyCategory.BEHAVIOR)
+  public boolean AudioLooping() {
+    return audioLooping;
+  }
+
+  @SimpleProperty(category = PropertyCategory.BEHAVIOR)
+  public void AudioLooping(boolean loop) {
+    audioLooping = loop;
+  }
+
+  @SimpleProperty(description = "Volume video+audio 0-100 (default 100).",
+      category = PropertyCategory.BEHAVIOR)
+  public int MediaVolume() {
+    return mediaVolume;
+  }
+
+  @SimpleProperty(category = PropertyCategory.BEHAVIOR)
+  public void MediaVolume(int volume) {
+    if (volume < 0) {
+      volume = 0;
+    }
+    if (volume > 100) {
+      volume = 100;
+    }
+    mediaVolume = volume;
+    try {
+      if (audioPlayer != null && audioReady) {
+        float v = volFloat();
+        audioPlayer.setVolume(v, v);
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  @SimpleProperty(description = "Double-tap video: kiri = mundur, kanan = maju, tengah = pause/resume. Default true.",
+      category = PropertyCategory.BEHAVIOR)
+  public boolean DoubleTapSeek() {
+    return doubleTapSeek;
+  }
+
+  @SimpleProperty(category = PropertyCategory.BEHAVIOR)
+  public void DoubleTapSeek(boolean enabled) {
+    doubleTapSeek = enabled;
+  }
+
+  // ================= MEDIA: path + waktu =================
+
+  @SimpleFunction(description = "Path absolut dari scope+path (untuk Image.Picture / dynamic image). URL/base64/Asset = string kosong + Error.")
+  public String GetFullPath(FileScope scope, String path) {
+    try {
+      String p = clean(path);
+      if (p.length() == 0) {
+        error("Media", 0, "path kosong");
+        return "";
+      }
+      if (p.regionMatches(true, 0, "http", 0, 4) || p.startsWith("data:") || looksBase64(p)) {
+        error("Media", 0, "URL/base64 tidak punya path file (pakai ShowImage / Download dulu)");
+        return "";
+      }
+      File f = resolve(scope, path);
+      if (f == null) {
+        error("Media", 0, "Asset tidak punya path file (pakai ShowImage langsung)");
+        return "";
+      }
+      return f.getAbsolutePath();
+    } catch (Exception e) {
+      String m = e.getMessage();
+      error("Media", 0, m == null ? "path gagal di-resolve" : m);
+      return "";
+    }
+  }
+
+  @SimpleFunction(description = "Ubah milidetik jadi teks jam (m:ss / h:mm:ss) untuk Label durasi.")
+  public String FormatTime(int millis) {
+    try {
+      int total = millis / 1000;
+      if (total < 0) {
+        total = 0;
+      }
+      int sec = total % 60;
+      int min = (total / 60) % 60;
+      int hr = total / 3600;
+      String ss = sec < 10 ? "0" + sec : String.valueOf(sec);
+      if (hr > 0) {
+        String mm = min < 10 ? "0" + min : String.valueOf(min);
+        return hr + ":" + mm + ":" + ss;
+      }
+      return min + ":" + ss;
+    } catch (Exception e) {
+      return "0:00";
+    }
+  }
+
+  // ================= MEDIA: gambar =================
+
+  @SimpleFunction(description = "Tampilkan gambar ke layout (Arrangement MIT / dinamis). source kosong = pakai scope+path. source bisa: path file, file:/// absolut, http(s) URL (di-cache otomatis), atau base64 (mentah / data:...). Hasil lewat ImageReady.")
+  public void ShowImage(final AndroidViewComponent container, final String source,
+      final FileScope scope, final String path, final int id) {
+    final String src = clean(source == null ? "" : source);
+    final FileScope fS = scope;
+    final String fP = path == null ? "" : path;
+    final AndroidViewComponent fContainer = container;
+    AsynchUtil.runAsynchronously(new Runnable() {
+      public void run() {
+        Bitmap bmp = null;
+        String disp = "";
+        String err = "";
+        try {
+          if (src.regionMatches(true, 0, "http", 0, 4)) {
+            String name = sanitize(GuessFileName(src, "", ""));
+            File cache = context.getCacheDir();
+            if (!cache.exists()) {
+              cache.mkdirs();
+            }
+            File dst = uniqueFile(cache, "img_" + id + "_" + name);
+            HttpURLConnection c = (HttpURLConnection) new URL(src).openConnection();
+            c.setConnectTimeout(20000);
+            c.setReadTimeout(20000);
+            c.setInstanceFollowRedirects(true);
+            c.setRequestProperty("User-Agent", "Mozilla/5.0");
+            int code = c.getResponseCode();
+            if (code >= 400) {
+              err = "HTTP " + code;
+            } else {
+              InputStream in = c.getInputStream();
+              byte[] data;
+              try {
+                data = readAll(in);
+              } finally {
+                try {
+                  in.close();
+                } catch (Exception e) {
+                  // abaikan
+                }
+              }
+              try {
+                c.disconnect();
+              } catch (Exception e) {
+                // abaikan
+              }
+              bmp = boundedDecode(data);
+              if (bmp == null) {
+                err = "URL bukan gambar yang valid";
+              } else {
+                FileOutputStream out = new FileOutputStream(dst);
+                try {
+                  out.write(data);
+                  out.flush();
+                } finally {
+                  try {
+                    out.close();
+                  } catch (Exception e) {
+                    // abaikan
+                  }
+                }
+                disp = dst.getAbsolutePath();
+              }
+            }
+          } else if (src.startsWith("data:") || looksBase64(src)) {
+            String b64 = src;
+            int comma = src.indexOf((char) 44);
+            if (src.startsWith("data:") && comma >= 0) {
+              b64 = src.substring(comma + 1);
+            }
+            byte[] data = Base64.decode(b64.trim(), Base64.DEFAULT);
+            bmp = boundedDecode(data);
+            if (bmp == null) {
+              err = "base64 bukan gambar yang valid";
+            } else {
+              File cache = context.getCacheDir();
+              if (!cache.exists()) {
+                cache.mkdirs();
+              }
+              File dst = new File(cache, "img_" + id + ".png");
+              FileOutputStream out = new FileOutputStream(dst);
+              try {
+                out.write(data);
+                out.flush();
+              } finally {
+                try {
+                  out.close();
+                } catch (Exception e) {
+                  // abaikan
+                }
+              }
+              disp = dst.getAbsolutePath();
+            }
+          } else {
+            String usePath = src.length() > 0 ? src : fP;
+            String p = clean(usePath);
+            if (p.length() == 0) {
+              err = "path kosong";
+            } else if (fS == FileScope.Asset || isAssetPath(p)) {
+              InputStream in = context.getAssets().open(assetName(p));
+              byte[] data;
+              try {
+                data = readAll(in);
+              } finally {
+                try {
+                  in.close();
+                } catch (Exception e) {
+                  // abaikan
+                }
+              }
+              bmp = boundedDecode(data);
+              if (bmp == null) {
+                err = "asset bukan gambar yang valid";
+              } else {
+                disp = usePath;
+              }
+            } else {
+              File f = resolve(fS, usePath);
+              if (f == null || !f.exists()) {
+                err = "file tidak ada";
+              } else {
+                FileInputStream fin = new FileInputStream(f);
+                byte[] data;
+                try {
+                  data = readAll(fin);
+                } finally {
+                  try {
+                    fin.close();
+                  } catch (Exception e) {
+                    // abaikan
+                  }
+                }
+                bmp = boundedDecode(data);
+                if (bmp == null) {
+                  err = "file bukan gambar yang valid";
+                } else {
+                  disp = f.getAbsolutePath();
+                }
+              }
+            }
+          }
+        } catch (Exception e) {
+          String m = e.getMessage();
+          err = m == null ? "gambar gagal ditampilkan" : m;
+        }
+        final Bitmap fBmp = bmp;
+        final String fDisp = disp;
+        final String fErr = err;
+        if (fBmp == null) {
+          error("Image", id, fErr.length() > 0 ? fErr : "gambar gagal ditampilkan");
+          return;
+        }
+        try {
+          form.runOnUiThread(new Runnable() {
+            public void run() {
+              try {
+                ViewGroup vg = groupOf(fContainer);
+                if (vg == null) {
+                  error("Image", id, "layout tidak valid");
+                  return;
+                }
+                if (imageView == null) {
+                  imageView = new ImageView(activity);
+                  imageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                  imageView.setAdjustViewBounds(true);
+                }
+                detachFromParent(imageView);
+                ViewGroup.LayoutParams lp = new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+                imageView.setImageBitmap(fBmp);
+                vg.addView(imageView, lp);
+                ImageReady(id, fDisp);
+              } catch (Exception e) {
+                String m = e.getMessage();
+                error("Image", id, m == null ? "gambar gagal ditampilkan" : m);
+              }
+            }
+          });
+        } catch (Exception e) {
+          String m = e.getMessage();
+          error("Image", id, m == null ? "gambar gagal ditampilkan" : m);
+        }
+      }
+    });
+  }
+
+  @SimpleFunction(description = "Hapus gambar/video FV7 dari layout itu (komponen lain tidak diusik). Video ikut di-pause.")
+  public void ClearMedia(final AndroidViewComponent container) {
+    try {
+      form.runOnUiThread(new Runnable() {
+        public void run() {
+          try {
+            ViewGroup vg = groupOf(container);
+            if (vg == null) {
+              error("Media", 0, "layout tidak valid");
+              return;
+            }
+            if (imageView != null && imageView.getParent() == vg) {
+              vg.removeView(imageView);
+            }
+            if (videoView != null && videoView.getParent() == vg) {
+              try {
+                if (videoView.isPlaying()) {
+                  videoView.pause();
+                }
+              } catch (Exception e) {
+                // abaikan
+              }
+              updateTickState();
+              vg.removeView(videoView);
+            }
+          } catch (Exception e) {
+            String m = e.getMessage();
+            error("Media", 0, m == null ? "clear gagal" : m);
+          }
+        }
+      });
+    } catch (Exception e) {
+      String m = e.getMessage();
+      error("Media", 0, m == null ? "clear gagal" : m);
+    }
+  }
+
+  // ================= MEDIA: video =================
+
+  @SimpleFunction(description = "Putar video di dalam layout (Arrangement MIT / dinamis). path bisa file scope, file:/// absolut, atau http(s) URL (streaming). Atur tinggi arrangement (mis. 300px) agar video kelihatan. Kontrol: PauseVideo/ResumeVideo/StopVideo/SeekVideo/Maju/Mundur + double-tap.")
+  public void PlayVideoIn(final AndroidViewComponent container, final FileScope scope,
+      final String path, final int id) {
+    try {
+      form.runOnUiThread(new Runnable() {
+        public void run() {
+          try {
+            ViewGroup vg = groupOf(container);
+            if (vg == null) {
+              error("Video", id, "layout tidak valid");
+              return;
+            }
+            if (videoView == null) {
+              videoView = new VideoView(activity);
+              videoView.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
+                public void onPrepared(MediaPlayer mp) {
+                  try {
+                    mp.setLooping(videoLooping);
+                    float v = volFloat();
+                    mp.setVolume(v, v);
+                  } catch (Exception e) {
+                    // abaikan
+                  }
+                  videoReadyFlag = true;
+                  int dur = 0;
+                  try {
+                    dur = videoView.getDuration();
+                  } catch (Exception e) {
+                    // abaikan
+                  }
+                  VideoReady(videoId, dur);
+                  updateTickState();
+                }
+              });
+              videoView.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+                public void onCompletion(MediaPlayer mp) {
+                  if (videoLooping) {
+                    try {
+                      videoView.start();
+                    } catch (Exception e) {
+                      // abaikan
+                    }
+                    return;
+                  }
+                  videoReadyFlag = false;
+                  VideoFinished(videoId);
+                  updateTickState();
+                }
+              });
+              videoView.setOnErrorListener(new MediaPlayer.OnErrorListener() {
+                public boolean onError(MediaPlayer mp, int what, int extra) {
+                  videoReadyFlag = false;
+                  error("Video", videoId, "format tidak didukung / file rusak");
+                  updateTickState();
+                  return true;
+                }
+              });
+              final GestureDetector gd = new GestureDetector(activity,
+                  new GestureDetector.SimpleOnGestureListener() {
+                    public boolean onDoubleTap(MotionEvent e) {
+                      if (!doubleTapSeek) {
+                        return false;
+                      }
+                      try {
+                        float x = e.getX();
+                        int w = videoView.getWidth();
+                        int skip = skipSeconds * 1000;
+                        int pos = videoView.getCurrentPosition();
+                        int dur = 0;
+                        try {
+                          dur = videoView.getDuration();
+                        } catch (Exception ex) {
+                          // abaikan
+                        }
+                        if (x < w / 3.0f) {
+                          videoView.seekTo(Math.max(0, pos - skip));
+                        } else if (x > w * 2.0f / 3.0f) {
+                          if (dur > 0) {
+                            videoView.seekTo(Math.min(dur, pos + skip));
+                          } else {
+                            videoView.seekTo(pos + skip);
+                          }
+                        } else {
+                          if (videoView.isPlaying()) {
+                            videoView.pause();
+                          } else {
+                            videoView.start();
+                          }
+                          updateTickState();
+                        }
+                      } catch (Exception ex) {
+                        // abaikan
+                      }
+                      return true;
+                    }
+                  });
+              videoView.setOnTouchListener(new View.OnTouchListener() {
+                public boolean onTouch(View v, MotionEvent e) {
+                  try {
+                    if (doubleTapSeek) {
+                      gd.onTouchEvent(e);
+                    }
+                  } catch (Exception ex) {
+                    // abaikan
+                  }
+                  return false;
+                }
+              });
+            }
+            detachFromParent(videoView);
+            if (showVideoController) {
+              if (videoController == null) {
+                videoController = new MediaController(activity);
+              }
+              videoController.setAnchorView(videoView);
+              videoView.setMediaController(videoController);
+            } else {
+              videoView.setMediaController(null);
+            }
+            ViewGroup.LayoutParams lp = new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT);
+            vg.addView(videoView, lp);
+            videoId = id;
+            videoReadyFlag = false;
+            String sv = clean(path);
+            if (sv.length() == 0) {
+              error("Video", id, "path kosong");
+              return;
+            }
+            if (sv.regionMatches(true, 0, "http", 0, 4)) {
+              videoView.setVideoURI(Uri.parse(sv));
+            } else if (sv.startsWith("file://")) {
+              videoView.setVideoPath(stripLeadingSlash(sv.substring(7)));
+            } else if (scope == FileScope.Asset || isAssetPath(sv)) {
+              File cache = context.getCacheDir();
+              if (!cache.exists()) {
+                cache.mkdirs();
+              }
+              File dst = new File(cache, "vid_" + id + "_" + sanitize(GetFileName(assetName(sv))));
+              InputStream in = context.getAssets().open(assetName(sv));
+              try {
+                FileOutputStream out = new FileOutputStream(dst);
+                try {
+                  copyStream(in, out);
+                } finally {
+                  try {
+                    out.close();
+                  } catch (Exception e) {
+                    // abaikan
+                  }
+                }
+              } finally {
+                try {
+                  in.close();
+                } catch (Exception e) {
+                  // abaikan
+                }
+              }
+              videoView.setVideoPath(dst.getAbsolutePath());
+            } else {
+              File f = resolve(scope, sv);
+              if (f == null || !f.exists()) {
+                error("Video", id, "file tidak ada");
+                return;
+              }
+              videoView.setVideoPath(f.getAbsolutePath());
+            }
+            videoView.requestFocus();
+            videoView.start();
+            updateTickState();
+          } catch (Exception e) {
+            String m = e.getMessage();
+            error("Video", id, m == null ? "video gagal diputar" : m);
+          }
+        }
+      });
+    } catch (Exception e) {
+      String m = e.getMessage();
+      error("Video", id, m == null ? "video gagal diputar" : m);
+    }
+  }
+
+  @SimpleFunction(description = "Jeda video yang sedang main.")
+  public void PauseVideo() {
+    try {
+      if (videoView != null && videoReadyFlag && videoView.isPlaying()) {
+        videoView.pause();
+        updateTickState();
+      } else {
+        error("Video", 0, "tidak ada video yang main");
+      }
+    } catch (Exception e) {
+      String m = e.getMessage();
+      error("Video", 0, m == null ? "pause gagal" : m);
+    }
+  }
+
+  @SimpleFunction(description = "Lanjutkan video yang dijeda.")
+  public void ResumeVideo() {
+    try {
+      if (videoView != null && videoReadyFlag && !videoView.isPlaying()) {
+        videoView.start();
+        updateTickState();
+      } else {
+        error("Video", 0, "tidak ada video yang dijeda");
+      }
+    } catch (Exception e) {
+      String m = e.getMessage();
+      error("Video", 0, m == null ? "resume gagal" : m);
+    }
+  }
+
+  @SimpleFunction(description = "Hentikan video (putar lagi via PlayVideoIn).")
+  public void StopVideo() {
+    try {
+      if (videoView != null) {
+        try {
+          videoView.stopPlayback();
+        } catch (Exception e) {
+          // abaikan
+        }
+        videoReadyFlag = false;
+        updateTickState();
+      } else {
+        error("Video", 0, "tidak ada video");
+      }
+    } catch (Exception e) {
+      String m = e.getMessage();
+      error("Video", 0, m == null ? "stop gagal" : m);
+    }
+  }
+
+  @SimpleFunction(description = "Lompat video ke posisi (ms). Bisa dipasang ke Slider.PositionChanged.")
+  public void SeekVideo(int position) {
+    try {
+      if (videoView != null && videoReadyFlag) {
+        int pos = position < 0 ? 0 : position;
+        videoView.seekTo(pos);
+      } else {
+        error("Video", 0, "tidak ada video yang main");
+      }
+    } catch (Exception e) {
+      String m = e.getMessage();
+      error("Video", 0, m == null ? "seek gagal" : m);
+    }
+  }
+
+  @SimpleFunction(description = "Maju video sejauh SkipSeconds detik.")
+  public void ForwardVideo() {
+    try {
+      if (videoView != null && videoReadyFlag) {
+        int pos = videoView.getCurrentPosition();
+        int dur = 0;
+        try {
+          dur = videoView.getDuration();
+        } catch (Exception e) {
+          // abaikan
+        }
+        int skip = skipSeconds * 1000;
+        if (dur > 0) {
+          videoView.seekTo(Math.min(dur, pos + skip));
+        } else {
+          videoView.seekTo(pos + skip);
+        }
+      } else {
+        error("Video", 0, "tidak ada video yang main");
+      }
+    } catch (Exception e) {
+      String m = e.getMessage();
+      error("Video", 0, m == null ? "maju gagal" : m);
+    }
+  }
+
+  @SimpleFunction(description = "Mundur video sejauh SkipSeconds detik.")
+  public void BackwardVideo() {
+    try {
+      if (videoView != null && videoReadyFlag) {
+        int pos = videoView.getCurrentPosition();
+        videoView.seekTo(Math.max(0, pos - skipSeconds * 1000));
+      } else {
+        error("Video", 0, "tidak ada video yang main");
+      }
+    } catch (Exception e) {
+      String m = e.getMessage();
+      error("Video", 0, m == null ? "mundur gagal" : m);
+    }
+  }
+
+  @SimpleFunction(description = "Posisi video sekarang (ms).")
+  public int VideoPosition() {
+    try {
+      if (videoView != null && videoReadyFlag) {
+        return videoView.getCurrentPosition();
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    return 0;
+  }
+
+  @SimpleFunction(description = "Durasi video (ms). 0 bila belum siap.")
+  public int VideoDuration() {
+    try {
+      if (videoView != null && videoReadyFlag) {
+        int d = videoView.getDuration();
+        return d < 0 ? 0 : d;
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    return 0;
+  }
+
+  @SimpleFunction(description = "True bila video sedang main.")
+  public boolean IsVideoPlaying() {
+    try {
+      return videoView != null && videoReadyFlag && videoView.isPlaying();
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
+  // ================= MEDIA: audio =================
+
+  @SimpleFunction(description = "Putar audio (background, tanpa tampilan). path bisa file scope, file:/// absolut, atau http(s) URL (streaming). Tampilan (Slider/Label) bikin sendiri dari AudioProgress. Kontrol: PauseAudio/ResumeAudio/StopAudio/SeekAudio/Maju/Mundur.")
+  public void PlayAudio(final FileScope scope, final String path, final int id) {
+    try {
+      form.runOnUiThread(new Runnable() {
+        public void run() {
+          try {
+            stopAudioInternal();
+            final MediaPlayer mp = new MediaPlayer();
+            String sa = clean(path);
+            if (sa.length() == 0) {
+              error("Audio", id, "path kosong");
+              return;
+            }
+            if (sa.regionMatches(true, 0, "http", 0, 4)) {
+              mp.setDataSource(sa);
+            } else if (sa.startsWith("file://")) {
+              mp.setDataSource(stripLeadingSlash(sa.substring(7)));
+            } else if (scope == FileScope.Asset || isAssetPath(sa)) {
+              android.content.res.AssetFileDescriptor afd =
+                  context.getAssets().openFd(assetName(sa));
+              try {
+                mp.setDataSource(afd.getFileDescriptor(), afd.getStartOffset(), afd.getLength());
+              } finally {
+                try {
+                  afd.close();
+                } catch (Exception e) {
+                  // abaikan
+                }
+              }
+            } else {
+              File f = resolve(scope, sa);
+              if (f == null || !f.exists()) {
+                error("Audio", id, "file tidak ada");
+                return;
+              }
+              mp.setDataSource(f.getAbsolutePath());
+            }
+            audioPlayer = mp;
+            audioId = id;
+            audioReady = false;
+            mp.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
+              public void onPrepared(MediaPlayer p) {
+                if (audioPlayer != mp) {
+                  return;
+                }
+                try {
+                  p.setLooping(audioLooping);
+                  float v = volFloat();
+                  p.setVolume(v, v);
+                } catch (Exception e) {
+                  // abaikan
+                }
+                audioReady = true;
+                int dur = 0;
+                try {
+                  dur = p.getDuration();
+                  p.start();
+                } catch (Exception e) {
+                  // abaikan
+                }
+                AudioReady(audioId, dur);
+                updateTickState();
+              }
+            });
+            mp.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+              public void onCompletion(MediaPlayer p) {
+                if (audioPlayer != mp) {
+                  return;
+                }
+                if (audioLooping) {
+                  try {
+                    p.start();
+                  } catch (Exception e) {
+                    // abaikan
+                  }
+                  return;
+                }
+                audioReady = false;
+                AudioFinished(audioId);
+                updateTickState();
+              }
+            });
+            mp.setOnErrorListener(new MediaPlayer.OnErrorListener() {
+              public boolean onError(MediaPlayer p, int what, int extra) {
+                if (audioPlayer == mp) {
+                  audioReady = false;
+                  error("Audio", audioId, "format tidak didukung / file rusak");
+                  updateTickState();
+                }
+                return true;
+              }
+            });
+            mp.prepareAsync();
+          } catch (Exception e) {
+            String m = e.getMessage();
+            error("Audio", id, m == null ? "audio gagal diputar" : m);
+          }
+        }
+      });
+    } catch (Exception e) {
+      String m = e.getMessage();
+      error("Audio", id, m == null ? "audio gagal diputar" : m);
+    }
+  }
+
+  @SimpleFunction(description = "Jeda audio yang sedang bunyi.")
+  public void PauseAudio() {
+    try {
+      if (audioPlayer != null && audioReady && audioPlayer.isPlaying()) {
+        audioPlayer.pause();
+        updateTickState();
+      } else {
+        error("Audio", 0, "tidak ada audio yang bunyi");
+      }
+    } catch (Exception e) {
+      String m = e.getMessage();
+      error("Audio", 0, m == null ? "pause gagal" : m);
+    }
+  }
+
+  @SimpleFunction(description = "Lanjutkan audio yang dijeda.")
+  public void ResumeAudio() {
+    try {
+      if (audioPlayer != null && audioReady && !audioPlayer.isPlaying()) {
+        audioPlayer.start();
+        updateTickState();
+      } else {
+        error("Audio", 0, "tidak ada audio yang dijeda");
+      }
+    } catch (Exception e) {
+      String m = e.getMessage();
+      error("Audio", 0, m == null ? "resume gagal" : m);
+    }
+  }
+
+  @SimpleFunction(description = "Hentikan audio (putar lagi via PlayAudio).")
+  public void StopAudio() {
+    try {
+      if (audioPlayer != null) {
+        stopAudioInternal();
+        updateTickState();
+      } else {
+        error("Audio", 0, "tidak ada audio");
+      }
+    } catch (Exception e) {
+      String m = e.getMessage();
+      error("Audio", 0, m == null ? "stop gagal" : m);
+    }
+  }
+
+  @SimpleFunction(description = "Lompat audio ke posisi (ms). Bisa dipasang ke Slider.PositionChanged.")
+  public void SeekAudio(int position) {
+    try {
+      if (audioPlayer != null && audioReady) {
+        int pos = position < 0 ? 0 : position;
+        audioPlayer.seekTo(pos);
+      } else {
+        error("Audio", 0, "tidak ada audio yang bunyi");
+      }
+    } catch (Exception e) {
+      String m = e.getMessage();
+      error("Audio", 0, m == null ? "seek gagal" : m);
+    }
+  }
+
+  @SimpleFunction(description = "Maju audio sejauh SkipSeconds detik.")
+  public void ForwardAudio() {
+    try {
+      if (audioPlayer != null && audioReady) {
+        int pos = audioPlayer.getCurrentPosition();
+        int dur = 0;
+        try {
+          dur = audioPlayer.getDuration();
+        } catch (Exception e) {
+          // abaikan
+        }
+        int skip = skipSeconds * 1000;
+        if (dur > 0) {
+          audioPlayer.seekTo(Math.min(dur, pos + skip));
+        } else {
+          audioPlayer.seekTo(pos + skip);
+        }
+      } else {
+        error("Audio", 0, "tidak ada audio yang bunyi");
+      }
+    } catch (Exception e) {
+      String m = e.getMessage();
+      error("Audio", 0, m == null ? "maju gagal" : m);
+    }
+  }
+
+  @SimpleFunction(description = "Mundur audio sejauh SkipSeconds detik.")
+  public void BackwardAudio() {
+    try {
+      if (audioPlayer != null && audioReady) {
+        int pos = audioPlayer.getCurrentPosition();
+        audioPlayer.seekTo(Math.max(0, pos - skipSeconds * 1000));
+      } else {
+        error("Audio", 0, "tidak ada audio yang bunyi");
+      }
+    } catch (Exception e) {
+      String m = e.getMessage();
+      error("Audio", 0, m == null ? "mundur gagal" : m);
+    }
+  }
+
+  @SimpleFunction(description = "Posisi audio sekarang (ms).")
+  public int AudioPosition() {
+    try {
+      if (audioPlayer != null && audioReady) {
+        return audioPlayer.getCurrentPosition();
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    return 0;
+  }
+
+  @SimpleFunction(description = "Durasi audio (ms). 0 bila belum siap.")
+  public int AudioDuration() {
+    try {
+      if (audioPlayer != null && audioReady) {
+        int d = audioPlayer.getDuration();
+        return d < 0 ? 0 : d;
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    return 0;
+  }
+
+  @SimpleFunction(description = "True bila audio sedang bunyi.")
+  public boolean IsAudioPlaying() {
+    try {
+      return audioPlayer != null && audioReady && audioPlayer.isPlaying();
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
+  // ================= MEDIA EVENTS =================
+
+  @SimpleEvent(description = "Gambar berhasil tampil di layout: id + path yang dipakai.")
+  public void ImageReady(int id, String path) {
+    EventDispatcher.dispatchEvent(this, "ImageReady",
+        Integer.valueOf(id), path);
+  }
+
+  @SimpleEvent(description = "Video siap + mulai main: id + durasi (ms).")
+  public void VideoReady(int id, int duration) {
+    EventDispatcher.dispatchEvent(this, "VideoReady",
+        Integer.valueOf(id), Integer.valueOf(duration));
+  }
+
+  @SimpleEvent(description = "Progres video: posisi + durasi (ms) + persen 0-100. Interval via ProgressInterval.")
+  public void VideoProgress(int id, int position, int duration, int percent) {
+    EventDispatcher.dispatchEvent(this, "VideoProgress",
+        Integer.valueOf(id), Integer.valueOf(position), Integer.valueOf(duration),
+        Integer.valueOf(percent));
+  }
+
+  @SimpleEvent(description = "Video selesai (tidak loop). Putar lagi via PlayVideoIn.")
+  public void VideoFinished(int id) {
+    EventDispatcher.dispatchEvent(this, "VideoFinished", Integer.valueOf(id));
+  }
+
+  @SimpleEvent(description = "Audio siap + mulai bunyi: id + durasi (ms).")
+  public void AudioReady(int id, int duration) {
+    EventDispatcher.dispatchEvent(this, "AudioReady",
+        Integer.valueOf(id), Integer.valueOf(duration));
+  }
+
+  @SimpleEvent(description = "Progres audio: posisi + durasi (ms) + persen 0-100. Interval via ProgressInterval.")
+  public void AudioProgress(int id, int position, int duration, int percent) {
+    EventDispatcher.dispatchEvent(this, "AudioProgress",
+        Integer.valueOf(id), Integer.valueOf(position), Integer.valueOf(duration),
+        Integer.valueOf(percent));
+  }
+
+  @SimpleEvent(description = "Audio selesai (tidak loop). Putar lagi via PlayAudio.")
+  public void AudioFinished(int id) {
+    EventDispatcher.dispatchEvent(this, "AudioFinished", Integer.valueOf(id));
+  }
+
   // ================= EVENTS =================
 
   @SimpleEvent(description = "Progres unduhan: persen 0-100 + byte.")
@@ -1824,11 +3019,59 @@ public class Fv7_Manager_File extends AndroidNonvisibleComponent
     return "Json";
   }
 
+  @SimpleProperty(description = "Nama operasi Video (untuk if di ErrorOccurred).",
+      category = PropertyCategory.BEHAVIOR)
+  public String OpVideo() {
+    return "Video";
+  }
+
+  @SimpleProperty(description = "Nama operasi Audio (untuk if di ErrorOccurred).",
+      category = PropertyCategory.BEHAVIOR)
+  public String OpAudio() {
+    return "Audio";
+  }
+
+  @SimpleProperty(description = "Nama operasi Image (untuk if di ErrorOccurred).",
+      category = PropertyCategory.BEHAVIOR)
+  public String OpImage() {
+    return "Image";
+  }
+
   // ================= destroy =================
 
   public void onDestroy() {
     try {
       form.unregisterForActivityResult(this);
+    } catch (Exception e) {
+      // abaikan
+    }
+    try {
+      if (mediaTicks != null) {
+        mediaTicks.removeCallbacks(mediaTick);
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    stopAudioInternal();
+    try {
+      if (videoView != null) {
+        try {
+          videoView.stopPlayback();
+        } catch (Exception e) {
+          // abaikan
+        }
+        detachFromParent(videoView);
+        videoView = null;
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    videoReadyFlag = false;
+    try {
+      if (imageView != null) {
+        detachFromParent(imageView);
+        imageView = null;
+      }
     } catch (Exception e) {
       // abaikan
     }
