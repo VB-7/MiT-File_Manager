@@ -599,8 +599,140 @@ public class Tools_File extends AndroidNonvisibleComponent
     }
   }
 
-  private void walkFiles(File dir, String ext, boolean recursive, ArrayList<String> out) {
+  // ================= TIPE FILE (helper kategori) =================
+
+  @SimpleFunction(description = "Kategori file dari nama/path: image, audio, "
+      + "video, text, archive, document, apk, atau unknown. Berdasarkan "
+      + "ekstensi (tak peduli huruf besar: foto.JPG -> image). Bandingkan "
+      + "hasilnya dengan blok TypeImage/TypeAudio/dll. Daftar ekstensi tiap "
+      + "kategori via GetExtensionsForType.")
+  public String FileTypeOf(String pathOrName) {
+    return Shared.fileCategory(pathOrName);
+  }
+
+  @SimpleFunction(description = "Daftar file (path lengkap) yang kategorinya "
+      + "cocok. type = image/audio/video/text/archive/document/apk (boleh "
+      + "juga alias: gambar/musik/vidio/teks/arsip/dokumen) atau salah satu "
+      + "blok TypeImage/dll. includeSubfolders = sertakan isi subfolder. "
+      + "Tipe tak dikenal via ErrorOccurred (OpFile).")
+  public List<String> ListFilesByType(FileScope scope, String folder,
+      String type, boolean includeSubfolders) {
+    ArrayList<String> out = new ArrayList<String>();
+    String cat = Shared.normCategory(type);
+    if (cat.length() == 0) {
+      Shared.err(this, "File", 0, "tipe tidak dikenal: "
+          + (type == null ? "" : type));
+      return out;
+    }
+    try {
+      String p = Shared.clean(folder);
+      if (scope == FileScope.Asset || Shared.isAssetPath(p)) {
+        String[] l = context.getAssets().list(Shared.assetName(p));
+        if (l != null) {
+          for (int i = 0; i < l.length; i = i + 1) {
+            if (cat.equals(Shared.fileCategory(l[i]))) {
+              out.add("//" + Shared.assetName(p) + "/" + l[i]);
+            }
+          }
+        }
+        Collections.sort(out);
+        return out;
+      }
+      File d = Shared.resolve(context, scope, folder);
+      if (d == null || !d.isDirectory()) {
+        Shared.err(this, "File", 0, "folder tidak ada");
+        return out;
+      }
+      walkFilesByCat(d, cat, includeSubfolders, out);
+      Collections.sort(out);
+    } catch (Exception e) {
+      String m = e.getMessage();
+      Shared.err(this, "File", 0, m == null ? "list gagal" : m);
+    }
+    return out;
+  }
+
+  private void walkFilesByCat(File dir, String cat, boolean recursive,
+      ArrayList<String> out) {
     File[] fs = dir.listFiles();
+    if (fs == null) {
+      return;
+    }
+    for (int i = 0; i < fs.length; i = i + 1) {
+      File g = fs[i];
+      if (g.isDirectory()) {
+        if (recursive) {
+          walkFilesByCat(g, cat, true, out);
+        }
+      } else if (cat.equals(Shared.fileCategory(g.getName()))) {
+        out.add(g.getAbsolutePath());
+      }
+    }
+  }
+
+  @SimpleFunction(description = "Daftar ekstensi (tanpa titik) yang masuk "
+      + "kategori type. Cth: image -> [bmp, gif, heic, ..., webp]. Berguna "
+      + "untuk melihat cakupan tiap kategori. Tipe tak dikenal = list kosong "
+      + "+ error.")
+  public List<String> GetExtensionsForType(String type) {
+    String cat = Shared.normCategory(type);
+    if (cat.length() == 0) {
+      Shared.err(this, "File", 0, "tipe tidak dikenal: "
+          + (type == null ? "" : type));
+      return new ArrayList<String>();
+    }
+    return Shared.extensionsFor(cat);
+  }
+
+  @SimpleProperty(description = "Pembanding read-only kategori: image.",
+      category = PropertyCategory.BEHAVIOR)
+  public String TypeImage() {
+    return "image";
+  }
+
+  @SimpleProperty(description = "Pembanding read-only kategori: audio.",
+      category = PropertyCategory.BEHAVIOR)
+  public String TypeAudio() {
+    return "audio";
+  }
+
+  @SimpleProperty(description = "Pembanding read-only kategori: video.",
+      category = PropertyCategory.BEHAVIOR)
+  public String TypeVideo() {
+    return "video";
+  }
+
+  @SimpleProperty(description = "Pembanding read-only kategori: text.",
+      category = PropertyCategory.BEHAVIOR)
+  public String TypeText() {
+    return "text";
+  }
+
+  @SimpleProperty(description = "Pembanding read-only kategori: archive.",
+      category = PropertyCategory.BEHAVIOR)
+  public String TypeArchive() {
+    return "archive";
+  }
+
+  @SimpleProperty(description = "Pembanding read-only kategori: document.",
+      category = PropertyCategory.BEHAVIOR)
+  public String TypeDocument() {
+    return "document";
+  }
+
+  @SimpleProperty(description = "Pembanding read-only kategori: apk.",
+      category = PropertyCategory.BEHAVIOR)
+  public String TypeApk() {
+    return "apk";
+  }
+
+  @SimpleProperty(description = "Pembanding read-only kategori: unknown.",
+      category = PropertyCategory.BEHAVIOR)
+  public String TypeUnknown() {
+    return "unknown";
+  }
+
+  private void walkFiles(File dir, String ext, boolean recursive, ArrayList<String> out) {    File[] fs = dir.listFiles();
     if (fs == null) {
       return;
     }

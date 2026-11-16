@@ -391,6 +391,107 @@ public final class Shared {
     return e == null ? "" : e;
   }
 
+  // ================= kategori file =================
+
+  public static final String[] IMAGE_EXTS = {"bmp", "gif", "heic", "heif",
+      "ico", "jpg", "jpeg", "png", "svg", "tif", "tiff", "wbmp", "webp"};
+  public static final String[] AUDIO_EXTS = {"aac", "amr", "flac", "m4a",
+      "mid", "midi", "mp3", "oga", "ogg", "opus", "wav", "weba"};
+  public static final String[] VIDEO_EXTS = {"avi", "flv", "m2ts", "mkv",
+      "mov", "mp4", "mpeg", "mpg", "ts", "webm", "wmv", "3gp"};
+  public static final String[] TEXT_EXTS = {"css", "csv", "htm", "html",
+      "ini", "js", "json", "log", "md", "txt", "xml", "yaml", "yml"};
+  public static final String[] ARCHIVE_EXTS = {"7z", "bz2", "gz", "rar",
+      "tar", "xz", "zip"};
+  public static final String[] DOC_EXTS = {"doc", "docx", "epub", "odp",
+      "ods", "odt", "pdf", "ppt", "pptx", "rtf", "xls", "xlsx"};
+
+  private static final Map<String, String> EXT_TO_CAT =
+      new HashMap<String, String>();
+  static {
+    putExts(IMAGE_EXTS, "image");
+    putExts(AUDIO_EXTS, "audio");
+    putExts(VIDEO_EXTS, "video");
+    putExts(TEXT_EXTS, "text");
+    putExts(ARCHIVE_EXTS, "archive");
+    putExts(DOC_EXTS, "document");
+    EXT_TO_CAT.put("apk", "apk");
+  }
+
+  private static void putExts(String[] exts, String cat) {
+    for (int i = 0; i < exts.length; i = i + 1) {
+      EXT_TO_CAT.put(exts[i], cat);
+    }
+  }
+
+  /** Kategori file dari nama/path: image/audio/video/text/archive/document/
+   *  apk/unknown. Berdasarkan ekstensi (tak peduli huruf besar). */
+  public static String fileCategory(String fileName) {
+    String ext = extensionOf(fileName == null ? "" : fileName);
+    if (ext.length() == 0) {
+      return "unknown";
+    }
+    String c = EXT_TO_CAT.get(ext);
+    return c == null ? "unknown" : c;
+  }
+
+  /** Normalisasi input tipe ke kanonik (terima alias Indonesia/Inggris).
+   *  Kembali "" bila tidak dikenal. */
+  public static String normCategory(String type) {
+    String t = type == null ? "" : type.trim().toLowerCase();
+    if (t.equals("image") || t.equals("images") || t.equals("gambar")
+        || t.equals("foto") || t.equals("picture")) {
+      return "image";
+    } else if (t.equals("audio") || t.equals("audios") || t.equals("suara")
+        || t.equals("musik") || t.equals("lagu") || t.equals("sound")) {
+      return "audio";
+    } else if (t.equals("video") || t.equals("videos") || t.equals("vidio")
+        || t.equals("film")) {
+      return "video";
+    } else if (t.equals("text") || t.equals("teks")) {
+      return "text";
+    } else if (t.equals("archive") || t.equals("archives")
+        || t.equals("arsip") || t.equals("kompres")) {
+      return "archive";
+    } else if (t.equals("document") || t.equals("documents")
+        || t.equals("dokumen")) {
+      return "document";
+    } else if (t.equals("apk")) {
+      return "apk";
+    } else if (t.equals("unknown") || t.equals("lain")
+        || t.equals("lainnya") || t.equals("other")) {
+      return "unknown";
+    }
+    return "";
+  }
+
+  /** Daftar ekstensi (tanpa titik, urut) untuk satu kategori kanonik. */
+  public static List<String> extensionsFor(String category) {
+    ArrayList<String> out = new ArrayList<String>();
+    String[] src = null;
+    if ("image".equals(category)) {
+      src = IMAGE_EXTS;
+    } else if ("audio".equals(category)) {
+      src = AUDIO_EXTS;
+    } else if ("video".equals(category)) {
+      src = VIDEO_EXTS;
+    } else if ("text".equals(category)) {
+      src = TEXT_EXTS;
+    } else if ("archive".equals(category)) {
+      src = ARCHIVE_EXTS;
+    } else if ("document".equals(category)) {
+      src = DOC_EXTS;
+    } else if ("apk".equals(category)) {
+      src = new String[] {"apk"};
+    }
+    if (src != null) {
+      for (int i = 0; i < src.length; i = i + 1) {
+        out.add(src[i]);
+      }
+    }
+    return out;
+  }
+
   // ================= format bantu =================
 
   public static String formatTime(int millis) {

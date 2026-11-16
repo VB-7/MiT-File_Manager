@@ -43,6 +43,8 @@ public class Tools_Layout extends AndroidNonvisibleComponent
   private static final Map<Integer, Component> layouts =
       new HashMap<Integer, Component>();
   private static final Object layoutLock = new Object();
+  private static final Map<Integer, String> layoutTypes =
+      new HashMap<Integer, String>();
 
   public Tools_Layout(ComponentContainer container) {
     super(container.$form());
@@ -53,6 +55,7 @@ public class Tools_Layout extends AndroidNonvisibleComponent
     Component c = null;
     synchronized (layoutLock) {
       c = layouts.remove(Integer.valueOf(id));
+      layoutTypes.remove(Integer.valueOf(id));
     }
     View root = null;
     if (c instanceof AndroidViewComponent) {
@@ -199,6 +202,7 @@ public class Tools_Layout extends AndroidNonvisibleComponent
       }
       synchronized (layoutLock) {
         layouts.put(Integer.valueOf(id), made);
+        layoutTypes.put(Integer.valueOf(id), type);
       }
       Ids.setActive(Ids.LAYOUT, id, true);
       LayoutCreated(id, type);
@@ -315,6 +319,43 @@ public class Tools_Layout extends AndroidNonvisibleComponent
     for (int i = 0; i < all.size(); i = i + 1) {
       clearStatic(all.get(i).intValue());
     }
+  }
+
+  // ================= TYPE (pembanding, read-only) =================
+
+  @SimpleFunction(description = "Tipe layout ber-id (\"VerticalArrangement\" "
+      + "dkk, sama dengan typeName di LayoutCreated). Bandingkan dengan blok "
+      + "TypeVertical/TypeHorizontal/TypeVerticalScroll/TypeHorizontalScroll. "
+      + "Kosong bila id tidak ada.")
+  public String GetLayoutType(int id) {
+    synchronized (layoutLock) {
+      String t = layoutTypes.get(Integer.valueOf(id));
+      return t == null ? "" : t;
+    }
+  }
+
+  @SimpleProperty(description = "Pembanding read-only: tipe VerticalArrangement.",
+      category = PropertyCategory.BEHAVIOR)
+  public String TypeVertical() {
+    return "VerticalArrangement";
+  }
+
+  @SimpleProperty(description = "Pembanding read-only: tipe HorizontalArrangement.",
+      category = PropertyCategory.BEHAVIOR)
+  public String TypeHorizontal() {
+    return "HorizontalArrangement";
+  }
+
+  @SimpleProperty(description = "Pembanding read-only: tipe VerticalScrollArrangement.",
+      category = PropertyCategory.BEHAVIOR)
+  public String TypeVerticalScroll() {
+    return "VerticalScrollArrangement";
+  }
+
+  @SimpleProperty(description = "Pembanding read-only: tipe HorizontalScrollArrangement.",
+      category = PropertyCategory.BEHAVIOR)
+  public String TypeHorizontalScroll() {
+    return "HorizontalScrollArrangement";
   }
 
   // ================= EVENTS =================
