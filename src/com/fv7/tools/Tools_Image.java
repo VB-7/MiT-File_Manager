@@ -32,13 +32,16 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @DesignerComponent(
     version = 1,
-    description = "Tools_Image: tampilkan gambar ke layout (path/URL/base64 mandiri) + "
-        + "gambar dari base64 + info ukuran. Sukses tampil tanpa event (langsung "
-        + "kelihatan); gagal via ErrorOccurred.",
+    description = "Tools_Image: tampilkan BANYAK gambar ber-id ke layout (path/URL/base64 mandiri) + "
+        + "gambar dari base64 + info ukuran. Id dikelola CreateImageId / Tools_Base. "
+        + "Sukses tampil tanpa event (langsung kelihatan); gagal via ErrorOccurred. "
+        + "List id URUT PEMBUATAN.",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,
@@ -52,7 +55,9 @@ public class Tools_Image extends AndroidNonvisibleComponent
 
   private final Context context;
   private final Activity activity;
-  private ImageView imageView = null;
+
+  private static final Map<Integer, ImageView> views = new HashMap<Integer, ImageView>();
+  private static final Object viewLock = new Object();
 
   public Tools_Image(ComponentContainer container) {
     super(container.$form());
@@ -128,13 +133,30 @@ public class Tools_Image extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Tampilkan gambar ke layout (Arrangement MIT / dinamis). "
-      + "source kosong = pakai scope+path. source bisa: path file, file:/// absolut, "
-      + "http(s) URL (di-cache otomatis), atau base64 (mentah / data:...). "
-      + "id = penanda (minta ke Tools_Base) — dipakai di ErrorOccurred bila gagal. "
-      + "Sukses tidak menembak event (gambar langsung kelihatan).")
+  @SimpleFunction(description = "Tampilkan gambar ber-id ke layout (Arrangement MIT / dinamis). "
+      + "Bisa jalan bareng (satu id = satu gambar). source kosong = pakai scope+path. "
+      + "source bisa: path file, file:/// absolut, http(s) URL (di-cache otomatis), "
+      + "atau base64 (mentah / data:...). id = penanda (minta ke CreateImageId / "
+      + "Tools_Base CreateUniqueId, reservasi otomatis diadopsi). Sukses tidak menembak "
+      + "event (gambar langsung kelihatan); gagal via ErrorOccurred.")
   public void ShowImage(final AndroidViewComponent container, final String source,
       final FileScope scope, final String path, final int id) {
+    if (id < 1) {
+      Shared.err(this, "Image", id, "id harus >= 1 (pakai CreateImageId)");
+      return;
+    }
+    if (!Ids.register(Ids.IMAGE, id)) {
+      Shared.err(this, "Image", id, "ID " + id + " sedang dipakai gambar lain");
+      return;
+    }
+    synchronized (viewLock) {
+      if (views.containsKey(Integer.valueOf(id))) {
+        Shared.err(this, "Image", id, "ID " + id + " masih tampil "
+            + "(Remove/Clear dulu)");
+        return;
+      }
+    }
+    Ids.setActive(Ids.IMAGE, id, true);
     final String src = Shared.clean(source == null ? "" : source);
     final FileScope fS = scope;
     final String fP = path == null ? "" : path;
@@ -248,7 +270,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
                 disp = usePath;
               }
             } else {
-              File f = Shared.resolve(context, fS, usePath);
+              File f = Shared.resolve(context, scope, usePath);
               if (f == null || !f.exists()) {
                 err = "file tidak ada";
               } else {
@@ -279,6 +301,8 @@ public class Tools_Image extends AndroidNonvisibleComponent
         final Bitmap fBmp = bmp;
         final String fErr = err;
         if (fBmp == null) {
+          Ids.setActive(Ids.IMAGE, id, false);
+          Ids.unregister(Ids.IMAGE, id);
           Shared.err(Tools_Image.this, "Image", id,
               fErr.length() > 0 ? fErr : "gambar gagal ditampilkan");
           return;
@@ -289,22 +313,31 @@ public class Tools_Image extends AndroidNonvisibleComponent
               try {
                 ViewGroup vg = groupOf(fContainer);
                 if (vg == null) {
+                  Ids.setActive(Ids.IMAGE, id, false);
+                  Ids.unregister(Ids.IMAGE, id);
                   Shared.err(Tools_Image.this, "Image", id, "layout tidak valid");
                   return;
                 }
-                if (imageView == null) {
-                  imageView = new ImageView(activity);
-                  imageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
-                  imageView.setAdjustViewBounds(true);
+                ImageView iv;
+                synchronized (viewLock) {
+                  iv = views.get(Integer.valueOf(id));
+                  if (iv == null) {
+                    iv = new ImageView(activity);
+                    iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                    iv.setAdjustViewBounds(true);
+                    views.put(Integer.valueOf(id), iv);
+                  }
                 }
-                detach(imageView);
+                detach(iv);
                 ViewGroup.LayoutParams lp = new ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT);
-                imageView.setImageBitmap(fBmp);
-                vg.addView(imageView, lp);
+                iv.setImageBitmap(fBmp);
+                vg.addView(iv, lp);
               } catch (Exception e) {
                 String m = e.getMessage();
+                Ids.setActive(Ids.IMAGE, id, false);
+                Ids.unregister(Ids.IMAGE, id);
                 Shared.err(Tools_Image.this, "Image", id,
                     m == null ? "gambar gagal ditampilkan" : m);
               }
@@ -312,6 +345,8 @@ public class Tools_Image extends AndroidNonvisibleComponent
           });
         } catch (Exception e) {
           String m = e.getMessage();
+          Ids.setActive(Ids.IMAGE, id, false);
+          Ids.unregister(Ids.IMAGE, id);
           Shared.err(Tools_Image.this, "Image", id,
               m == null ? "gambar gagal ditampilkan" : m);
         }
@@ -342,8 +377,8 @@ public class Tools_Image extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Hapus gambar Tools_Image dari layout itu (komponen lain "
-      + "tidak diusik).")
+  @SimpleFunction(description = "Hapus SEMUA gambar Tools_Image dari layout itu "
+      + "(komponen lain tidak diusik, id ikut dilepas).")
   public void ClearImage(final AndroidViewComponent container) {
     try {
       form.runOnUiThread(new Runnable() {
@@ -354,8 +389,25 @@ public class Tools_Image extends AndroidNonvisibleComponent
               Shared.err(Tools_Image.this, "Image", 0, "layout tidak valid");
               return;
             }
-            if (imageView != null && imageView.getParent() == vg) {
-              vg.removeView(imageView);
+            synchronized (viewLock) {
+              ArrayList<Integer> gone = new ArrayList<Integer>();
+              for (Map.Entry<Integer, ImageView> en : views.entrySet()) {
+                ImageView iv = en.getValue();
+                if (iv != null && iv.getParent() == vg) {
+                  try {
+                    vg.removeView(iv);
+                  } catch (Exception e) {
+                    // abaikan
+                  }
+                  gone.add(en.getKey());
+                }
+              }
+              for (int i = 0; i < gone.size(); i = i + 1) {
+                int gid = gone.get(i).intValue();
+                views.remove(Integer.valueOf(gid));
+                Ids.setActive(Ids.IMAGE, gid, false);
+                Ids.unregister(Ids.IMAGE, gid);
+              }
             }
           } catch (Exception e) {
             String m = e.getMessage();
@@ -365,8 +417,79 @@ public class Tools_Image extends AndroidNonvisibleComponent
       });
     } catch (Exception e) {
       String m = e.getMessage();
-      Shared.err(Tools_Image.this, "Image", 0, m == null ? "clear gagal" : m);
+      Shared.err(this, "Image", 0, m == null ? "clear gagal" : m);
     }
+  }
+
+  /** Lepas satu gambar ber-id (lepas view + lepas id). Dipakai komponen + Base. */
+  public static void clearStatic(int id) {
+    synchronized (viewLock) {
+      ImageView iv = views.remove(Integer.valueOf(id));
+      if (iv != null) {
+        try {
+          if (iv.getParent() instanceof ViewGroup) {
+            ((ViewGroup) iv.getParent()).removeView(iv);
+          }
+        } catch (Exception e) {
+          // abaikan
+        }
+      }
+    }
+    Ids.setActive(Ids.IMAGE, id, false);
+    Ids.unregister(Ids.IMAGE, id);
+  }
+
+  // ================= ID =================
+
+  @SimpleFunction(description = "Buat id gambar unik baru (Number, siap pakai ke ShowImage).")
+  public int CreateImageId() {
+    int id = Ids.createFor(Ids.IMAGE);
+    if (id < 1) {
+      Shared.err(this, "Image", 0, "gagal buat id");
+    }
+    return id;
+  }
+
+  @SimpleFunction(description = "Semua id gambar yang tampil (URUT PEMBUATAN, "
+      + "index 1 = pertama dibuat).")
+  public List<Integer> GetImageIds() {
+    return Ids.idsOf(Ids.IMAGE);
+  }
+
+  @SimpleFunction(description = "Id gambar yang sedang tampil/loading (URUT PEMBUATAN).")
+  public List<Integer> GetActiveImageIds() {
+    return Ids.activeIdsOf(Ids.IMAGE);
+  }
+
+  @SimpleFunction(description = "Id gambar yang terakhir dibuat/di-start. -1 bila kosong.")
+  public int CurrentImageId() {
+    return Ids.currentOf(Ids.IMAGE);
+  }
+
+  @SimpleFunction(description = "Id index 1 = PERTAMA DIBUAT. -1 bila kosong.")
+  public int GetFirstImageId() {
+    return Ids.firstOf(Ids.IMAGE);
+  }
+
+  @SimpleFunction(description = "Id TERAKHIR DIBUAT. -1 bila kosong.")
+  public int GetLastImageId() {
+    return Ids.lastOf(Ids.IMAGE);
+  }
+
+  @SimpleFunction(description = "Id yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
+  public int GetPreviousImageId(int id) {
+    return Ids.previousOf(Ids.IMAGE, id);
+  }
+
+  @SimpleFunction(description = "True bila id gambar ini sedang tampil/loading.")
+  public boolean IsImageIdActive(int id) {
+    return Ids.isActive(Ids.IMAGE, id);
+  }
+
+  @SimpleFunction(description = "Hapus id gambar: lepas gambar dari layout + lepas id "
+      + "(otomatis beres-beres).")
+  public void RemoveImageId(int id) {
+    clearStatic(id);
   }
 
   @SimpleFunction(description = "Decode base64 jadi gambar di cache. Path hasil langsung bisa "
@@ -505,7 +628,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
 
   // ================= EVENTS =================
 
-  @SimpleEvent(description = "Proses base64→gambar dimulai.")
+  @SimpleEvent(description = "Proses base64-gambar dimulai.")
   public void PictureStarted() {
     EventDispatcher.dispatchEvent(this, "PictureStarted");
   }
@@ -543,9 +666,15 @@ public class Tools_Image extends AndroidNonvisibleComponent
 
   public void onDestroy() {
     try {
-      if (imageView != null) {
-        detach(imageView);
-        imageView = null;
+      synchronized (viewLock) {
+        for (ImageView iv : views.values()) {
+          try {
+            detach(iv);
+          } catch (Exception e) {
+            // abaikan
+          }
+        }
+        views.clear();
       }
     } catch (Exception e) {
       // abaikan

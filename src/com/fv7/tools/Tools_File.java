@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
+import android.util.Base64;
 
 import com.google.appinventor.components.annotations.DesignerComponent;
 import com.google.appinventor.components.annotations.PropertyCategory;
@@ -37,7 +38,8 @@ import java.util.Map;
     version = 1,
     description = "Tools_File: semua operasi file instan (tanpa id) + salin/pindah "
         + "(Started/ProgressChanged/Finished, single-slot) + batch list + file picker "
-        + "+ buka file + nomedia + hidden.",
+        + "+ buka file + nomedia + hidden + simpan base64 langsung ke storage "
+        + "(SaveBase64ToFile, tanpa validasi gambar, lebih cepat).",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,
@@ -328,6 +330,97 @@ public class Tools_File extends AndroidNonvisibleComponent
       Shared.err(this, "File", 0, m == null ? "buat file gagal" : m);
       return false;
     }
+  }
+
+  // ================= BASE64 KE FILE =================
+
+  @SimpleFunction(description = "Simpan base64 LANGSUNG ke storage (tanpa validasi gambar, "
+      + "lebih cepat dari Base64ToPicture). base64 boleh mentah atau data:.../...;base64,.... "
+      + "path = lokasi TUJUAN termasuk nama file (mis. folder/hasil.bin). Folder dibuat "
+      + "otomatis. Asset tidak bisa jadi tujuan. Hasil lewat AfterBase64FileReady. "
+      + "Satu proses per saat; sibuk = false + error. Kembali: true = mulai.")
+  public boolean SaveBase64ToFile(final String base64, final FileScope scope,
+      final String path) {
+    if (!Shared.claimSlot("b64file")) {
+      Shared.err(this, "Base64", 0, "masih ada proses base64-file berjalan");
+      return false;
+    }
+    final String b64 = base64 == null ? "" : base64;
+    final FileScope fS = scope;
+    final String fP = path == null ? "" : path;
+    Base64FileStarted();
+    AsynchUtil.runAsynchronously(new Runnable() {
+      public void run() {
+        boolean ok = false;
+        String outPath = "";
+        String outName = "";
+        String outScope = "";
+        String msg = "";
+        try {
+          String s = Shared.clean(b64);
+          int comma = s.indexOf(',');
+          if (s.startsWith("data:") && comma >= 0) {
+            s = s.substring(comma + 1).trim();
+          }
+          if (s.length() == 0) {
+            msg = "base64 kosong";
+          } else {
+            byte[] data = Base64.decode(s, Base64.DEFAULT);
+            File dst = Shared.resolve(context, fS, fP);
+            if (dst == null) {
+              msg = "tidak bisa tulis ke Asset";
+            } else if (dst.isDirectory()) {
+              msg = "path adalah folder (tambah nama file)";
+            } else {
+              if (dst.getParentFile() != null) {
+                dst.getParentFile().mkdirs();
+              }
+              FileOutputStream out = new FileOutputStream(dst);
+              try {
+                out.write(data);
+                out.flush();
+              } finally {
+                try {
+                  out.close();
+                } catch (Exception e) {
+                  // abaikan
+                }
+              }
+              ok = true;
+              outPath = dst.getAbsolutePath();
+              outName = dst.getName();
+              outScope = fS == null ? "" : fS.name();
+              msg = "OK";
+            }
+          }
+        } catch (IllegalArgumentException e) {
+          msg = "base64 tidak valid";
+        } catch (Exception e) {
+          String m = e.getMessage();
+          msg = m == null ? "simpan base64 gagal" : m;
+        } finally {
+          Shared.releaseSlot("b64file");
+        }
+        final boolean fOk = ok;
+        final String fPath = outPath;
+        final String fName = outName;
+        final String fSc = outScope;
+        final String fMsg = msg;
+        try {
+          form.runOnUiThread(new Runnable() {
+            public void run() {
+              AfterBase64FileReady(fOk, fSc, fPath, fName, fMsg);
+            }
+          });
+        } catch (Exception e) {
+          AfterBase64FileReady(fOk, fSc, fPath, fName, fMsg);
+        }
+        if (!fOk) {
+          Shared.err(Tools_File.this, "Base64", 0, fMsg);
+        }
+      }
+    });
+    return true;
   }
 
   // ================= INSTAN: nomedia =================
@@ -1373,6 +1466,19 @@ public class Tools_File extends AndroidNonvisibleComponent
         path, fileName, content);
   }
 
+  @SimpleEvent(description = "Simpan base64 ke file dimulai: siapkan loading.")
+  public void Base64FileStarted() {
+    EventDispatcher.dispatchEvent(this, "Base64FileStarted");
+  }
+
+  @SimpleEvent(description = "Hasil SaveBase64ToFile: success pertama, scope menemani path, "
+      + "fileName paling belakang.")
+  public void AfterBase64FileReady(boolean success, String scope, String path,
+      String fileName, String message) {
+    EventDispatcher.dispatchEvent(this, "AfterBase64FileReady",
+        Boolean.valueOf(success), scope, path, fileName, message);
+  }
+
   @SimpleEvent(description = "Salinan dimulai: siapkan tampilan progres.")
   public void CopyStarted(String fileName, String destPath) {
     EventDispatcher.dispatchEvent(this, "CopyStarted", fileName, destPath);
@@ -1518,6 +1624,12 @@ public class Tools_File extends AndroidNonvisibleComponent
     return "Open";
   }
 
+  @SimpleProperty(description = "Nama operasi Base64 (untuk if di ErrorOccurred).",
+      category = PropertyCategory.BEHAVIOR)
+  public String OpBase64() {
+    return "Base64";
+  }
+
   // ================= destroy =================
 
   public void onDestroy() {
@@ -1533,5 +1645,6 @@ public class Tools_File extends AndroidNonvisibleComponent
     Shared.releaseSlot("move");
     Shared.releaseSlot("read");
     Shared.releaseSlot("pick");
+    Shared.releaseSlot("b64file");
   }
 }

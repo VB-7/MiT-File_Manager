@@ -25,16 +25,15 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLDecoder;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 
 @DesignerComponent(
     version = 1,
     description = "Tools_Downloader: unduh paralel ber-id (pause/resume/cancel per id, "
         + "Started/ProgressChanged/Finished) + unduh batch list URL. Id dikelola "
-        + "Tools_Base (SuggestId).",
+        + "Tools_Base (CreateUniqueId) atau CreateDownloadId. List id URUT PEMBUATAN.",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,
@@ -49,15 +48,15 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
   private final Context context;
   private final Activity activity;
 
-  private final Map<Integer, DlOp> downloads = new HashMap<Integer, DlOp>();
-  private final Object lock = new Object();
+  private static final Map<Integer, DlOp> downloads = new HashMap<Integer, DlOp>();
+  private static final Object lock = new Object();
   private static final long PROGRESS_MIN_MS = 400;
 
-  private boolean dlBatchActive = false;
-  private int dlBatchTotal = 0;
-  private int dlBatchDone = 0;
-  private int dlBatchOk = 0;
-  private String dlBatchFolder = "";
+  private static boolean dlBatchActive = false;
+  private static int dlBatchTotal = 0;
+  private static int dlBatchDone = 0;
+  private static int dlBatchOk = 0;
+  private static String dlBatchFolder = "";
 
   private static class DlOp {
     int id;
@@ -76,21 +75,32 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Unduh URL ke folder scope+path. fileName kosong = nama otomatis. "
-      + "id = angka bebas yang belum dipakai (minta ke Tools_Base SuggestId). "
-      + "Kembali: id, atau -1 bila gagal mulai.")
+      + "id = angka bebas yang belum dipakai (minta ke Tools_Base CreateUniqueId atau "
+      + "CreateDownloadId). Id reservasi otomatis diadopsi. Kembali: id, atau -1 bila gagal mulai.")
   public int Download(String url, String fileName, FileScope scope, String path, int id) {
     String u = Shared.clean(url);
     if (u.length() == 0) {
       Shared.err(this, "Download", id, "URL kosong");
       return -1;
     }
-    if (!Ids.claim(id)) {
-      Shared.err(this, "Download", id, "ID " + id + " sedang dipakai unduhan lain");
+    if (id < 1) {
+      Shared.err(this, "Download", id, "id harus >= 1 (pakai CreateDownloadId)");
       return -1;
+    }
+    if (!Ids.register(Ids.DOWNLOAD, id)) {
+      Shared.err(this, "Download", id, "ID " + id + " sedang dipakai operasi lain");
+      return -1;
+    }
+    synchronized (lock) {
+      if (downloads.containsKey(Integer.valueOf(id))) {
+        Shared.err(this, "Download", id, "ID " + id + " masih ada unduhan jalan "
+            + "(Cancel/Remove dulu)");
+        return -1;
+      }
     }
     File dir = Shared.resolve(context, scope, path);
     if (dir == null) {
-      Ids.release(id);
+      Ids.unregister(Ids.DOWNLOAD, id);
       Shared.err(this, "Download", id, "tidak bisa unduh ke Asset");
       return -1;
     }
@@ -99,7 +109,7 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
         dir.mkdirs();
       }
     } catch (Exception e) {
-      Ids.release(id);
+      Ids.unregister(Ids.DOWNLOAD, id);
       Shared.err(this, "Download", id, "folder tujuan tidak bisa dibuat");
       return -1;
     }
@@ -111,6 +121,7 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     synchronized (lock) {
       downloads.put(Integer.valueOf(id), op);
     }
+    Ids.setActive(Ids.DOWNLOAD, id, true);
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         runDownload(op);
@@ -260,7 +271,8 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     synchronized (lock) {
       downloads.remove(Integer.valueOf(op.id));
     }
-    Ids.release(op.id);
+    Ids.setActive(Ids.DOWNLOAD, op.id, false);
+    Ids.unregister(Ids.DOWNLOAD, op.id);
     try {
       form.runOnUiThread(new Runnable() {
         public void run() {
@@ -313,7 +325,7 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Unduh BANYAK URL sekaligus (tanpa loop manual). fileNames "
-      + "boleh kosong (= otomatis semua). Kembali: list id (pantau per id). "
+      + "boleh kosong (= otomatis semua). Kembali: list id URUT PEMBUATAN (pantau per id). "
       + "Ringkasan lewat DownloadBatchFinished. Satu batch per saat.")
   public List<Integer> DownloadList(Object urls, Object fileNames, FileScope scope,
       String folder) {
@@ -355,7 +367,17 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     }
     for (int i = 0; i < us.size(); i = i + 1) {
       String fn = i < ns.size() ? ns.get(i) : "";
-      int id = Ids.suggest();
+      int id = Ids.createFor(Ids.DOWNLOAD);
+      if (id < 1) {
+        synchronized (lock) {
+          dlBatchTotal = dlBatchTotal - 1;
+          if (dlBatchDone >= dlBatchTotal) {
+            dlBatchActive = false;
+          }
+        }
+        continue;
+      }
+      Ids.unregister(Ids.DOWNLOAD, id);
       int got = Download(us.get(i), fn, scope, folder, id);
       if (got >= 0) {
         out.add(Integer.valueOf(id));
@@ -402,12 +424,17 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "Batalkan unduhan berjalan (per id). File sebagian dihapus.")
   public void CancelDownload(int id) {
+    cancelStatic(id);
+  }
+
+  /** Batalkan + lepas id. Dipakai juga oleh Tools_Base RemoveDownloadId. */
+  public static void cancelStatic(int id) {
     DlOp op;
     synchronized (lock) {
       op = downloads.get(Integer.valueOf(id));
     }
     if (op == null) {
-      Shared.err(this, "Download", id, "tidak ada unduhan ID " + id);
+      Ids.unregister(Ids.DOWNLOAD, id);
       return;
     }
     op.cancel = true;
@@ -428,6 +455,7 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
       return;
     }
     op.paused = true;
+    Ids.setActive(Ids.DOWNLOAD, id, false);
   }
 
   @SimpleFunction(description = "Lanjutkan unduhan yang dijeda (per id).")
@@ -444,15 +472,64 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
       op.paused = false;
       op.pauseLock.notifyAll();
     }
+    Ids.setActive(Ids.DOWNLOAD, id, true);
   }
 
-  @SimpleFunction(description = "Daftar ID unduhan yang sedang berjalan (kosong = tidak ada).")
-  public List<Integer> GetDownloadIds() {
-    synchronized (lock) {
-      ArrayList<Integer> out = new ArrayList<Integer>(downloads.keySet());
-      Collections.sort(out);
-      return out;
+  // ================= ID =================
+
+  @SimpleFunction(description = "Buat id unduhan unik baru (Number, siap pakai ke Download). "
+      + "Urutan pembuatan menentukan urutan list.")
+  public int CreateDownloadId() {
+    int id = Ids.createFor(Ids.DOWNLOAD);
+    if (id < 1) {
+      Shared.err(this, "Download", 0, "gagal buat id");
     }
+    return id;
+  }
+
+  @SimpleFunction(description = "Semua id unduhan yang dipegang (URUT PEMBUATAN, "
+      + "index 1 = pertama dibuat). Termasuk yang dijeda.")
+  public List<Integer> GetDownloadIds() {
+    return Ids.idsOf(Ids.DOWNLOAD);
+  }
+
+  @SimpleFunction(description = "Id unduhan yang sedang jalan (URUT PEMBUATAN). "
+      + "Yang dijeda TIDAK masuk sini.")
+  public List<Integer> GetActiveDownloadIds() {
+    return Ids.activeIdsOf(Ids.DOWNLOAD);
+  }
+
+  @SimpleFunction(description = "Id unduhan yang terakhir dibuat/di-start. -1 bila kosong.")
+  public int CurrentDownloadId() {
+    return Ids.currentOf(Ids.DOWNLOAD);
+  }
+
+  @SimpleFunction(description = "Id index 1 = PERTAMA DIBUAT. -1 bila kosong.")
+  public int GetFirstDownloadId() {
+    return Ids.firstOf(Ids.DOWNLOAD);
+  }
+
+  @SimpleFunction(description = "Id TERAKHIR DIBUAT. -1 bila kosong.")
+  public int GetLastDownloadId() {
+    return Ids.lastOf(Ids.DOWNLOAD);
+  }
+
+  @SimpleFunction(description = "Id yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
+  public int GetPreviousDownloadId(int id) {
+    return Ids.previousOf(Ids.DOWNLOAD, id);
+  }
+
+  @SimpleFunction(description = "True bila id unduhan ini sedang jalan (tidak dijeda).")
+  public boolean IsDownloadIdActive(int id) {
+    return Ids.isActive(Ids.DOWNLOAD, id);
+  }
+
+  @SimpleFunction(description = "Hapus id unduhan: batalkan bila jalan + lepas id "
+      + "(otomatis beres-beres).")
+  public void RemoveDownloadId(int id) {
+    cancelStatic(id);
+    Ids.setActive(Ids.DOWNLOAD, id, false);
+    Ids.unregister(Ids.DOWNLOAD, id);
   }
 
   @SimpleFunction(description = "Tebak nama file dari URL, mime, dan content-disposition "

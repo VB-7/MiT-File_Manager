@@ -29,12 +29,17 @@ import com.google.appinventor.components.runtime.OnDestroyListener;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @DesignerComponent(
     version = 1,
-    description = "Tools_Video: putar video di dalam layout (Arrangement MIT / dinamis), "
+    description = "Tools_Video: putar BANYAK video ber-id di dalam layout (Arrangement MIT / dinamis), "
         + "kontrol ala VLC (pause/resume/seek/maju/mundur/double-tap), loop, volume. "
-        + "Satu video per saat (Play baru hentikan yang lama). Tanpa id.",
+        + "Satu id = satu video, bisa jalan bareng. Id dikelola CreateVideoId / Tools_Base. "
+        + "List id URUT PEMBUATAN.",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,
@@ -53,19 +58,37 @@ public class Tools_Video extends AndroidNonvisibleComponent
   private int mediaVolume = 100;
   private boolean doubleTapSeek = true;
 
-  private VideoView videoView = null;
-  private MediaController videoController = null;
-  private boolean videoReadyFlag = false;
+  private static final Map<Integer, VideoView> views = new HashMap<Integer, VideoView>();
+  private static final Map<Integer, Boolean> readies = new HashMap<Integer, Boolean>();
+  private static final Object videoLock = new Object();
   private Handler mediaTicks = null;
 
   private final Runnable mediaTick = new Runnable() {
     public void run() {
       try {
-        if (videoView != null && videoReadyFlag && videoView.isPlaying()) {
-          int pos = videoView.getCurrentPosition();
-          int dur = videoView.getDuration();
-          int pct = dur > 0 ? ((int) (pos * 100L / dur)) : 0;
-          VideoProgressChanged(pos, dur, pct);
+        ArrayList<Integer> keys;
+        synchronized (videoLock) {
+          keys = new ArrayList<Integer>(views.keySet());
+        }
+        for (int i = 0; i < keys.size(); i = i + 1) {
+          int vid = keys.get(i).intValue();
+          try {
+            VideoView vv;
+            boolean ready;
+            synchronized (videoLock) {
+              vv = views.get(Integer.valueOf(vid));
+              Boolean r = readies.get(Integer.valueOf(vid));
+              ready = r != null && r.booleanValue();
+            }
+            if (vv != null && ready && vv.isPlaying()) {
+              int pos = vv.getCurrentPosition();
+              int dur = vv.getDuration();
+              int pct = dur > 0 ? ((int) (pos * 100L / dur)) : 0;
+              VideoProgressChanged(vid, pos, dur, pct);
+            }
+          } catch (Exception e) {
+            // abaikan per-id
+          }
         }
       } catch (Exception e) {
         // abaikan
@@ -84,8 +107,18 @@ public class Tools_Video extends AndroidNonvisibleComponent
     try {
       boolean need = false;
       try {
-        if (videoView != null && videoReadyFlag && videoView.isPlaying()) {
-          need = true;
+        synchronized (videoLock) {
+          for (Map.Entry<Integer, VideoView> en : views.entrySet()) {
+            try {
+              Boolean r = readies.get(en.getKey());
+              if (r != null && r.booleanValue() && en.getValue().isPlaying()) {
+                need = true;
+                break;
+              }
+            } catch (Exception e) {
+              // abaikan per-id
+            }
+          }
         }
       } catch (Exception e) {
         // abaikan
@@ -139,151 +172,108 @@ public class Tools_Video extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Putar video di dalam layout (Arrangement MIT / dinamis). "
-      + "path bisa file scope, file:/// absolut, atau http(s) URL (streaming). "
+  @SimpleFunction(description = "Putar video ber-id di dalam layout (Arrangement MIT / dinamis). "
+      + "Bisa jalan bareng (satu id = satu video). path bisa file scope, file:/// absolut, "
+      + "atau http(s) URL (streaming). id dari CreateVideoId / Tools_Base CreateUniqueId. "
       + "Atur tinggi arrangement (mis. 300px) agar video kelihatan. "
-      + "Double-tap: kiri = mundur, kanan = maju, tengah = pause/resume.")
-  public void PlayVideoIn(final AndroidViewComponent container, final FileScope scope,
-      final String path) {
+      + "Double-tap: kiri = mundur, kanan = maju, tengah = pause/resume. "
+      + "Kembali: id, atau -1 bila gagal mulai.")
+  public int PlayVideoIn(final AndroidViewComponent container, final FileScope scope,
+      final String path, final int id) {
+    if (id < 1) {
+      Shared.err(this, "Video", id, "id harus >= 1 (pakai CreateVideoId)");
+      return -1;
+    }
+    if (!Ids.register(Ids.VIDEO, id)) {
+      Shared.err(this, "Video", id, "ID " + id + " sedang dipakai video lain");
+      return -1;
+    }
     try {
       form.runOnUiThread(new Runnable() {
         public void run() {
           try {
             ViewGroup vg = groupOf(container);
             if (vg == null) {
-              Shared.err(Tools_Video.this, "Video", 0, "layout tidak valid");
+              Ids.unregister(Ids.VIDEO, id);
+              Shared.err(Tools_Video.this, "Video", id, "layout tidak valid");
               return;
             }
-            if (videoView == null) {
-              videoView = new VideoView(activity);
-              videoView.setOnPreparedListener(
-                  new MediaPlayer.OnPreparedListener() {
-                    public void onPrepared(MediaPlayer mp) {
-                      try {
-                        mp.setLooping(videoLooping);
-                        float v = volFloat();
-                        mp.setVolume(v, v);
-                      } catch (Exception e) {
-                        // abaikan
-                      }
-                      videoReadyFlag = true;
-                      int dur = 0;
-                      try {
-                        dur = videoView.getDuration();
-                      } catch (Exception e) {
-                        // abaikan
-                      }
-                      VideoStarted(dur);
-                      updateTickState();
-                    }
-                  });
-              videoView.setOnCompletionListener(
-                  new MediaPlayer.OnCompletionListener() {
-                    public void onCompletion(MediaPlayer mp) {
-                      if (videoLooping) {
-                        try {
-                          videoView.start();
-                        } catch (Exception e) {
-                          // abaikan
-                        }
-                        return;
-                      }
-                      videoReadyFlag = false;
-                      VideoFinished();
-                      updateTickState();
-                    }
-                  });
-              videoView.setOnErrorListener(new MediaPlayer.OnErrorListener() {
-                public boolean onError(MediaPlayer mp, int what, int extra) {
-                  videoReadyFlag = false;
-                  Shared.err(Tools_Video.this, "Video", 0,
-                      "format tidak didukung / file rusak");
-                  updateTickState();
-                  return true;
-                }
-              });
-              final GestureDetector gd = new GestureDetector(activity,
-                  new GestureDetector.SimpleOnGestureListener() {
-                    public boolean onDoubleTap(MotionEvent e) {
-                      if (!doubleTapSeek) {
-                        return false;
-                      }
-                      try {
-                        float x = e.getX();
-                        int w = videoView.getWidth();
-                        int skip = skipSeconds * 1000;
-                        int pos = videoView.getCurrentPosition();
-                        int dur = 0;
-                        try {
-                          dur = videoView.getDuration();
-                        } catch (Exception ex) {
-                          // abaikan
-                        }
-                        if (x < w / 3.0f) {
-                          videoView.seekTo(Math.max(0, pos - skip));
-                        } else if (x > w * 2.0f / 3.0f) {
-                          if (dur > 0) {
-                            videoView.seekTo(Math.min(dur, pos + skip));
-                          } else {
-                            videoView.seekTo(pos + skip);
-                          }
-                        } else {
-                          if (videoView.isPlaying()) {
-                            videoView.pause();
-                          } else {
-                            videoView.start();
-                          }
-                          updateTickState();
-                        }
-                      } catch (Exception ex) {
-                        // abaikan
-                      }
-                      return true;
-                    }
-                  });
-              videoView.setOnTouchListener(new View.OnTouchListener() {
-                public boolean onTouch(View v, MotionEvent e) {
-                  try {
-                    if (doubleTapSeek) {
-                      gd.onTouchEvent(e);
-                    }
-                  } catch (Exception ex) {
-                    // abaikan
-                  }
-                  return false;
-                }
-              });
+            VideoView old;
+            synchronized (videoLock) {
+              old = views.get(Integer.valueOf(id));
             }
-            detach(videoView);
-            if (showVideoController) {
-              if (videoController == null) {
-                videoController = new MediaController(activity);
+            if (old != null) {
+              if (Ids.isActive(Ids.VIDEO, id)) {
+                Shared.err(Tools_Video.this, "Video", id, "ID " + id + " masih main "
+                    + "(tunggu selesai / Pause / Stop dulu)");
+                return;
               }
-              videoController.setAnchorView(videoView);
-              videoView.setMediaController(videoController);
+              try {
+                old.stopPlayback();
+              } catch (Exception e) {
+                // abaikan
+              }
+              detach(old);
+              synchronized (videoLock) {
+                if (views.get(Integer.valueOf(id)) == old) {
+                  views.remove(Integer.valueOf(id));
+                  readies.remove(Integer.valueOf(id));
+                }
+              }
+              Ids.setActive(Ids.VIDEO, id, false);
+            }
+            VideoView vv;
+            synchronized (videoLock) {
+              vv = views.get(Integer.valueOf(id));
+            }
+            if (vv == null) {
+              vv = buildView(id);
+              synchronized (videoLock) {
+                views.put(Integer.valueOf(id), vv);
+                readies.put(Integer.valueOf(id), Boolean.valueOf(false));
+              }
+            }
+            final VideoView fVv = vv;
+            detach(fVv);
+            if (showVideoController) {
+              try {
+                MediaController mc = new MediaController(activity);
+                mc.setAnchorView(fVv);
+                fVv.setMediaController(mc);
+              } catch (Exception e) {
+                // abaikan
+              }
             } else {
-              videoView.setMediaController(null);
+              try {
+                fVv.setMediaController(null);
+              } catch (Exception e) {
+                // abaikan
+              }
             }
             ViewGroup.LayoutParams lp = new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT);
-            vg.addView(videoView, lp);
-            videoReadyFlag = false;
+            vg.addView(fVv, lp);
+            synchronized (videoLock) {
+              readies.put(Integer.valueOf(id), Boolean.valueOf(false));
+            }
+            Ids.setActive(Ids.VIDEO, id, false);
             String sv = Shared.clean(path);
             if (sv.length() == 0) {
-              Shared.err(Tools_Video.this, "Video", 0, "path kosong");
+              Ids.unregister(Ids.VIDEO, id);
+              Shared.err(Tools_Video.this, "Video", id, "path kosong");
               return;
             }
             if (sv.regionMatches(true, 0, "http", 0, 4)) {
-              videoView.setVideoURI(Uri.parse(sv));
+              fVv.setVideoURI(Uri.parse(sv));
             } else if (sv.startsWith("file://")) {
-              videoView.setVideoPath(Shared.stripLeadingSlash(sv.substring(7)));
+              fVv.setVideoPath(Shared.stripLeadingSlash(sv.substring(7)));
             } else if (scope == FileScope.Asset || Shared.isAssetPath(sv)) {
               File cache = context.getCacheDir();
               if (!cache.exists()) {
                 cache.mkdirs();
               }
-              File dst = new File(cache, "vid_"
+              File dst = new File(cache, "vid_" + id + "_"
                   + Shared.sanitize(Shared.fileNameOf(Shared.assetName(sv))));
               InputStream in = context.getAssets().open(Shared.assetName(sv));
               try {
@@ -304,141 +294,301 @@ public class Tools_Video extends AndroidNonvisibleComponent
                   // abaikan
                 }
               }
-              videoView.setVideoPath(dst.getAbsolutePath());
+              fVv.setVideoPath(dst.getAbsolutePath());
             } else {
               File f = Shared.resolve(context, scope, sv);
               if (f == null || !f.exists()) {
-                Shared.err(Tools_Video.this, "Video", 0, "file tidak ada");
+                Ids.unregister(Ids.VIDEO, id);
+                Shared.err(Tools_Video.this, "Video", id, "file tidak ada");
                 return;
               }
-              videoView.setVideoPath(f.getAbsolutePath());
+              fVv.setVideoPath(f.getAbsolutePath());
             }
-            videoView.requestFocus();
-            videoView.start();
+            fVv.requestFocus();
+            fVv.start();
             updateTickState();
           } catch (Exception e) {
+            Ids.unregister(Ids.VIDEO, id);
             String m = e.getMessage();
-            Shared.err(Tools_Video.this, "Video", 0,
+            Shared.err(Tools_Video.this, "Video", id,
                 m == null ? "video gagal diputar" : m);
           }
         }
       });
     } catch (Exception e) {
+      Ids.unregister(Ids.VIDEO, id);
       String m = e.getMessage();
-      Shared.err(this, "Video", 0, m == null ? "video gagal diputar" : m);
+      Shared.err(this, "Video", id, m == null ? "video gagal diputar" : m);
+      return -1;
     }
+    return id;
   }
 
-  @SimpleFunction(description = "Jeda video yang sedang main.")
-  public void PauseVideo() {
-    try {
-      if (videoView != null && videoReadyFlag && videoView.isPlaying()) {
-        videoView.pause();
-        updateTickState();
-      } else {
-        Shared.err(this, "Video", 0, "tidak ada video yang main");
-      }
-    } catch (Exception e) {
-      String m = e.getMessage();
-      Shared.err(this, "Video", 0, m == null ? "pause gagal" : m);
-    }
-  }
-
-  @SimpleFunction(description = "Lanjutkan video yang dijeda.")
-  public void ResumeVideo() {
-    try {
-      if (videoView != null && videoReadyFlag && !videoView.isPlaying()) {
-        videoView.start();
-        updateTickState();
-      } else {
-        Shared.err(this, "Video", 0, "tidak ada video yang dijeda");
-      }
-    } catch (Exception e) {
-      String m = e.getMessage();
-      Shared.err(this, "Video", 0, m == null ? "resume gagal" : m);
-    }
-  }
-
-  @SimpleFunction(description = "Hentikan video (putar lagi via PlayVideoIn).")
-  public void StopVideo() {
-    try {
-      if (videoView != null) {
+  private VideoView buildView(final int id) {
+    final VideoView vv = new VideoView(activity);
+    vv.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
+      public void onPrepared(MediaPlayer mp) {
+        synchronized (videoLock) {
+          if (views.get(Integer.valueOf(id)) != vv) {
+            return;
+          }
+          readies.put(Integer.valueOf(id), Boolean.valueOf(true));
+        }
         try {
-          videoView.stopPlayback();
+          mp.setLooping(videoLooping);
+          float v = volFloat();
+          mp.setVolume(v, v);
         } catch (Exception e) {
           // abaikan
         }
-        videoReadyFlag = false;
-        updateTickState();
-      } else {
-        Shared.err(this, "Video", 0, "tidak ada video");
-      }
-    } catch (Exception e) {
-      String m = e.getMessage();
-      Shared.err(this, "Video", 0, m == null ? "stop gagal" : m);
-    }
-  }
-
-  @SimpleFunction(description = "Lompat video ke posisi (ms). Bisa dipasang ke Slider.")
-  public void SeekVideo(int position) {
-    try {
-      if (videoView != null && videoReadyFlag) {
-        videoView.seekTo(position < 0 ? 0 : position);
-      } else {
-        Shared.err(this, "Video", 0, "tidak ada video yang main");
-      }
-    } catch (Exception e) {
-      String m = e.getMessage();
-      Shared.err(this, "Video", 0, m == null ? "seek gagal" : m);
-    }
-  }
-
-  @SimpleFunction(description = "Maju video sejauh SkipSeconds detik.")
-  public void ForwardVideo() {
-    try {
-      if (videoView != null && videoReadyFlag) {
-        int pos = videoView.getCurrentPosition();
+        Ids.setActive(Ids.VIDEO, id, true);
         int dur = 0;
         try {
-          dur = videoView.getDuration();
+          dur = vv.getDuration();
+        } catch (Exception e) {
+          // abaikan
+        }
+        VideoStarted(id, dur);
+        updateTickState();
+      }
+    });
+    vv.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+      public void onCompletion(MediaPlayer mp) {
+        synchronized (videoLock) {
+          if (views.get(Integer.valueOf(id)) != vv) {
+            return;
+          }
+        }
+        if (videoLooping) {
+          try {
+            vv.start();
+          } catch (Exception e) {
+            // abaikan
+          }
+          return;
+        }
+        synchronized (videoLock) {
+          readies.put(Integer.valueOf(id), Boolean.valueOf(false));
+        }
+        Ids.setActive(Ids.VIDEO, id, false);
+        VideoFinished(id);
+        updateTickState();
+      }
+    });
+    vv.setOnErrorListener(new MediaPlayer.OnErrorListener() {
+      public boolean onError(MediaPlayer mp, int what, int extra) {
+        synchronized (videoLock) {
+          if (views.get(Integer.valueOf(id)) == vv) {
+            readies.put(Integer.valueOf(id), Boolean.valueOf(false));
+          } else {
+            return true;
+          }
+        }
+        Ids.setActive(Ids.VIDEO, id, false);
+        Shared.err(Tools_Video.this, "Video", id,
+            "format tidak didukung / file rusak");
+        updateTickState();
+        return true;
+      }
+    });
+    final GestureDetector gd = new GestureDetector(activity,
+        new GestureDetector.SimpleOnGestureListener() {
+          public boolean onDoubleTap(MotionEvent e) {
+            if (!doubleTapSeek) {
+              return false;
+            }
+            try {
+              float x = e.getX();
+              int w = vv.getWidth();
+              int skip = skipSeconds * 1000;
+              int pos = vv.getCurrentPosition();
+              int dur = 0;
+              try {
+                dur = vv.getDuration();
+              } catch (Exception ex) {
+                // abaikan
+              }
+              if (x < w / 3.0f) {
+                vv.seekTo(Math.max(0, pos - skip));
+              } else if (x > w * 2.0f / 3.0f) {
+                if (dur > 0) {
+                  vv.seekTo(Math.min(dur, pos + skip));
+                } else {
+                  vv.seekTo(pos + skip);
+                }
+              } else {
+                if (vv.isPlaying()) {
+                  vv.pause();
+                  Ids.setActive(Ids.VIDEO, id, false);
+                } else {
+                  vv.start();
+                  Ids.setActive(Ids.VIDEO, id, true);
+                }
+                updateTickState();
+              }
+            } catch (Exception ex) {
+              // abaikan
+            }
+            return true;
+          }
+        });
+    vv.setOnTouchListener(new View.OnTouchListener() {
+      public boolean onTouch(View v, MotionEvent e) {
+        try {
+          if (doubleTapSeek) {
+            gd.onTouchEvent(e);
+          }
+        } catch (Exception ex) {
+          // abaikan
+        }
+        return false;
+      }
+    });
+    return vv;
+  }
+
+  private VideoView viewOf(int id) {
+    synchronized (videoLock) {
+      return views.get(Integer.valueOf(id));
+    }
+  }
+
+  private boolean readyOf(int id) {
+    synchronized (videoLock) {
+      Boolean r = readies.get(Integer.valueOf(id));
+      return r != null && r.booleanValue();
+    }
+  }
+
+  @SimpleFunction(description = "Jeda video yang sedang main. (per id)")
+  public void PauseVideo(int id) {
+    try {
+      VideoView vv = viewOf(id);
+      if (vv != null && readyOf(id) && vv.isPlaying()) {
+        vv.pause();
+        Ids.setActive(Ids.VIDEO, id, false);
+        updateTickState();
+      } else {
+        Shared.err(this, "Video", id, "tidak ada video main ID " + id);
+      }
+    } catch (Exception e) {
+      String m = e.getMessage();
+      Shared.err(this, "Video", id, m == null ? "pause gagal" : m);
+    }
+  }
+
+  @SimpleFunction(description = "Lanjutkan video yang dijeda. (per id)")
+  public void ResumeVideo(int id) {
+    try {
+      VideoView vv = viewOf(id);
+      if (vv != null && readyOf(id) && !vv.isPlaying()) {
+        vv.start();
+        Ids.setActive(Ids.VIDEO, id, true);
+        updateTickState();
+      } else {
+        Shared.err(this, "Video", id, "tidak ada video jeda ID " + id);
+      }
+    } catch (Exception e) {
+      String m = e.getMessage();
+      Shared.err(this, "Video", id, m == null ? "resume gagal" : m);
+    }
+  }
+
+  @SimpleFunction(description = "Hentikan video + lepas dari layout (per id). "
+      + "Id tetap tercatat (Play lagi langsung bisa). Bersih total via RemoveVideoId.")
+  public void StopVideo(int id) {
+    try {
+      VideoView vv = viewOf(id);
+      if (vv != null) {
+        try {
+          vv.stopPlayback();
+        } catch (Exception e) {
+          // abaikan
+        }
+        try {
+          detach(vv);
+        } catch (Exception e) {
+          // abaikan
+        }
+        synchronized (videoLock) {
+          views.remove(Integer.valueOf(id));
+          readies.remove(Integer.valueOf(id));
+        }
+        Ids.setActive(Ids.VIDEO, id, false);
+        updateTickState();
+      } else {
+        Shared.err(this, "Video", id, "tidak ada video ID " + id);
+      }
+    } catch (Exception e) {
+      String m = e.getMessage();
+      Shared.err(this, "Video", id, m == null ? "stop gagal" : m);
+    }
+  }
+
+  @SimpleFunction(description = "Lompat video ke posisi (ms). Bisa dipasang ke Slider. (per id)")
+  public void SeekVideo(int id, int position) {
+    try {
+      VideoView vv = viewOf(id);
+      if (vv != null && readyOf(id)) {
+        vv.seekTo(position < 0 ? 0 : position);
+      } else {
+        Shared.err(this, "Video", id, "tidak ada video main ID " + id);
+      }
+    } catch (Exception e) {
+      String m = e.getMessage();
+      Shared.err(this, "Video", id, m == null ? "seek gagal" : m);
+    }
+  }
+
+  @SimpleFunction(description = "Maju video sejauh SkipSeconds detik. (per id)")
+  public void ForwardVideo(int id) {
+    try {
+      VideoView vv = viewOf(id);
+      if (vv != null && readyOf(id)) {
+        int pos = vv.getCurrentPosition();
+        int dur = 0;
+        try {
+          dur = vv.getDuration();
         } catch (Exception e) {
           // abaikan
         }
         int skip = skipSeconds * 1000;
         if (dur > 0) {
-          videoView.seekTo(Math.min(dur, pos + skip));
+          vv.seekTo(Math.min(dur, pos + skip));
         } else {
-          videoView.seekTo(pos + skip);
+          vv.seekTo(pos + skip);
         }
       } else {
-        Shared.err(this, "Video", 0, "tidak ada video yang main");
+        Shared.err(this, "Video", id, "tidak ada video main ID " + id);
       }
     } catch (Exception e) {
       String m = e.getMessage();
-      Shared.err(this, "Video", 0, m == null ? "maju gagal" : m);
+      Shared.err(this, "Video", id, m == null ? "maju gagal" : m);
     }
   }
 
-  @SimpleFunction(description = "Mundur video sejauh SkipSeconds detik.")
-  public void BackwardVideo() {
+  @SimpleFunction(description = "Mundur video sejauh SkipSeconds detik. (per id)")
+  public void BackwardVideo(int id) {
     try {
-      if (videoView != null && videoReadyFlag) {
-        int pos = videoView.getCurrentPosition();
-        videoView.seekTo(Math.max(0, pos - skipSeconds * 1000));
+      VideoView vv = viewOf(id);
+      if (vv != null && readyOf(id)) {
+        int pos = vv.getCurrentPosition();
+        vv.seekTo(Math.max(0, pos - skipSeconds * 1000));
       } else {
-        Shared.err(this, "Video", 0, "tidak ada video yang main");
+        Shared.err(this, "Video", id, "tidak ada video main ID " + id);
       }
     } catch (Exception e) {
       String m = e.getMessage();
-      Shared.err(this, "Video", 0, m == null ? "mundur gagal" : m);
+      Shared.err(this, "Video", id, m == null ? "mundur gagal" : m);
     }
   }
 
-  @SimpleFunction(description = "Posisi video sekarang (ms).")
-  public int VideoPosition() {
+  @SimpleFunction(description = "Posisi video sekarang (ms). (per id)")
+  public int VideoPosition(int id) {
     try {
-      if (videoView != null && videoReadyFlag) {
-        return videoView.getCurrentPosition();
+      VideoView vv = viewOf(id);
+      if (vv != null && readyOf(id)) {
+        return vv.getCurrentPosition();
       }
     } catch (Exception e) {
       // abaikan
@@ -446,11 +596,12 @@ public class Tools_Video extends AndroidNonvisibleComponent
     return 0;
   }
 
-  @SimpleFunction(description = "Durasi video (ms). 0 bila belum siap.")
-  public int VideoDuration() {
+  @SimpleFunction(description = "Durasi video (ms). 0 bila belum siap. (per id)")
+  public int VideoDuration(int id) {
     try {
-      if (videoView != null && videoReadyFlag) {
-        int d = videoView.getDuration();
+      VideoView vv = viewOf(id);
+      if (vv != null && readyOf(id)) {
+        int d = vv.getDuration();
         return d < 0 ? 0 : d;
       }
     } catch (Exception e) {
@@ -459,17 +610,18 @@ public class Tools_Video extends AndroidNonvisibleComponent
     return 0;
   }
 
-  @SimpleFunction(description = "True bila video sedang main.")
-  public boolean IsVideoPlaying() {
+  @SimpleFunction(description = "True bila video id ini sedang main.")
+  public boolean IsVideoPlaying(int id) {
     try {
-      return videoView != null && videoReadyFlag && videoView.isPlaying();
+      VideoView vv = viewOf(id);
+      return vv != null && readyOf(id) && vv.isPlaying();
     } catch (Exception e) {
       return false;
     }
   }
 
-  @SimpleFunction(description = "Hapus video dari layout itu (komponen lain tidak diusik). "
-      + "Video ikut di-pause.")
+  @SimpleFunction(description = "Hapus SEMUA video Tools_Video dari layout itu (id ikut dilepas, "
+      + "komponen lain tidak diusik). Video ikut di-pause.")
   public void ClearVideo(final AndroidViewComponent container) {
     try {
       form.runOnUiThread(new Runnable() {
@@ -480,17 +632,35 @@ public class Tools_Video extends AndroidNonvisibleComponent
               Shared.err(Tools_Video.this, "Video", 0, "layout tidak valid");
               return;
             }
-            if (videoView != null && videoView.getParent() == vg) {
-              try {
-                if (videoView.isPlaying()) {
-                  videoView.pause();
+            ArrayList<Integer> gone = new ArrayList<Integer>();
+            synchronized (videoLock) {
+              for (Map.Entry<Integer, VideoView> en : views.entrySet()) {
+                VideoView vv = en.getValue();
+                if (vv != null && vv.getParent() == vg) {
+                  try {
+                    if (vv.isPlaying()) {
+                      vv.pause();
+                    }
+                  } catch (Exception e) {
+                    // abaikan
+                  }
+                  try {
+                    vg.removeView(vv);
+                  } catch (Exception e) {
+                    // abaikan
+                  }
+                  gone.add(en.getKey());
                 }
-              } catch (Exception e) {
-                // abaikan
               }
-              updateTickState();
-              vg.removeView(videoView);
+              for (int i = 0; i < gone.size(); i = i + 1) {
+                int gid = gone.get(i).intValue();
+                views.remove(Integer.valueOf(gid));
+                readies.remove(Integer.valueOf(gid));
+                Ids.setActive(Ids.VIDEO, gid, false);
+                Ids.unregister(Ids.VIDEO, gid);
+              }
             }
+            updateTickState();
           } catch (Exception e) {
             String m = e.getMessage();
             Shared.err(Tools_Video.this, "Video", 0,
@@ -502,6 +672,97 @@ public class Tools_Video extends AndroidNonvisibleComponent
       String m = e.getMessage();
       Shared.err(this, "Video", 0, m == null ? "clear gagal" : m);
     }
+  }
+
+  /** Hentikan + lepas satu video ber-id. Dipakai komponen + Tools_Base. */
+  public static void stopStatic(int id) {
+    VideoView vv;
+    synchronized (videoLock) {
+      vv = views.remove(Integer.valueOf(id));
+      readies.remove(Integer.valueOf(id));
+    }
+    if (vv != null) {
+      try {
+        try {
+          if (vv.isPlaying()) {
+            vv.pause();
+          }
+        } catch (Exception e) {
+          // abaikan
+        }
+        try {
+          vv.stopPlayback();
+        } catch (Exception e) {
+          // abaikan
+        }
+        try {
+          if (vv.getParent() instanceof ViewGroup) {
+            ((ViewGroup) vv.getParent()).removeView(vv);
+          }
+        } catch (Exception e) {
+          // abaikan
+        }
+      } catch (Exception e) {
+        // abaikan
+      }
+    }
+    Ids.setActive(Ids.VIDEO, id, false);
+    Ids.unregister(Ids.VIDEO, id);
+  }
+
+  // ================= ID =================
+
+  @SimpleFunction(description = "Buat id video unik baru (Number, siap pakai ke PlayVideoIn).")
+  public int CreateVideoId() {
+    int id = Ids.createFor(Ids.VIDEO);
+    if (id < 1) {
+      Shared.err(this, "Video", 0, "gagal buat id");
+    }
+    return id;
+  }
+
+  @SimpleFunction(description = "Semua id video yang dipegang (URUT PEMBUATAN, "
+      + "index 1 = pertama dibuat).")
+  public List<Integer> GetVideoIds() {
+    return Ids.idsOf(Ids.VIDEO);
+  }
+
+  @SimpleFunction(description = "Id video yang sedang main (URUT PEMBUATAN). "
+      + "Yang dijeda/berhenti TIDAK masuk sini.")
+  public List<Integer> GetActiveVideoIds() {
+    return Ids.activeIdsOf(Ids.VIDEO);
+  }
+
+  @SimpleFunction(description = "Id video yang terakhir dibuat/di-start. -1 bila kosong.")
+  public int CurrentVideoId() {
+    return Ids.currentOf(Ids.VIDEO);
+  }
+
+  @SimpleFunction(description = "Id index 1 = PERTAMA DIBUAT. -1 bila kosong.")
+  public int GetFirstVideoId() {
+    return Ids.firstOf(Ids.VIDEO);
+  }
+
+  @SimpleFunction(description = "Id TERAKHIR DIBUAT. -1 bila kosong.")
+  public int GetLastVideoId() {
+    return Ids.lastOf(Ids.VIDEO);
+  }
+
+  @SimpleFunction(description = "Id yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
+  public int GetPreviousVideoId(int id) {
+    return Ids.previousOf(Ids.VIDEO, id);
+  }
+
+  @SimpleFunction(description = "True bila id video ini sedang main.")
+  public boolean IsVideoIdActive(int id) {
+    return Ids.isActive(Ids.VIDEO, id);
+  }
+
+  @SimpleFunction(description = "Hapus id video: hentikan + lepas dari layout + lepas id "
+      + "(otomatis beres-beres).")
+  public void RemoveVideoId(int id) {
+    stopStatic(id);
+    updateTickState();
   }
 
   // ================= pengaturan =================
@@ -582,22 +843,22 @@ public class Tools_Video extends AndroidNonvisibleComponent
 
   // ================= events =================
 
-  @SimpleEvent(description = "Video mulai main: persiapan selesai, durasi (ms) diketahui.")
-  public void VideoStarted(int duration) {
+  @SimpleEvent(description = "Video mulai main: id + durasi (ms) diketahui.")
+  public void VideoStarted(int id, int duration) {
     EventDispatcher.dispatchEvent(this, "VideoStarted",
-        Integer.valueOf(duration));
+        Integer.valueOf(id), Integer.valueOf(duration));
   }
 
-  @SimpleEvent(description = "Progres video berubah: posisi + durasi (ms) + persen 0-100.")
-  public void VideoProgressChanged(int position, int duration, int percent) {
+  @SimpleEvent(description = "Progres video berubah: id + posisi + durasi (ms) + persen 0-100.")
+  public void VideoProgressChanged(int id, int position, int duration, int percent) {
     EventDispatcher.dispatchEvent(this, "VideoProgressChanged",
-        Integer.valueOf(position), Integer.valueOf(duration),
+        Integer.valueOf(id), Integer.valueOf(position), Integer.valueOf(duration),
         Integer.valueOf(percent));
   }
 
   @SimpleEvent(description = "Video selesai (tidak loop). Putar lagi via PlayVideoIn.")
-  public void VideoFinished() {
-    EventDispatcher.dispatchEvent(this, "VideoFinished");
+  public void VideoFinished(int id) {
+    EventDispatcher.dispatchEvent(this, "VideoFinished", Integer.valueOf(id));
   }
 
   @SimpleEvent(description = "SATU-SATUNYA error Tools_Video.")
@@ -623,18 +884,15 @@ public class Tools_Video extends AndroidNonvisibleComponent
       // abaikan
     }
     try {
-      if (videoView != null) {
-        try {
-          videoView.stopPlayback();
-        } catch (Exception e) {
-          // abaikan
-        }
-        detach(videoView);
-        videoView = null;
+      ArrayList<Integer> keys;
+      synchronized (videoLock) {
+        keys = new ArrayList<Integer>(views.keySet());
+      }
+      for (int i = 0; i < keys.size(); i = i + 1) {
+        stopStatic(keys.get(i).intValue());
       }
     } catch (Exception e) {
       // abaikan
     }
-    videoReadyFlag = false;
   }
 }

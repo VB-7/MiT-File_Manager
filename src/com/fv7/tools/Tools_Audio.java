@@ -19,13 +19,16 @@ import com.google.appinventor.components.runtime.EventDispatcher;
 import com.google.appinventor.components.runtime.OnDestroyListener;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @DesignerComponent(
     version = 1,
-    description = "Tools_Audio: putar audio background (tanpa tampilan), kontrol "
-        + "pause/resume/seek/maju/mundur, loop, volume. Satu audio per saat (Play baru "
-        + "hentikan yang lama). Tampilan (Slider/Label) bikin sendiri dari event. "
-        + "Tanpa id.",
+    description = "Tools_Audio: putar BANYAK audio ber-id (background, tanpa tampilan), kontrol "
+        + "pause/resume/seek/maju/mundur, loop, volume. Satu id = satu audio, bisa jalan bareng. "
+        + "Id dikelola CreateAudioId / Tools_Base. List id URUT PEMBUATAN.",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,
@@ -42,18 +45,39 @@ public class Tools_Audio extends AndroidNonvisibleComponent
   private boolean audioLooping = false;
   private int mediaVolume = 100;
 
-  private MediaPlayer audioPlayer = null;
-  private boolean audioReady = false;
-  private Handler mediaTicks = null;
+  private static final Map<Integer, MediaPlayer> players =
+      new HashMap<Integer, MediaPlayer>();
+  private static final Map<Integer, Boolean> readies =
+      new HashMap<Integer, Boolean>();
+  private static final Object audioLock = new Object();
+  private static Handler mediaTicks = null;
 
   private final Runnable mediaTick = new Runnable() {
     public void run() {
       try {
-        if (audioPlayer != null && audioReady && audioPlayer.isPlaying()) {
-          int pos = audioPlayer.getCurrentPosition();
-          int dur = audioPlayer.getDuration();
-          int pct = dur > 0 ? ((int) (pos * 100L / dur)) : 0;
-          AudioProgressChanged(pos, dur, pct);
+        ArrayList<Integer> keys;
+        synchronized (audioLock) {
+          keys = new ArrayList<Integer>(players.keySet());
+        }
+        for (int i = 0; i < keys.size(); i = i + 1) {
+          int aid = keys.get(i).intValue();
+          try {
+            MediaPlayer mp;
+            boolean ready;
+            synchronized (audioLock) {
+              mp = players.get(Integer.valueOf(aid));
+              Boolean r = readies.get(Integer.valueOf(aid));
+              ready = r != null && r.booleanValue();
+            }
+            if (mp != null && ready && mp.isPlaying()) {
+              int pos = mp.getCurrentPosition();
+              int dur = mp.getDuration();
+              int pct = dur > 0 ? ((int) (pos * 100L / dur)) : 0;
+              AudioProgressChanged(aid, pos, dur, pct);
+            }
+          } catch (Exception e) {
+            // abaikan per-id
+          }
         }
       } catch (Exception e) {
         // abaikan
@@ -72,19 +96,35 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     try {
       boolean need = false;
       try {
-        if (audioPlayer != null && audioReady && audioPlayer.isPlaying()) {
-          need = true;
+        synchronized (audioLock) {
+          for (Map.Entry<Integer, MediaPlayer> en : players.entrySet()) {
+            try {
+              Boolean r = readies.get(en.getKey());
+              if (r != null && r.booleanValue() && en.getValue().isPlaying()) {
+                need = true;
+                break;
+              }
+            } catch (Exception e) {
+              // abaikan per-id
+            }
+          }
         }
       } catch (Exception e) {
         // abaikan
       }
-      if (mediaTicks == null) {
-        mediaTicks = new Handler(context.getMainLooper());
-      }
-      mediaTicks.removeCallbacks(mediaTick);
-      if (need) {
-        int every = progressInterval > 0 ? progressInterval : 500;
-        mediaTicks.postDelayed(mediaTick, every);
+      synchronized (audioLock) {
+        if (mediaTicks == null) {
+          try {
+            mediaTicks = new Handler(context.getMainLooper());
+          } catch (Exception e) {
+            return;
+          }
+        }
+        mediaTicks.removeCallbacks(mediaTick);
+        if (need) {
+          int every = progressInterval > 0 ? progressInterval : 500;
+          mediaTicks.postDelayed(mediaTick, every);
+        }
       }
     } catch (Exception e) {
       // abaikan
@@ -102,45 +142,101 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     return v / 100.0f;
   }
 
-  private void stopInternal() {
+  private void stopInternal(int id) {
+    MediaPlayer mp;
+    synchronized (audioLock) {
+      mp = players.remove(Integer.valueOf(id));
+      readies.remove(Integer.valueOf(id));
+    }
     try {
-      if (audioPlayer != null) {
+      if (mp != null) {
         try {
-          audioPlayer.stop();
+          mp.stop();
         } catch (Exception e) {
           // abaikan
         }
         try {
-          audioPlayer.reset();
+          mp.reset();
         } catch (Exception e) {
           // abaikan
         }
         try {
-          audioPlayer.release();
+          mp.release();
         } catch (Exception e) {
           // abaikan
         }
-        audioPlayer = null;
       }
     } catch (Exception e) {
       // abaikan
     }
-    audioReady = false;
+    Ids.setActive(Ids.AUDIO, id, false);
   }
 
-  @SimpleFunction(description = "Putar audio (background, tanpa tampilan). path bisa file scope, "
-      + "file:/// absolut, atau http(s) URL (streaming). Tampilan (Slider/Label) bikin "
-      + "sendiri dari AudioStarted/ProgressChanged/Finished.")
-  public void PlayAudio(final FileScope scope, final String path) {
+  /** Hentikan + lepas id. Dipakai komponen + Tools_Base RemoveAudioId. */
+  public static void stopStatic(int id) {
+    MediaPlayer mp;
+    synchronized (audioLock) {
+      mp = players.remove(Integer.valueOf(id));
+      readies.remove(Integer.valueOf(id));
+    }
+    try {
+      if (mp != null) {
+        try {
+          mp.stop();
+        } catch (Exception e) {
+          // abaikan
+        }
+        try {
+          mp.reset();
+        } catch (Exception e) {
+          // abaikan
+        }
+        try {
+          mp.release();
+        } catch (Exception e) {
+          // abaikan
+        }
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    Ids.setActive(Ids.AUDIO, id, false);
+    Ids.unregister(Ids.AUDIO, id);
+  }
+
+  @SimpleFunction(description = "Putar audio ber-id (background, tanpa tampilan). Bisa jalan bareng "
+      + "(satu id = satu audio). path bisa file scope, file:/// absolut, atau http(s) URL "
+      + "(streaming). id dari CreateAudioId / Tools_Base CreateUniqueId (reservasi diadopsi). "
+      + "Tampilan (Slider/Label) bikin sendiri dari AudioStarted/ProgressChanged/Finished. "
+      + "Kembali: id, atau -1 bila gagal mulai.")
+  public int PlayAudio(final FileScope scope, final String path, final int id) {
+    if (id < 1) {
+      Shared.err(this, "Audio", id, "id harus >= 1 (pakai CreateAudioId)");
+      return -1;
+    }
+    if (!Ids.register(Ids.AUDIO, id)) {
+      Shared.err(this, "Audio", id, "ID " + id + " sedang dipakai audio lain");
+      return -1;
+    }
+    synchronized (audioLock) {
+      if (players.containsKey(Integer.valueOf(id))) {
+        if (Ids.isActive(Ids.AUDIO, id)) {
+          Shared.err(this, "Audio", id, "ID " + id + " masih bunyi "
+              + "(tunggu selesai / Pause / Stop dulu)");
+          return -1;
+        }
+      }
+    }
+    stopInternal(id);
     try {
       form.runOnUiThread(new Runnable() {
         public void run() {
           try {
-            stopInternal();
             final MediaPlayer mp = new MediaPlayer();
             String sa = Shared.clean(path);
             if (sa.length() == 0) {
-              Shared.err(Tools_Audio.this, "Audio", 0, "path kosong");
+              Ids.unregister(Ids.AUDIO, id);
+              Shared.err(Tools_Audio.this, "Audio", id, "path kosong");
               return;
             }
             if (sa.regionMatches(true, 0, "http", 0, 4)) {
@@ -163,17 +259,24 @@ public class Tools_Audio extends AndroidNonvisibleComponent
             } else {
               File f = Shared.resolve(context, scope, sa);
               if (f == null || !f.exists()) {
-                Shared.err(Tools_Audio.this, "Audio", 0, "file tidak ada");
+                Ids.unregister(Ids.AUDIO, id);
+                Shared.err(Tools_Audio.this, "Audio", id, "file tidak ada");
                 return;
               }
               mp.setDataSource(f.getAbsolutePath());
             }
-            audioPlayer = mp;
-            audioReady = false;
+            synchronized (audioLock) {
+              players.put(Integer.valueOf(id), mp);
+              readies.put(Integer.valueOf(id), Boolean.valueOf(false));
+            }
+            final int fId = id;
             mp.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
               public void onPrepared(MediaPlayer p) {
-                if (audioPlayer != mp) {
-                  return;
+                synchronized (audioLock) {
+                  if (players.get(Integer.valueOf(fId)) != p) {
+                    return;
+                  }
+                  readies.put(Integer.valueOf(fId), Boolean.valueOf(true));
                 }
                 try {
                   p.setLooping(audioLooping);
@@ -182,7 +285,7 @@ public class Tools_Audio extends AndroidNonvisibleComponent
                 } catch (Exception e) {
                   // abaikan
                 }
-                audioReady = true;
+                Ids.setActive(Ids.AUDIO, fId, true);
                 int dur = 0;
                 try {
                   dur = p.getDuration();
@@ -190,14 +293,16 @@ public class Tools_Audio extends AndroidNonvisibleComponent
                 } catch (Exception e) {
                   // abaikan
                 }
-                AudioStarted(dur);
+                AudioStarted(fId, dur);
                 updateTickState();
               }
             });
             mp.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
               public void onCompletion(MediaPlayer p) {
-                if (audioPlayer != mp) {
-                  return;
+                synchronized (audioLock) {
+                  if (players.get(Integer.valueOf(fId)) != p) {
+                    return;
+                  }
                 }
                 if (audioLooping) {
                   try {
@@ -207,141 +312,198 @@ public class Tools_Audio extends AndroidNonvisibleComponent
                   }
                   return;
                 }
-                audioReady = false;
-                AudioFinished();
+                synchronized (audioLock) {
+                  readies.put(Integer.valueOf(fId), Boolean.valueOf(false));
+                }
+                Ids.setActive(Ids.AUDIO, fId, false);
+                AudioFinished(fId);
                 updateTickState();
               }
             });
             mp.setOnErrorListener(new MediaPlayer.OnErrorListener() {
               public boolean onError(MediaPlayer p, int what, int extra) {
-                if (audioPlayer == mp) {
-                  audioReady = false;
-                  Shared.err(Tools_Audio.this, "Audio", 0,
-                      "format tidak didukung / file rusak");
-                  updateTickState();
+                synchronized (audioLock) {
+                  if (players.get(Integer.valueOf(fId)) == p) {
+                    readies.put(Integer.valueOf(fId), Boolean.valueOf(false));
+                  } else {
+                    return true;
+                  }
                 }
+                Ids.setActive(Ids.AUDIO, fId, false);
+                Shared.err(Tools_Audio.this, "Audio", fId,
+                    "format tidak didukung / file rusak");
+                updateTickState();
                 return true;
               }
             });
             mp.prepareAsync();
           } catch (Exception e) {
+            Ids.unregister(Ids.AUDIO, id);
             String m = e.getMessage();
-            Shared.err(Tools_Audio.this, "Audio", 0,
+            Shared.err(Tools_Audio.this, "Audio", id,
                 m == null ? "audio gagal diputar" : m);
           }
         }
       });
     } catch (Exception e) {
+      Ids.unregister(Ids.AUDIO, id);
       String m = e.getMessage();
-      Shared.err(this, "Audio", 0, m == null ? "audio gagal diputar" : m);
+      Shared.err(this, "Audio", id, m == null ? "audio gagal diputar" : m);
+      return -1;
     }
+    return id;
   }
 
-  @SimpleFunction(description = "Jeda audio yang sedang bunyi.")
-  public void PauseAudio() {
+  @SimpleFunction(description = "Jeda audio yang sedang bunyi (per id).")
+  public void PauseAudio(int id) {
     try {
-      if (audioPlayer != null && audioReady && audioPlayer.isPlaying()) {
-        audioPlayer.pause();
+      MediaPlayer mp;
+      boolean ready;
+      synchronized (audioLock) {
+        mp = players.get(Integer.valueOf(id));
+        Boolean r = readies.get(Integer.valueOf(id));
+        ready = r != null && r.booleanValue();
+      }
+      if (mp != null && ready && mp.isPlaying()) {
+        mp.pause();
+        Ids.setActive(Ids.AUDIO, id, false);
         updateTickState();
       } else {
-        Shared.err(this, "Audio", 0, "tidak ada audio yang bunyi");
+        Shared.err(this, "Audio", id, "tidak ada audio bunyi ID " + id);
       }
     } catch (Exception e) {
       String m = e.getMessage();
-      Shared.err(this, "Audio", 0, m == null ? "pause gagal" : m);
+      Shared.err(this, "Audio", id, m == null ? "pause gagal" : m);
     }
   }
 
-  @SimpleFunction(description = "Lanjutkan audio yang dijeda.")
-  public void ResumeAudio() {
+  @SimpleFunction(description = "Lanjutkan audio yang dijeda (per id).")
+  public void ResumeAudio(int id) {
     try {
-      if (audioPlayer != null && audioReady && !audioPlayer.isPlaying()) {
-        audioPlayer.start();
+      MediaPlayer mp;
+      boolean ready;
+      synchronized (audioLock) {
+        mp = players.get(Integer.valueOf(id));
+        Boolean r = readies.get(Integer.valueOf(id));
+        ready = r != null && r.booleanValue();
+      }
+      if (mp != null && ready && !mp.isPlaying()) {
+        mp.start();
+        Ids.setActive(Ids.AUDIO, id, true);
         updateTickState();
       } else {
-        Shared.err(this, "Audio", 0, "tidak ada audio yang dijeda");
+        Shared.err(this, "Audio", id, "tidak ada audio jeda ID " + id);
       }
     } catch (Exception e) {
       String m = e.getMessage();
-      Shared.err(this, "Audio", 0, m == null ? "resume gagal" : m);
+      Shared.err(this, "Audio", id, m == null ? "resume gagal" : m);
     }
   }
 
-  @SimpleFunction(description = "Hentikan audio (putar lagi via PlayAudio).")
-  public void StopAudio() {
+  @SimpleFunction(description = "Hentikan audio (per id). Putar lagi via PlayAudio.")
+  public void StopAudio(int id) {
     try {
-      if (audioPlayer != null) {
-        stopInternal();
+      boolean has;
+      synchronized (audioLock) {
+        has = players.containsKey(Integer.valueOf(id));
+      }
+      if (has) {
+        stopInternal(id);
         updateTickState();
       } else {
-        Shared.err(this, "Audio", 0, "tidak ada audio");
+        Shared.err(this, "Audio", id, "tidak ada audio ID " + id);
       }
     } catch (Exception e) {
       String m = e.getMessage();
-      Shared.err(this, "Audio", 0, m == null ? "stop gagal" : m);
+      Shared.err(this, "Audio", id, m == null ? "stop gagal" : m);
     }
   }
 
-  @SimpleFunction(description = "Lompat audio ke posisi (ms). Bisa dipasang ke Slider.")
-  public void SeekAudio(int position) {
+  @SimpleFunction(description = "Lompat audio ke posisi (ms). Bisa dipasang ke Slider. (per id)")
+  public void SeekAudio(int id, int position) {
     try {
-      if (audioPlayer != null && audioReady) {
-        audioPlayer.seekTo(position < 0 ? 0 : position);
+      MediaPlayer mp;
+      boolean ready;
+      synchronized (audioLock) {
+        mp = players.get(Integer.valueOf(id));
+        Boolean r = readies.get(Integer.valueOf(id));
+        ready = r != null && r.booleanValue();
+      }
+      if (mp != null && ready) {
+        mp.seekTo(position < 0 ? 0 : position);
       } else {
-        Shared.err(this, "Audio", 0, "tidak ada audio yang bunyi");
+        Shared.err(this, "Audio", id, "tidak ada audio bunyi ID " + id);
       }
     } catch (Exception e) {
       String m = e.getMessage();
-      Shared.err(this, "Audio", 0, m == null ? "seek gagal" : m);
+      Shared.err(this, "Audio", id, m == null ? "seek gagal" : m);
     }
   }
 
-  @SimpleFunction(description = "Maju audio sejauh SkipSeconds detik.")
-  public void ForwardAudio() {
+  @SimpleFunction(description = "Maju audio sejauh SkipSeconds detik. (per id)")
+  public void ForwardAudio(int id) {
     try {
-      if (audioPlayer != null && audioReady) {
-        int pos = audioPlayer.getCurrentPosition();
+      MediaPlayer mp;
+      boolean ready;
+      synchronized (audioLock) {
+        mp = players.get(Integer.valueOf(id));
+        Boolean r = readies.get(Integer.valueOf(id));
+        ready = r != null && r.booleanValue();
+      }
+      if (mp != null && ready) {
+        int pos = mp.getCurrentPosition();
         int dur = 0;
         try {
-          dur = audioPlayer.getDuration();
+          dur = mp.getDuration();
         } catch (Exception e) {
           // abaikan
         }
         int skip = skipSeconds * 1000;
         if (dur > 0) {
-          audioPlayer.seekTo(Math.min(dur, pos + skip));
+          mp.seekTo(Math.min(dur, pos + skip));
         } else {
-          audioPlayer.seekTo(pos + skip);
+          mp.seekTo(pos + skip);
         }
       } else {
-        Shared.err(this, "Audio", 0, "tidak ada audio yang bunyi");
+        Shared.err(this, "Audio", id, "tidak ada audio bunyi ID " + id);
       }
     } catch (Exception e) {
       String m = e.getMessage();
-      Shared.err(this, "Audio", 0, m == null ? "maju gagal" : m);
+      Shared.err(this, "Audio", id, m == null ? "maju gagal" : m);
     }
   }
 
-  @SimpleFunction(description = "Mundur audio sejauh SkipSeconds detik.")
-  public void BackwardAudio() {
+  @SimpleFunction(description = "Mundur audio sejauh SkipSeconds detik. (per id)")
+  public void BackwardAudio(int id) {
     try {
-      if (audioPlayer != null && audioReady) {
-        int pos = audioPlayer.getCurrentPosition();
-        audioPlayer.seekTo(Math.max(0, pos - skipSeconds * 1000));
+      MediaPlayer mp;
+      boolean ready;
+      synchronized (audioLock) {
+        mp = players.get(Integer.valueOf(id));
+        Boolean r = readies.get(Integer.valueOf(id));
+        ready = r != null && r.booleanValue();
+      }
+      if (mp != null && ready) {
+        int pos = mp.getCurrentPosition();
+        mp.seekTo(Math.max(0, pos - skipSeconds * 1000));
       } else {
-        Shared.err(this, "Audio", 0, "tidak ada audio yang bunyi");
+        Shared.err(this, "Audio", id, "tidak ada audio bunyi ID " + id);
       }
     } catch (Exception e) {
       String m = e.getMessage();
-      Shared.err(this, "Audio", 0, m == null ? "mundur gagal" : m);
+      Shared.err(this, "Audio", id, m == null ? "mundur gagal" : m);
     }
   }
 
-  @SimpleFunction(description = "Posisi audio sekarang (ms).")
-  public int AudioPosition() {
+  @SimpleFunction(description = "Posisi audio sekarang (ms). (per id)")
+  public int AudioPosition(int id) {
     try {
-      if (audioPlayer != null && audioReady) {
-        return audioPlayer.getCurrentPosition();
+      synchronized (audioLock) {
+        MediaPlayer mp = players.get(Integer.valueOf(id));
+        Boolean r = readies.get(Integer.valueOf(id));
+        if (mp != null && r != null && r.booleanValue()) {
+          return mp.getCurrentPosition();
+        }
       }
     } catch (Exception e) {
       // abaikan
@@ -349,12 +511,16 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     return 0;
   }
 
-  @SimpleFunction(description = "Durasi audio (ms). 0 bila belum siap.")
-  public int AudioDuration() {
+  @SimpleFunction(description = "Durasi audio (ms). 0 bila belum siap. (per id)")
+  public int AudioDuration(int id) {
     try {
-      if (audioPlayer != null && audioReady) {
-        int d = audioPlayer.getDuration();
-        return d < 0 ? 0 : d;
+      synchronized (audioLock) {
+        MediaPlayer mp = players.get(Integer.valueOf(id));
+        Boolean r = readies.get(Integer.valueOf(id));
+        if (mp != null && r != null && r.booleanValue()) {
+          int d = mp.getDuration();
+          return d < 0 ? 0 : d;
+        }
       }
     } catch (Exception e) {
       // abaikan
@@ -362,13 +528,71 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     return 0;
   }
 
-  @SimpleFunction(description = "True bila audio sedang bunyi.")
-  public boolean IsAudioPlaying() {
+  @SimpleFunction(description = "True bila audio id ini sedang bunyi.")
+  public boolean IsAudioPlaying(int id) {
     try {
-      return audioPlayer != null && audioReady && audioPlayer.isPlaying();
+      synchronized (audioLock) {
+        MediaPlayer mp = players.get(Integer.valueOf(id));
+        Boolean r = readies.get(Integer.valueOf(id));
+        return mp != null && r != null && r.booleanValue() && mp.isPlaying();
+      }
     } catch (Exception e) {
       return false;
     }
+  }
+
+  // ================= ID =================
+
+  @SimpleFunction(description = "Buat id audio unik baru (Number, siap pakai ke PlayAudio).")
+  public int CreateAudioId() {
+    int id = Ids.createFor(Ids.AUDIO);
+    if (id < 1) {
+      Shared.err(this, "Audio", 0, "gagal buat id");
+    }
+    return id;
+  }
+
+  @SimpleFunction(description = "Semua id audio yang dipegang (URUT PEMBUATAN, "
+      + "index 1 = pertama dibuat).")
+  public List<Integer> GetAudioIds() {
+    return Ids.idsOf(Ids.AUDIO);
+  }
+
+  @SimpleFunction(description = "Id audio yang sedang bunyi (URUT PEMBUATAN). "
+      + "Yang dijeda/berhenti TIDAK masuk sini.")
+  public List<Integer> GetActiveAudioIds() {
+    return Ids.activeIdsOf(Ids.AUDIO);
+  }
+
+  @SimpleFunction(description = "Id audio yang terakhir dibuat/di-start. -1 bila kosong.")
+  public int CurrentAudioId() {
+    return Ids.currentOf(Ids.AUDIO);
+  }
+
+  @SimpleFunction(description = "Id index 1 = PERTAMA DIBUAT. -1 bila kosong.")
+  public int GetFirstAudioId() {
+    return Ids.firstOf(Ids.AUDIO);
+  }
+
+  @SimpleFunction(description = "Id TERAKHIR DIBUAT. -1 bila kosong.")
+  public int GetLastAudioId() {
+    return Ids.lastOf(Ids.AUDIO);
+  }
+
+  @SimpleFunction(description = "Id yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
+  public int GetPreviousAudioId(int id) {
+    return Ids.previousOf(Ids.AUDIO, id);
+  }
+
+  @SimpleFunction(description = "True bila id audio ini sedang bunyi.")
+  public boolean IsAudioIdActive(int id) {
+    return Ids.isActive(Ids.AUDIO, id);
+  }
+
+  @SimpleFunction(description = "Hapus id audio: hentikan bila bunyi + lepas id "
+      + "(otomatis beres-beres).")
+  public void RemoveAudioId(int id) {
+    stopStatic(id);
   }
 
   // ================= pengaturan =================
@@ -407,7 +631,7 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     audioLooping = loop;
   }
 
-  @SimpleProperty(description = "Volume audio 0-100 (default 100).",
+  @SimpleProperty(description = "Volume audio 0-100 (default 100, berlaku semua id).",
       category = PropertyCategory.BEHAVIOR)
   public int MediaVolume() {
     return mediaVolume;
@@ -423,9 +647,15 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     }
     mediaVolume = volume;
     try {
-      if (audioPlayer != null && audioReady) {
-        float v = volFloat();
-        audioPlayer.setVolume(v, v);
+      float v = volFloat();
+      synchronized (audioLock) {
+        for (MediaPlayer mp : players.values()) {
+          try {
+            mp.setVolume(v, v);
+          } catch (Exception e) {
+            // abaikan per-id
+          }
+        }
       }
     } catch (Exception e) {
       // abaikan
@@ -434,22 +664,22 @@ public class Tools_Audio extends AndroidNonvisibleComponent
 
   // ================= events =================
 
-  @SimpleEvent(description = "Audio mulai bunyi: persiapan selesai, durasi (ms) diketahui.")
-  public void AudioStarted(int duration) {
+  @SimpleEvent(description = "Audio mulai bunyi: id + durasi (ms) diketahui.")
+  public void AudioStarted(int id, int duration) {
     EventDispatcher.dispatchEvent(this, "AudioStarted",
-        Integer.valueOf(duration));
+        Integer.valueOf(id), Integer.valueOf(duration));
   }
 
-  @SimpleEvent(description = "Progres audio berubah: posisi + durasi (ms) + persen 0-100.")
-  public void AudioProgressChanged(int position, int duration, int percent) {
+  @SimpleEvent(description = "Progres audio berubah: id + posisi + durasi (ms) + persen 0-100.")
+  public void AudioProgressChanged(int id, int position, int duration, int percent) {
     EventDispatcher.dispatchEvent(this, "AudioProgressChanged",
-        Integer.valueOf(position), Integer.valueOf(duration),
+        Integer.valueOf(id), Integer.valueOf(position), Integer.valueOf(duration),
         Integer.valueOf(percent));
   }
 
   @SimpleEvent(description = "Audio selesai (tidak loop). Putar lagi via PlayAudio.")
-  public void AudioFinished() {
-    EventDispatcher.dispatchEvent(this, "AudioFinished");
+  public void AudioFinished(int id) {
+    EventDispatcher.dispatchEvent(this, "AudioFinished", Integer.valueOf(id));
   }
 
   @SimpleEvent(description = "SATU-SATUNYA error Tools_Audio.")
@@ -468,12 +698,25 @@ public class Tools_Audio extends AndroidNonvisibleComponent
 
   public void onDestroy() {
     try {
-      if (mediaTicks != null) {
-        mediaTicks.removeCallbacks(mediaTick);
+      synchronized (audioLock) {
+        if (mediaTicks != null) {
+          mediaTicks.removeCallbacks(mediaTick);
+        }
       }
     } catch (Exception e) {
       // abaikan
     }
-    stopInternal();
+    try {
+      ArrayList<Integer> keys;
+      synchronized (audioLock) {
+        keys = new ArrayList<Integer>(players.keySet());
+      }
+      for (int i = 0; i < keys.size(); i = i + 1) {
+        stopInternal(keys.get(i).intValue());
+        Ids.unregister(Ids.AUDIO, keys.get(i).intValue());
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
   }
 }
