@@ -335,6 +335,15 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   // ================= BASE64 KE FILE =================
 
+  /** Fallback polling untuk AfterBase64FileReady: path file terakhir yang jadi. */
+  private static String lastBase64FilePath = "";
+
+  @SimpleFunction(description = "Fallback polling untuk AfterBase64FileReady: "
+      + "path file terakhir yang berhasil ditulis (kosong bila belum ada).")
+  public String GetLastBase64FilePath() {
+    return lastBase64FilePath;
+  }
+
   @SimpleFunction(description = "Simpan base64 LANGSUNG ke storage (tanpa validasi gambar, "
       + "lebih cepat dari Base64ToPicture). base64 boleh mentah atau data:.../...;base64,.... "
       + "path = lokasi TUJUAN termasuk nama file (mis. folder/hasil.bin). Folder dibuat "
@@ -410,10 +419,16 @@ public class Tools_File extends AndroidNonvisibleComponent
         try {
           form.runOnUiThread(new Runnable() {
             public void run() {
+              if (fOk) {
+                lastBase64FilePath = fPath;
+              }
               AfterBase64FileReady(fOk, fSc, fPath, fName, fMsg);
             }
           });
         } catch (Exception e) {
+          if (fOk) {
+            lastBase64FilePath = fPath;
+          }
           AfterBase64FileReady(fOk, fSc, fPath, fName, fMsg);
         }
         if (!fOk) {
@@ -1584,6 +1599,13 @@ public class Tools_File extends AndroidNonvisibleComponent
   public void ErrorOccurred(String component, int id, String message) {
     EventDispatcher.dispatchEvent(this, "ErrorOccurred",
         component, Integer.valueOf(id), message);
+  }
+
+  @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred: "
+      + "pesan error terakhir operasi ini (Copy/Move/Read/File/Pick/Open/dll, "
+      + "kosong bila belum ada).")
+  public String LastError(String operation) {
+    return Shared.lastError(operation);
   }
 
   // ================= OP =================

@@ -873,6 +873,12 @@ public class Tools_Video extends AndroidNonvisibleComponent
     return "Video";
   }
 
+  @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred: "
+      + "pesan error terakhir operasi ini (kosong bila belum ada).")
+  public String LastError(String operation) {
+    return Shared.lastError(operation);
+  }
+
   // ================= destroy =================
 
   public void onDestroy() {

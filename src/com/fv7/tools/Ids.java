@@ -23,6 +23,10 @@ public final class Ids {
   public static final String IMAGE = "Image";
   public static final String AUDIO = "Audio";
   public static final String VIDEO = "Video";
+  public static final String CORE = "Core";
+  public static final String LAYOUT = "Layout";
+  public static final String SHEET = "Sheet";
+  public static final String SLIDER = "Slider";
   public static final String RESERVED = "Reserved";
 
   private static final Set<Integer> claimed = new LinkedHashSet<Integer>();
@@ -38,15 +42,27 @@ public final class Ids {
     sets.put(IMAGE, new LinkedHashSet<Integer>());
     sets.put(AUDIO, new LinkedHashSet<Integer>());
     sets.put(VIDEO, new LinkedHashSet<Integer>());
+    sets.put(CORE, new LinkedHashSet<Integer>());
+    sets.put(LAYOUT, new LinkedHashSet<Integer>());
+    sets.put(SHEET, new LinkedHashSet<Integer>());
+    sets.put(SLIDER, new LinkedHashSet<Integer>());
     sets.put(RESERVED, new LinkedHashSet<Integer>());
     actives.put(DOWNLOAD, new LinkedHashSet<Integer>());
     actives.put(IMAGE, new LinkedHashSet<Integer>());
     actives.put(AUDIO, new LinkedHashSet<Integer>());
     actives.put(VIDEO, new LinkedHashSet<Integer>());
+    actives.put(CORE, new LinkedHashSet<Integer>());
+    actives.put(LAYOUT, new LinkedHashSet<Integer>());
+    actives.put(SHEET, new LinkedHashSet<Integer>());
+    actives.put(SLIDER, new LinkedHashSet<Integer>());
     currents.put(DOWNLOAD, Integer.valueOf(-1));
     currents.put(IMAGE, Integer.valueOf(-1));
     currents.put(AUDIO, Integer.valueOf(-1));
     currents.put(VIDEO, Integer.valueOf(-1));
+    currents.put(CORE, Integer.valueOf(-1));
+    currents.put(LAYOUT, Integer.valueOf(-1));
+    currents.put(SHEET, Integer.valueOf(-1));
+    currents.put(SLIDER, Integer.valueOf(-1));
   }
 
   private Ids() {
@@ -58,7 +74,9 @@ public final class Ids {
 
   private static boolean badType(String type) {
     return !DOWNLOAD.equals(type) && !IMAGE.equals(type)
-        && !AUDIO.equals(type) && !VIDEO.equals(type);
+        && !AUDIO.equals(type) && !VIDEO.equals(type)
+        && !CORE.equals(type) && !LAYOUT.equals(type)
+        && !SHEET.equals(type) && !SLIDER.equals(type);
   }
 
   private static Integer lastOfSet(LinkedHashSet<Integer> s) {

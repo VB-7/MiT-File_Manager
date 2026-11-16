@@ -556,6 +556,12 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
         component, Integer.valueOf(id), message);
   }
 
+  @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred: "
+      + "pesan error terakhir operasi ini (Zip/Unzip, kosong bila belum ada).")
+  public String LastError(String operation) {
+    return Shared.lastError(operation);
+  }
+
   // ================= OP =================
 
   @SimpleProperty(description = "Nama operasi Zip (untuk if di ErrorOccurred).",

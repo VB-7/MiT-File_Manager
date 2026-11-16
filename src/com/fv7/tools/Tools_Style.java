@@ -1,0 +1,775 @@
+package com.fv7.tools;
+
+import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.GradientDrawable;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.animation.AlphaAnimation;
+import android.view.animation.Animation;
+import android.view.animation.ScaleAnimation;
+import android.view.animation.TranslateAnimation;
+
+import com.google.appinventor.components.annotations.DesignerComponent;
+import com.google.appinventor.components.annotations.PropertyCategory;
+import com.google.appinventor.components.annotations.SimpleEvent;
+import com.google.appinventor.components.annotations.SimpleFunction;
+import com.google.appinventor.components.annotations.SimpleObject;
+import com.google.appinventor.components.annotations.SimpleProperty;
+import com.google.appinventor.components.common.ComponentCategory;
+import com.google.appinventor.components.common.FileScope;
+import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
+import com.google.appinventor.components.runtime.AndroidViewComponent;
+import com.google.appinventor.components.runtime.ComponentContainer;
+import com.google.appinventor.components.runtime.EventDispatcher;
+import com.google.appinventor.components.runtime.util.AsynchUtil;
+import com.google.appinventor.components.runtime.util.YailList;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.util.ArrayList;
+
+@DesignerComponent(
+    version = 1,
+    description = "Tools_Style: percantik komponen/wadah yang kelihatan "
+        + "(Button, Label, Arrangement, gambar Tools_Image, komponen dinamis, "
+        + "dsb). Radius, border, gradien, elevation, padding, margin, opacity, "
+        + "background warna/gambar, plus animasi fade/slide/zoom. Tanpa id "
+        + "(stateless, langsung ke komponen). Semua prosedur void; gagal via "
+        + "ErrorOccurred. Catatan: background bawaan komponen (mis. Button) "
+        + "diganti drawable baru.",
+    category = ComponentCategory.EXTENSION,
+    nonVisible = true,
+    androidMinSdk = 21,
+    iconName = "aiwebres/tools_style.jpg")
+@SimpleObject(external = true)
+public class Tools_Style extends AndroidNonvisibleComponent {
+
+  private final Context context;
+  private final float density;
+
+  public Tools_Style(ComponentContainer container) {
+    super(container.$form());
+    this.context = container.$context();
+    float d = 1.0f;
+    try {
+      d = context.getResources().getDisplayMetrics().density;
+    } catch (Exception e) {
+      // abaikan
+    }
+    this.density = d <= 0 ? 1.0f : d;
+  }
+
+  private int dp(float v) {
+    return Math.round(v * density);
+  }
+
+  private View viewOf(AndroidViewComponent comp, String op) {
+    if (comp == null) {
+      Shared.err(this, "Style", 0, op + ": komponen tidak valid");
+      return null;
+    }
+    try {
+      View v = comp.getView();
+      if (v == null) {
+        Shared.err(this, "Style", 0, op + ": view tidak ada");
+        return null;
+      }
+      return v;
+    } catch (Exception e) {
+      Shared.err(this, "Style", 0, op + ": view tidak bisa diakses");
+      return null;
+    }
+  }
+
+  private GradientDrawable currentBg(View v) {
+    try {
+      if (v.getBackground() instanceof GradientDrawable) {
+        return (GradientDrawable) v.getBackground();
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    return new GradientDrawable();
+  }
+
+  @SimpleFunction(description = "Atur sudut membulat (radius, dp). Background "
+      + "bawaan diganti.")
+  public void SetCornerRadius(AndroidViewComponent comp, float radiusDp) {
+    View v = viewOf(comp, "Radius");
+    if (v == null) {
+      return;
+    }
+    try {
+      GradientDrawable g = currentBg(v);
+      g.setCornerRadius(dp(Math.max(0, radiusDp)));
+      v.setBackgroundDrawable(g);
+    } catch (Exception e) {
+      Shared.err(this, "Style", 0, "radius gagal");
+    }
+  }
+
+  @SimpleFunction(description = "Atur garis tepi: warna + tebal (dp). "
+      + "Background bawaan diganti.")
+  public void SetBorder(AndroidViewComponent comp, int color, float widthDp) {
+    View v = viewOf(comp, "Border");
+    if (v == null) {
+      return;
+    }
+    try {
+      GradientDrawable g = currentBg(v);
+      g.setStroke(dp(Math.max(0, widthDp)), color);
+      v.setBackgroundDrawable(g);
+    } catch (Exception e) {
+      Shared.err(this, "Style", 0, "border gagal");
+    }
+  }
+
+  @SimpleFunction(description = "Atur gradien banyak warna (list warna) + arah "
+      + "angka: 0=atas-bawah, 1=kananATAS-kiriBAWAH, 2=kanan-kiri, 3=kananBAWAH-"
+      + "kiriATAS, 4=bawah-atas, 5=kiriBAWAH-kananATAS, 6=kiri-kanan, "
+      + "7=kiriATAS-kananBAWAH. Background bawaan diganti.")
+  public void SetGradient(AndroidViewComponent comp, Object colors,
+      int orientation) {
+    View v = viewOf(comp, "Gradient");
+    if (v == null) {
+      return;
+    }
+    if (orientation < 0 || orientation > 7) {
+      Shared.err(this, "Style", 0, "arah harus 0-7");
+      return;
+    }
+    ArrayList<Integer> list = new ArrayList<Integer>();
+    try {
+      if (colors instanceof YailList) {
+        for (Object x : ((YailList) colors).toArray()) {
+          if (x instanceof Number) {
+            list.add(Integer.valueOf(((Number) x).intValue()));
+          } else if (x != null) {
+            try {
+              list.add(Integer.valueOf(Integer.parseInt(x.toString().trim())));
+            } catch (Exception e) {
+              // abaikan item
+            }
+          }
+        }
+      } else if (colors instanceof Number) {
+        list.add(Integer.valueOf(((Number) colors).intValue()));
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    if (list.size() < 2) {
+      Shared.err(this, "Style", 0, "butuh minimal 2 warna");
+      return;
+    }
+    try {
+      GradientDrawable g = currentBg(v);
+      int[] arr = new int[list.size()];
+      for (int i = 0; i < list.size(); i = i + 1) {
+        arr[i] = list.get(i).intValue();
+      }
+      g.setColors(arr);
+      GradientDrawable.Orientation[] all = {
+          GradientDrawable.Orientation.TOP_BOTTOM,
+          GradientDrawable.Orientation.TR_BL,
+          GradientDrawable.Orientation.RIGHT_LEFT,
+          GradientDrawable.Orientation.BR_TL,
+          GradientDrawable.Orientation.BOTTOM_TOP,
+          GradientDrawable.Orientation.BL_TR,
+          GradientDrawable.Orientation.LEFT_RIGHT,
+          GradientDrawable.Orientation.TL_BR
+      };
+      g.setOrientation(all[orientation]);
+      v.setBackgroundDrawable(g);
+    } catch (Exception e) {
+      Shared.err(this, "Style", 0, "gradien gagal");
+    }
+  }
+
+  @SimpleFunction(description = "Atur gradien radial: warna tengah, warna tepi, "
+      + "radius (dp). Background bawaan diganti.")
+  public void SetRadialGradient(AndroidViewComponent comp, int centerColor,
+      int edgeColor, float radiusDp) {
+    View v = viewOf(comp, "RadialGradient");
+    if (v == null) {
+      return;
+    }
+    try {
+      GradientDrawable g = currentBg(v);
+      g.setColors(new int[] { centerColor, edgeColor });
+      g.setGradientType(GradientDrawable.RADIAL_GRADIENT);
+      g.setGradientRadius(dp(Math.max(0, radiusDp)));
+      v.setBackgroundDrawable(g);
+    } catch (Exception e) {
+      Shared.err(this, "Style", 0, "gradien radial gagal");
+    }
+  }
+
+  @SimpleFunction(description = "Atur bentuk background angka: pakai properti "
+      + "ShapeRectangle/ShapeOval/ShapeLine/ShapeRing.")
+  public void SetShape(AndroidViewComponent comp, int shape) {
+    View v = viewOf(comp, "Shape");
+    if (v == null) {
+      return;
+    }
+    if (shape < 0 || shape > 3) {
+      Shared.err(this, "Style", 0, "shape harus 0-3");
+      return;
+    }
+    try {
+      GradientDrawable g = currentBg(v);
+      g.setShape(shape);
+      v.setBackgroundDrawable(g);
+    } catch (Exception e) {
+      Shared.err(this, "Style", 0, "shape gagal");
+    }
+  }
+
+  @SimpleProperty(description = "Bentuk: persegi.",
+      category = PropertyCategory.BEHAVIOR)
+  public int ShapeRectangle() {
+    return GradientDrawable.RECTANGLE;
+  }
+
+  @SimpleProperty(description = "Bentuk: oval/lingkaran.",
+      category = PropertyCategory.BEHAVIOR)
+  public int ShapeOval() {
+    return GradientDrawable.OVAL;
+  }
+
+  @SimpleProperty(description = "Bentuk: garis.",
+      category = PropertyCategory.BEHAVIOR)
+  public int ShapeLine() {
+    return GradientDrawable.LINE;
+  }
+
+  @SimpleProperty(description = "Bentuk: cincin.",
+      category = PropertyCategory.BEHAVIOR)
+  public int ShapeRing() {
+    return GradientDrawable.RING;
+  }
+
+  @SimpleFunction(description = "Atur visibilitas angka: pakai properti "
+      + "VisibilityVisible/VisibilityInvisible/VisibilityGone.")
+  public void SetVisibility(AndroidViewComponent comp, int visibility) {
+    View v = viewOf(comp, "Visibility");
+    if (v == null) {
+      return;
+    }
+    try {
+      v.setVisibility(visibility);
+    } catch (Exception e) {
+      Shared.err(this, "Style", 0, "visibility gagal");
+    }
+  }
+
+  @SimpleProperty(description = "Visibilitas: terlihat.",
+      category = PropertyCategory.BEHAVIOR)
+  public int VisibilityVisible() {
+    return View.VISIBLE;
+  }
+
+  @SimpleProperty(description = "Visibilitas: tak terlihat (tempat tetap ada).",
+      category = PropertyCategory.BEHAVIOR)
+  public int VisibilityInvisible() {
+    return View.INVISIBLE;
+  }
+
+  @SimpleProperty(description = "Visibilitas: hilang (tempat ikut hilang).",
+      category = PropertyCategory.BEHAVIOR)
+  public int VisibilityGone() {
+    return View.GONE;
+  }
+
+  @SimpleFunction(description = "Atur putaran komponen (derajat, searah jarum jam).")
+  public void SetRotation(AndroidViewComponent comp, float degrees) {
+    View v = viewOf(comp, "Rotation");
+    if (v == null) {
+      return;
+    }
+    try {
+      v.setRotation(degrees);
+    } catch (Exception e) {
+      Shared.err(this, "Style", 0, "rotation gagal");
+    }
+  }
+
+  @SimpleFunction(description = "Efek ripple (gelombang sentuh) warna tertentu. "
+      + "Background bawaan diganti RippleDrawable.")
+  public void SetRipple(AndroidViewComponent comp, int color) {
+    View v = viewOf(comp, "Ripple");
+    if (v == null) {
+      return;
+    }
+    try {
+      android.graphics.drawable.Drawable content = v.getBackground();
+      android.content.res.ColorStateList cs =
+          android.content.res.ColorStateList.valueOf(color);
+      android.graphics.drawable.RippleDrawable r =
+          new android.graphics.drawable.RippleDrawable(cs, content, null);
+      v.setBackgroundDrawable(r);
+      try {
+        v.setClickable(true);
+      } catch (Exception e) {
+        // abaikan
+      }
+    } catch (Exception e) {
+      Shared.err(this, "Style", 0, "ripple gagal");
+    }
+  }
+
+  @SimpleFunction(description = "Garis tepi putus-putus: warna, tebal (dp), "
+      + "panjang garis (dp), jarak garis (dp). dashed=false = garis penuh.")
+  public void SetStroke(AndroidViewComponent comp, boolean dashed,
+      float widthDp, int color, float dashLengthDp, float dashGapDp) {
+    View v = viewOf(comp, "Stroke");
+    if (v == null) {
+      return;
+    }
+    try {
+      GradientDrawable g = currentBg(v);
+      if (dashed) {
+        g.setStroke(dp(Math.max(0, widthDp)), color, dp(Math.max(0, dashLengthDp)),
+            dp(Math.max(0, dashGapDp)));
+      } else {
+        g.setStroke(dp(Math.max(0, widthDp)), color);
+      }
+      v.setBackgroundDrawable(g);
+    } catch (Exception e) {
+      Shared.err(this, "Style", 0, "stroke gagal");
+    }
+  }
+
+  @SimpleFunction(description = "Atur spasi teks (khusus Label/TextBox/Button): "
+      + "jarak baris (dp) + jarak huruf (em). Selain teks: error.")
+  public void SetTextSpace(AndroidViewComponent comp, float lineSpaceDp,
+      float letterSpace) {
+    View v = viewOf(comp, "TextSpace");
+    if (v == null) {
+      return;
+    }
+    try {
+      if (!(v instanceof android.widget.TextView)) {
+        Shared.err(this, "Style", 0, "bukan komponen teks");
+        return;
+      }
+      android.widget.TextView tv = (android.widget.TextView) v;
+      tv.setLineSpacing(dp(lineSpaceDp), 1.0f);
+      try {
+        tv.setLetterSpacing(letterSpace);
+      } catch (Exception e) {
+        // abaikan (API lama)
+      }
+    } catch (Exception e) {
+      Shared.err(this, "Style", 0, "textspace gagal");
+    }
+  }
+
+  @SimpleFunction(description = "Jadikan lingkaran/oval (cocok untuk foto "
+      + "profil). Untuk lingkaran sempurna pakai komponen persegi.")
+  public void MakeCircular(AndroidViewComponent comp) {
+    View v = viewOf(comp, "Circular");
+    if (v == null) {
+      return;
+    }
+    try {
+      GradientDrawable g = currentBg(v);
+      g.setShape(GradientDrawable.OVAL);
+      v.setBackgroundDrawable(g);
+    } catch (Exception e) {
+      Shared.err(this, "Style", 0, "circular gagal");
+    }
+  }
+
+  @SimpleFunction(description = "Lingkaran + garis tepi warna (cocok untuk foto "
+      + "profil).")
+  public void MakeCircularWithBorder(AndroidViewComponent comp, int color,
+      float widthDp) {
+    View v = viewOf(comp, "CircularBorder");
+    if (v == null) {
+      return;
+    }
+    try {
+      GradientDrawable g = currentBg(v);
+      g.setShape(GradientDrawable.OVAL);
+      g.setStroke(dp(Math.max(0, widthDp)), color);
+      v.setBackgroundDrawable(g);
+    } catch (Exception e) {
+      Shared.err(this, "Style", 0, "circular gagal");
+    }
+  }
+
+  @SimpleFunction(description = "Kembalikan efek sementara: hapus animasi, "
+      + "alpha/rotasi/skala/posisi ke normal. Background tidak diubah.")
+  public void ResetEffects(AndroidViewComponent comp) {
+    View v = viewOf(comp, "Reset");
+    if (v == null) {
+      return;
+    }
+    try {
+      v.clearAnimation();
+      v.setAlpha(1.0f);
+      v.setRotation(0.0f);
+      v.setScaleX(1.0f);
+      v.setScaleY(1.0f);
+      v.setTranslationX(0.0f);
+      v.setTranslationY(0.0f);
+    } catch (Exception e) {
+      Shared.err(this, "Style", 0, "reset gagal");
+    }
+  }
+
+  @SimpleFunction(description = "Atur warna background polos. Background "
+      + "bawaan diganti.")
+  public void SetBackgroundColor(AndroidViewComponent comp, int color) {
+    View v = viewOf(comp, "BackgroundColor");
+    if (v == null) {
+      return;
+    }
+    try {
+      GradientDrawable g = currentBg(v);
+      g.setColor(color);
+      v.setBackgroundDrawable(g);
+    } catch (Exception e) {
+      Shared.err(this, "Style", 0, "background gagal");
+    }
+  }
+
+  @SimpleFunction(description = "Atur gambar background (file/asset, scope+"
+      + "path). Cocok untuk wadah.")
+  public void SetBackgroundImage(AndroidViewComponent comp, FileScope scope,
+      final String path) {
+    final View v = viewOf(comp, "BackgroundImage");
+    if (v == null) {
+      return;
+    }
+    final String p = Shared.clean(path == null ? "" : path);
+    if (p.length() == 0) {
+      Shared.err(this, "Style", 0, "path kosong");
+      return;
+    }
+    final FileScope fS = scope;
+    AsynchUtil.runAsynchronously(new Runnable() {
+      public void run() {
+        Bitmap bmp = null;
+        try {
+          byte[] data = null;
+          if (fS == FileScope.Asset || Shared.isAssetPath(p)) {
+            InputStream in = context.getAssets().open(Shared.assetName(p));
+            try {
+              data = Shared.readAll(in);
+            } finally {
+              try {
+                in.close();
+              } catch (Exception e) {
+                // abaikan
+              }
+            }
+          } else {
+            File f = Shared.resolve(context, fS, p);
+            if (f == null || !f.exists()) {
+              Shared.err(Tools_Style.this, "Style", 0, "file tidak ada");
+              return;
+            }
+            FileInputStream fin = new FileInputStream(f);
+            try {
+              data = Shared.readAll(fin);
+            } finally {
+              try {
+                fin.close();
+              } catch (Exception e) {
+                // abaikan
+              }
+            }
+          }
+          if (data == null) {
+            Shared.err(Tools_Style.this, "Style", 0, "gambar tidak terbaca");
+            return;
+          }
+          BitmapFactory.Options o = new BitmapFactory.Options();
+          o.inJustDecodeBounds = true;
+          BitmapFactory.decodeByteArray(data, 0, data.length, o);
+          int sample = 1;
+          while (((o.outWidth / sample) > 2048
+              || (o.outHeight / sample) > 2048) && sample < 16) {
+            sample = sample * 2;
+          }
+          BitmapFactory.Options o2 = new BitmapFactory.Options();
+          o2.inSampleSize = sample;
+          bmp = BitmapFactory.decodeByteArray(data, 0, data.length, o2);
+        } catch (Exception e) {
+          String m = e.getMessage();
+          Shared.err(Tools_Style.this, "Style", 0,
+              m == null ? "background gagal" : m);
+          return;
+        }
+        if (bmp == null) {
+          Shared.err(Tools_Style.this, "Style", 0, "bukan gambar yang valid");
+          return;
+        }
+        final Bitmap fBmp = bmp;
+        try {
+          v.post(new Runnable() {
+            public void run() {
+              try {
+                v.setBackgroundDrawable(new BitmapDrawable(
+                    context.getResources(), fBmp));
+              } catch (Exception e) {
+                Shared.err(Tools_Style.this, "Style", 0, "background gagal");
+              }
+            }
+          });
+        } catch (Exception e) {
+          Shared.err(Tools_Style.this, "Style", 0, "background gagal");
+        }
+      }
+    });
+  }
+
+  @SimpleFunction(description = "Atur bayangan/elevasi (dp). Efek terlihat di "
+      + "Android 5.0+.")
+  public void SetElevation(AndroidViewComponent comp, float dp) {
+    View v = viewOf(comp, "Elevation");
+    if (v == null) {
+      return;
+    }
+    try {
+      v.setElevation(dp(Math.max(0, dp)));
+    } catch (Exception e) {
+      Shared.err(this, "Style", 0, "elevation gagal");
+    }
+  }
+
+  @SimpleFunction(description = "Atur jarak dalam/padding (dp): "
+      + "kiri, atas, kanan, bawah.")
+  public void SetPadding(AndroidViewComponent comp, float leftDp,
+      float topDp, float rightDp, float bottomDp) {
+    View v = viewOf(comp, "Padding");
+    if (v == null) {
+      return;
+    }
+    try {
+      v.setPadding(dp(leftDp), dp(topDp), dp(rightDp), dp(bottomDp));
+    } catch (Exception e) {
+      Shared.err(this, "Style", 0, "padding gagal");
+    }
+  }
+
+  @SimpleFunction(description = "Atur jarak luar/margin (dp): kiri, atas, "
+      + "kanan, bawah. Hanya bila induk mendukung margin.")
+  public void SetMargin(AndroidViewComponent comp, float leftDp,
+      float topDp, float rightDp, float bottomDp) {
+    View v = viewOf(comp, "Margin");
+    if (v == null) {
+      return;
+    }
+    try {
+      ViewGroup.LayoutParams lp = v.getLayoutParams();
+      if (lp instanceof ViewGroup.MarginLayoutParams) {
+        ((ViewGroup.MarginLayoutParams) lp).setMargins(dp(leftDp), dp(topDp),
+            dp(rightDp), dp(bottomDp));
+        v.requestLayout();
+      } else {
+        Shared.err(this, "Style", 0, "induk tidak mendukung margin");
+      }
+    } catch (Exception e) {
+      Shared.err(this, "Style", 0, "margin gagal");
+    }
+  }
+
+  @SimpleFunction(description = "Atur transparansi 0-100 (100 = penuh).")
+  public void SetOpacity(AndroidViewComponent comp, int percent) {
+    View v = viewOf(comp, "Opacity");
+    if (v == null) {
+      return;
+    }
+    try {
+      int p = Math.max(0, Math.min(100, percent));
+      v.setAlpha(p / 100.0f);
+    } catch (Exception e) {
+      Shared.err(this, "Style", 0, "opacity gagal");
+    }
+  }
+
+  private void play(final AndroidViewComponent comp, final View v,
+      final Animation a, final int durationMs, final String op,
+      final String type) {
+    if (v == null) {
+      return;
+    }
+    try {
+      if (durationMs > 0) {
+        a.setDuration(durationMs);
+      }
+      if (type != null && !"".equals(type)) {
+        try {
+          a.setAnimationListener(new Animation.AnimationListener() {
+            public void onAnimationStart(Animation an) {
+              AnimationStarted(comp, type);
+            }
+            public void onAnimationEnd(Animation an) {
+              AnimationEnded(comp, type);
+            }
+            public void onAnimationRepeat(Animation an) {
+              // abaikan
+            }
+          });
+        } catch (Exception e) {
+          // abaikan
+        }
+      }
+      try {
+        v.post(new Runnable() {
+          public void run() {
+            try {
+              v.startAnimation(a);
+            } catch (Exception e) {
+              Shared.err(Tools_Style.this, "Style", 0, "animasi gagal");
+            }
+          }
+        });
+      } catch (Exception e) {
+        v.startAnimation(a);
+      }
+    } catch (Exception e) {
+      Shared.err(this, "Style", 0, op + " gagal");
+    }
+  }
+
+  @SimpleFunction(description = "Animasi fade: startPercent ke endPercent "
+      + "(0-100). Mis. 0->100 muncul, 100->0 hilang. Menembak "
+      + "AnimationStarted/AnimationEnded.")
+  public void AnimateFade(AndroidViewComponent comp, int durationMs,
+      int startPercent, int endPercent) {
+    View v = viewOf(comp, "Fade");
+    if (v == null) {
+      return;
+    }
+    float s = Math.max(0, Math.min(100, startPercent)) / 100.0f;
+    float e = Math.max(0, Math.min(100, endPercent)) / 100.0f;
+    AlphaAnimation a = new AlphaAnimation(s, e);
+    a.setFillAfter(true);
+    play(comp, v, a, durationMs, "fade", "fade");
+  }
+
+  @SimpleFunction(description = "Animasi geser-masuk: direction = "
+      + "left/right/top/bottom. durationMs mis. 300.")
+  public void AnimateSlideIn(AndroidViewComponent comp, String direction,
+      int durationMs) {
+    View v = viewOf(comp, "SlideIn");
+    if (v == null) {
+      return;
+    }
+    String d = direction == null ? "" : direction.trim().toLowerCase();
+    Animation a;
+    if ("left".equals(d)) {
+      a = new TranslateAnimation(Animation.RELATIVE_TO_SELF, -1.0f,
+          Animation.RELATIVE_TO_SELF, 0.0f, Animation.RELATIVE_TO_SELF, 0.0f,
+          Animation.RELATIVE_TO_SELF, 0.0f);
+    } else if ("right".equals(d)) {
+      a = new TranslateAnimation(Animation.RELATIVE_TO_SELF, 1.0f,
+          Animation.RELATIVE_TO_SELF, 0.0f, Animation.RELATIVE_TO_SELF, 0.0f,
+          Animation.RELATIVE_TO_SELF, 0.0f);
+    } else if ("top".equals(d)) {
+      a = new TranslateAnimation(Animation.RELATIVE_TO_SELF, 0.0f,
+          Animation.RELATIVE_TO_SELF, 0.0f, Animation.RELATIVE_TO_SELF, -1.0f,
+          Animation.RELATIVE_TO_SELF, 0.0f);
+    } else if ("bottom".equals(d)) {
+      a = new TranslateAnimation(Animation.RELATIVE_TO_SELF, 0.0f,
+          Animation.RELATIVE_TO_SELF, 0.0f, Animation.RELATIVE_TO_SELF, 1.0f,
+          Animation.RELATIVE_TO_SELF, 0.0f);
+    } else {
+      Shared.err(this, "Style", 0,
+          "arah harus left/right/top/bottom");
+      return;
+    }
+    play(comp, v, a, durationMs, "slidein", "slide");
+  }
+
+  @SimpleFunction(description = "Animasi skala: ke toXPercent/toYPercent "
+      + "(100 = normal). durationMs mis. 300.")
+  public void AnimateScale(AndroidViewComponent comp, int durationMs,
+      int toXPercent, int toYPercent) {
+    View v = viewOf(comp, "Scale");
+    if (v == null) {
+      return;
+    }
+    float x = Math.max(0, toXPercent) / 100.0f;
+    float y = Math.max(0, toYPercent) / 100.0f;
+    play(comp, v, new ScaleAnimation(0.0f, x, 0.0f, y,
+        Animation.RELATIVE_TO_SELF, 0.5f, Animation.RELATIVE_TO_SELF, 0.5f),
+        durationMs, "scale", "scale");
+  }
+
+  @SimpleFunction(description = "Animasi putar (derajat, searah jarum jam). "
+      + "durationMs mis. 300.")
+  public void AnimateRotation(AndroidViewComponent comp, int durationMs,
+      float degrees) {
+    View v = viewOf(comp, "RotationAnim");
+    if (v == null) {
+      return;
+    }
+    play(comp, v, new android.view.animation.RotateAnimation(0.0f, degrees,
+        Animation.RELATIVE_TO_SELF, 0.5f, Animation.RELATIVE_TO_SELF, 0.5f),
+        durationMs, "rotation", "rotation");
+  }
+
+  @SimpleFunction(description = "Fallback polling untuk event animasi: true "
+      + "bila komponen sedang dianimasikan Tools_Style.")
+  public boolean IsAnimationRunning(AndroidViewComponent comp) {
+    View v = comp == null ? null : viewOf(comp, "AnimCheck");
+    if (v == null) {
+      return false;
+    }
+    try {
+      Animation a = v.getAnimation();
+      return a != null && a.hasStarted() && !a.hasEnded();
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
+  @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred: "
+      + "pesan error terakhir operasi ini (kosong bila belum ada).")
+  public String LastError(String operation) {
+    return Shared.lastError(operation);
+  }
+
+  // ================= EVENTS =================
+
+  @SimpleEvent(description = "Animasi Tools_Style mulai: komponen + tipe "
+      + "(fade/slide/scale/rotation). Fallback: IsAnimationRunning.")
+  public void AnimationStarted(AndroidViewComponent comp, String animationType) {
+    EventDispatcher.dispatchEvent(this, "AnimationStarted", comp,
+        animationType == null ? "" : animationType);
+  }
+
+  @SimpleEvent(description = "Animasi Tools_Style selesai: komponen + tipe. "
+      + "Fallback: IsAnimationRunning.")
+  public void AnimationEnded(AndroidViewComponent comp, String animationType) {
+    EventDispatcher.dispatchEvent(this, "AnimationEnded", comp,
+        animationType == null ? "" : animationType);
+  }
+
+  // ================= EVENTS =================
+
+  @SimpleEvent(description = "SATU-SATUNYA error Tools_Style. component = nama "
+      + "operasi (bandingkan dengan blok OpStyle). Id selalu 0 (stateless).")
+  public void ErrorOccurred(String component, int id, String message) {
+    EventDispatcher.dispatchEvent(this, "ErrorOccurred",
+        component, Integer.valueOf(id), message);
+  }
+
+  // ================= OP =================
+
+  @SimpleProperty(description = "Nama operasi Style (untuk if di "
+      + "ErrorOccurred).",
+      category = PropertyCategory.BEHAVIOR)
+  public String OpStyle() {
+    return "Style";
+  }
+}

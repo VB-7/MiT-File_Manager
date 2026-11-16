@@ -68,6 +68,31 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     final Object pauseLock = new Object();
   }
 
+  /** Rekam status terakhir per id = fallback polling untuk semua event unduhan. */
+  private static final class DlInfo {
+    String status = "antri";
+    int percent = 0;
+    long received = 0;
+    long total = 0;
+    boolean success = false;
+    String savePath = "";
+    String fileName = "";
+    String message = "";
+  }
+
+  private static final Map<Integer, DlInfo> infos = new HashMap<Integer, DlInfo>();
+
+  private static DlInfo infoOf(int id) {
+    synchronized (lock) {
+      DlInfo i = infos.get(Integer.valueOf(id));
+      if (i == null) {
+        i = new DlInfo();
+        infos.put(Integer.valueOf(id), i);
+      }
+      return i;
+    }
+  }
+
   public Tools_Downloader(ComponentContainer container) {
     super(container.$form());
     this.context = container.$context();
@@ -122,6 +147,15 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
       downloads.put(Integer.valueOf(id), op);
     }
     Ids.setActive(Ids.DOWNLOAD, id, true);
+    DlInfo ni = infoOf(id);
+    ni.status = "jalan";
+    ni.percent = 0;
+    ni.received = 0;
+    ni.total = 0;
+    ni.success = false;
+    ni.savePath = "";
+    ni.fileName = Shared.clean(fileName);
+    ni.message = "";
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         runDownload(op);
@@ -169,6 +203,10 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
       } catch (Exception e) {
         // abaikan
       }
+      DlInfo si = infoOf(fId);
+      si.status = "jalan";
+      si.fileName = fName;
+      si.savePath = fPath;
       FileOutputStream out = new FileOutputStream(outFile);
       try {
         InputStream in = c.getInputStream();
@@ -227,6 +265,10 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
               } catch (Exception e) {
                 // abaikan
               }
+              DlInfo pi = infoOf(fId);
+              pi.percent = pPct;
+              pi.received = pDone;
+              pi.total = pTotal;
             }
           }
           out.flush();
@@ -273,6 +315,12 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     }
     Ids.setActive(Ids.DOWNLOAD, op.id, false);
     Ids.unregister(Ids.DOWNLOAD, op.id);
+    DlInfo fi = infoOf(op.id);
+    fi.success = success;
+    fi.savePath = path;
+    fi.fileName = name;
+    fi.message = msg;
+    fi.status = success ? "selesai" : ("Dibatalkan".equals(msg) ? "batal" : "gagal");
     try {
       form.runOnUiThread(new Runnable() {
         public void run() {
@@ -456,6 +504,7 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     }
     op.paused = true;
     Ids.setActive(Ids.DOWNLOAD, id, false);
+    infoOf(id).status = "jeda";
   }
 
   @SimpleFunction(description = "Lanjutkan unduhan yang dijeda (per id).")
@@ -473,6 +522,7 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
       op.pauseLock.notifyAll();
     }
     Ids.setActive(Ids.DOWNLOAD, id, true);
+    infoOf(id).status = "jalan";
   }
 
   // ================= ID =================
@@ -530,6 +580,79 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     cancelStatic(id);
     Ids.setActive(Ids.DOWNLOAD, id, false);
     Ids.unregister(Ids.DOWNLOAD, id);
+    synchronized (lock) {
+      infos.remove(Integer.valueOf(id));
+    }
+  }
+
+  @SimpleFunction(description = "Fallback polling untuk event Started/Progress/"
+      + "Finished: status unduhan ber-id. Salah satu: jalan, jeda, selesai, "
+      + "gagal, batal, atau tidak ada.")
+  public String GetDownloadStatus(int id) {
+    synchronized (lock) {
+      DlInfo i = infos.get(Integer.valueOf(id));
+      return i == null ? "tidak ada" : i.status;
+    }
+  }
+
+  @SimpleFunction(description = "Fallback polling untuk event "
+      + "DownloadProgressChanged: list [persen 0-100, byte diterima, byte total].")
+  public List<Object> GetDownloadProgress(int id) {
+    ArrayList<Object> out = new ArrayList<Object>();
+    synchronized (lock) {
+      DlInfo i = infos.get(Integer.valueOf(id));
+      if (i == null) {
+        out.add(Integer.valueOf(0));
+        out.add(Long.valueOf(0));
+        out.add(Long.valueOf(0));
+        return out;
+      }
+      out.add(Integer.valueOf(i.percent));
+      out.add(Long.valueOf(i.received));
+      out.add(Long.valueOf(i.total));
+    }
+    return out;
+  }
+
+  @SimpleFunction(description = "Fallback polling untuk event DownloadFinished: "
+      + "list [success, savePath, fileName, message]. Tetap ada setelah selesai "
+      + "sampai RemoveDownloadId.")
+  public List<Object> GetDownloadResult(int id) {
+    ArrayList<Object> out = new ArrayList<Object>();
+    synchronized (lock) {
+      DlInfo i = infos.get(Integer.valueOf(id));
+      if (i == null) {
+        out.add(Boolean.valueOf(false));
+        out.add("");
+        out.add("");
+        out.add("tidak ada");
+        return out;
+      }
+      out.add(Boolean.valueOf(i.success));
+      out.add(i.savePath);
+      out.add(i.fileName);
+      out.add(i.message);
+    }
+    return out;
+  }
+
+  @SimpleFunction(description = "Fallback polling untuk event batch: list "
+      + "[batchJalan, total, selesai, ok].")
+  public List<Object> GetBatchProgress() {
+    ArrayList<Object> out = new ArrayList<Object>();
+    synchronized (lock) {
+      out.add(Boolean.valueOf(dlBatchActive));
+      out.add(Integer.valueOf(dlBatchTotal));
+      out.add(Integer.valueOf(dlBatchDone));
+      out.add(Integer.valueOf(dlBatchOk));
+    }
+    return out;
+  }
+
+  @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred: "
+      + "pesan error terakhir operasi ini (kosong bila belum ada).")
+  public String LastError(String operation) {
+    return Shared.lastError(operation);
   }
 
   @SimpleFunction(description = "Tebak nama file dari URL, mime, dan content-disposition "

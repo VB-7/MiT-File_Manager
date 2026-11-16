@@ -694,6 +694,12 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     return "Audio";
   }
 
+  @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred: "
+      + "pesan error terakhir operasi ini (kosong bila belum ada).")
+  public String LastError(String operation) {
+    return Shared.lastError(operation);
+  }
+
   // ================= destroy =================
 
   public void onDestroy() {

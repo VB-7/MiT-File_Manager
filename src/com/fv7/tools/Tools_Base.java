@@ -249,6 +249,180 @@ public class Tools_Base extends AndroidNonvisibleComponent {
     Tools_Video.stopStatic(id);
   }
 
+  // ================= ID: Core (dinamis) =================
+
+  @SimpleFunction(description = "Semua id dinamis Tools_Core (URUT PEMBUATAN, "
+      + "index 1 = pertama dibuat).")
+  public List<Integer> GetDynamicIds() {
+    return Ids.idsOf(Ids.CORE);
+  }
+
+  @SimpleFunction(description = "Id dinamis yang aktif (URUT PEMBUATAN).")
+  public List<Integer> GetActiveDynamicIds() {
+    return Ids.activeIdsOf(Ids.CORE);
+  }
+
+  @SimpleFunction(description = "Id dinamis terakhir dibuat. -1 bila kosong.")
+  public int CurrentDynamicId() {
+    return Ids.currentOf(Ids.CORE);
+  }
+
+  @SimpleFunction(description = "Id dinamis index 1 = PERTAMA DIBUAT. -1 bila kosong.")
+  public int GetFirstDynamicId() {
+    return Ids.firstOf(Ids.CORE);
+  }
+
+  @SimpleFunction(description = "Id dinamis TERAKHIR DIBUAT. -1 bila kosong.")
+  public int GetLastDynamicId() {
+    return Ids.lastOf(Ids.CORE);
+  }
+
+  @SimpleFunction(description = "Id dinamis yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
+  public int GetPreviousDynamicId(int id) {
+    return Ids.previousOf(Ids.CORE, id);
+  }
+
+  @SimpleFunction(description = "True bila id dinamis ini masih ada.")
+  public boolean IsDynamicIdActive(int id) {
+    return Ids.isActive(Ids.CORE, id);
+  }
+
+  @SimpleFunction(description = "Hapus id dinamis: lepas view + lepas id.")
+  public void RemoveDynamicId(int id) {
+    Tools_Core.clearStatic(id);
+  }
+
+  // ================= ID: Layout (dinamis) =================
+
+  @SimpleFunction(description = "Semua id layout Tools_Layout (URUT PEMBUATAN, "
+      + "index 1 = pertama dibuat).")
+  public List<Integer> GetLayoutIds() {
+    return Ids.idsOf(Ids.LAYOUT);
+  }
+
+  @SimpleFunction(description = "Id layout yang aktif (URUT PEMBUATAN).")
+  public List<Integer> GetActiveLayoutIds() {
+    return Ids.activeIdsOf(Ids.LAYOUT);
+  }
+
+  @SimpleFunction(description = "Id layout terakhir dibuat. -1 bila kosong.")
+  public int CurrentLayoutId() {
+    return Ids.currentOf(Ids.LAYOUT);
+  }
+
+  @SimpleFunction(description = "Id layout index 1 = PERTAMA DIBUAT. -1 bila kosong.")
+  public int GetFirstLayoutId() {
+    return Ids.firstOf(Ids.LAYOUT);
+  }
+
+  @SimpleFunction(description = "Id layout TERAKHIR DIBUAT. -1 bila kosong.")
+  public int GetLastLayoutId() {
+    return Ids.lastOf(Ids.LAYOUT);
+  }
+
+  @SimpleFunction(description = "Id layout yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
+  public int GetPreviousLayoutId(int id) {
+    return Ids.previousOf(Ids.LAYOUT, id);
+  }
+
+  @SimpleFunction(description = "True bila id layout ini masih ada.")
+  public boolean IsLayoutIdActive(int id) {
+    return Ids.isActive(Ids.LAYOUT, id);
+  }
+
+  @SimpleFunction(description = "Hapus id layout: lepas dari induk (anak dinamis "
+      + "di dalamnya ikut beres) + lepas id.")
+  public void RemoveLayoutId(int id) {
+    Tools_Layout.clearStatic(id);
+  }
+
+  // ================= ID: Sheet =================
+
+  @SimpleFunction(description = "Semua id sheet Tools_Sheet (URUT PEMBUATAN, "
+      + "index 1 = pertama dibuat).")
+  public List<Integer> GetSheetIds() {
+    return Ids.idsOf(Ids.SHEET);
+  }
+
+  @SimpleFunction(description = "Id sheet yang aktif (URUT PEMBUATAN).")
+  public List<Integer> GetActiveSheetIds() {
+    return Ids.activeIdsOf(Ids.SHEET);
+  }
+
+  @SimpleFunction(description = "Id sheet terakhir dibuat. -1 bila kosong.")
+  public int CurrentSheetId() {
+    return Ids.currentOf(Ids.SHEET);
+  }
+
+  @SimpleFunction(description = "Id sheet index 1 = PERTAMA DIBUAT. -1 bila kosong.")
+  public int GetFirstSheetId() {
+    return Ids.firstOf(Ids.SHEET);
+  }
+
+  @SimpleFunction(description = "Id sheet TERAKHIR DIBUAT. -1 bila kosong.")
+  public int GetLastSheetId() {
+    return Ids.lastOf(Ids.SHEET);
+  }
+
+  @SimpleFunction(description = "Id sheet yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
+  public int GetPreviousSheetId(int id) {
+    return Ids.previousOf(Ids.SHEET, id);
+  }
+
+  @SimpleFunction(description = "True bila id sheet ini masih terdaftar.")
+  public boolean IsSheetIdActive(int id) {
+    return Ids.isActive(Ids.SHEET, id);
+  }
+
+  @SimpleFunction(description = "Hapus id sheet: tutup diam-diam + lepas id.")
+  public void RemoveSheetId(int id) {
+    Tools_Sheet.clearStatic(id);
+  }
+
+  // ================= ID: Slider =================
+
+  @SimpleFunction(description = "Semua id slider Tools_Image (URUT PEMBUATAN, "
+      + "index 1 = pertama dibuat).")
+  public List<Integer> GetSliderIds() {
+    return Ids.idsOf(Ids.SLIDER);
+  }
+
+  @SimpleFunction(description = "Id slider yang aktif (URUT PEMBUATAN).")
+  public List<Integer> GetActiveSliderIds() {
+    return Ids.activeIdsOf(Ids.SLIDER);
+  }
+
+  @SimpleFunction(description = "Id slider terakhir dibuat. -1 bila kosong.")
+  public int CurrentSliderId() {
+    return Ids.currentOf(Ids.SLIDER);
+  }
+
+  @SimpleFunction(description = "Id slider index 1 = PERTAMA DIBUAT. -1 bila kosong.")
+  public int GetFirstSliderId() {
+    return Ids.firstOf(Ids.SLIDER);
+  }
+
+  @SimpleFunction(description = "Id slider TERAKHIR DIBUAT. -1 bila kosong.")
+  public int GetLastSliderId() {
+    return Ids.lastOf(Ids.SLIDER);
+  }
+
+  @SimpleFunction(description = "Id slider yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
+  public int GetPreviousSliderId(int id) {
+    return Ids.previousOf(Ids.SLIDER, id);
+  }
+
+  @SimpleFunction(description = "True bila id slider ini masih ada.")
+  public boolean IsSliderIdActive(int id) {
+    return Ids.isActive(Ids.SLIDER, id);
+  }
+
+  @SimpleFunction(description = "Hapus id slider: lepas dari layout (autoplay "
+      + "mati) + lepas id.")
+  public void RemoveSliderId(int id) {
+    Tools_Image.clearSliderStatic(id);
+  }
+
   // ================= ID TAG (helper komponen LUAR) =================
 
   @SimpleFunction(description = "Buat id unik baru di tag ini (Number, angka terkecil yang belum "
@@ -397,7 +571,7 @@ public class Tools_Base extends AndroidNonvisibleComponent {
 
   @SimpleFunction(description = "Versi paket Tools (sama untuk semua Tools_* dalam satu .aix).")
   public int ToolsVersion() {
-    return 5;
+    return 6;
   }
 
   // ================= OP + ERROR =================
@@ -412,6 +586,12 @@ public class Tools_Base extends AndroidNonvisibleComponent {
       category = PropertyCategory.BEHAVIOR)
   public String OpId() {
     return "Id";
+  }
+
+  @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred: "
+      + "pesan error terakhir operasi ini (Id/Json/Tag, kosong bila belum ada).")
+  public String LastError(String operation) {
+    return Shared.lastError(operation);
   }
 
   @SimpleEvent(description = "SATU-SATUNYA error Tools_Base. component = nama operasi "

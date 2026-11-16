@@ -48,13 +48,36 @@ public final class Shared {
 
   // ================= error =================
 
+  private static final Map<String, String> lastErr =
+      new HashMap<String, String>();
+
   public static void err(Component comp, String component, int id, String message) {
     String m = message == null ? "gagal" : message;
+    try {
+      String key = component == null ? "" : component;
+      synchronized (lastErr) {
+        lastErr.put(key, m);
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
     try {
       EventDispatcher.dispatchEvent(comp, "ErrorOccurred", component,
           Integer.valueOf(id), m);
     } catch (Exception e) {
       // abaikan
+    }
+  }
+
+  /** Fallback polling untuk event ErrorOccurred: pesan error terakhir per operasi. */
+  public static String lastError(String component) {
+    try {
+      synchronized (lastErr) {
+        String m = lastErr.get(component == null ? "" : component);
+        return m == null ? "" : m;
+      }
+    } catch (Exception e) {
+      return "";
     }
   }
 
