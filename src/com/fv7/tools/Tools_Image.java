@@ -555,7 +555,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
     long downT = 0;
     boolean ready = false;
 
-    ZoomHandler(int zid, ImageView ziv) {
+    ZoomHandler(final int zid, final ImageView ziv) {
       this.zid = zid;
       this.ziv = ziv;
       detector = new ScaleGestureDetector(context,
