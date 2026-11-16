@@ -125,7 +125,7 @@ public class Tools_Core extends AndroidNonvisibleComponent
       + "reservasi otomatis diadopsi). Sukses menembak ComponentCreated; "
       + "klik/longklik menembak CoreClicked/CoreLongClicked; gagal via "
       + "ErrorOccurred.")
-  public void CreateDynamicComponent(String typeName,
+  public void CallCreateDynamicComponent(String typeName,
       AndroidViewComponent container, final int id) {
     final String canon = canonical(typeName);
     if (canon == null) {
@@ -305,7 +305,7 @@ public class Tools_Core extends AndroidNonvisibleComponent
     return null;
   }
 
-  @SimpleFunction(description = "Set properti komponen dinamis ber-id "
+  @SimpleFunction(description = "SET: Set properti komponen dinamis ber-id "
       + "(nama properti MIT, mis. Text, BackgroundColor, FontSize). "
       + "Gagal via ErrorOccurred.")
   public void SetDynamicProperty(int id, String name, Object value) {
@@ -346,7 +346,7 @@ public class Tools_Core extends AndroidNonvisibleComponent
 
   private void build(String canon, AndroidViewComponent container, int id,
       String[] names, Object[] values) {
-    CreateDynamicComponent(canon, container, id);
+    CallCreateDynamicComponent(canon, container, id);
     boolean ok;
     synchronized (compLock) {
       ok = comps.containsKey(Integer.valueOf(id));
@@ -362,10 +362,10 @@ public class Tools_Core extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Jalan pintas: bikin Button dinamis ber-id "
+  @SimpleFunction(description = "CALL: Jalan pintas: bikin Button dinamis ber-id "
       + "lengkap dengan teks, warna, ukuran font, tebal, visibilitas. "
       + "Sama seperti Create + Set berulang, tapi satu blok.")
-  public void CreateDynamicButton(AndroidViewComponent container, int id,
+  public void CallCreateDynamicButton(AndroidViewComponent container, int id,
       String text, int textColor, int backgroundColor, float fontSize,
       boolean bold, boolean visible) {
     build("Button", container, id,
@@ -376,9 +376,9 @@ public class Tools_Core extends AndroidNonvisibleComponent
             Boolean.valueOf(bold), Boolean.valueOf(visible) });
   }
 
-  @SimpleFunction(description = "Jalan pintas: bikin Label dinamis ber-id "
+  @SimpleFunction(description = "CALL: Jalan pintas: bikin Label dinamis ber-id "
       + "lengkap dengan teks, warna, ukuran font, tebal, visibilitas.")
-  public void CreateDynamicLabel(AndroidViewComponent container, int id,
+  public void CallCreateDynamicLabel(AndroidViewComponent container, int id,
       String text, int textColor, int backgroundColor, float fontSize,
       boolean bold, boolean visible) {
     build("Label", container, id,
@@ -389,9 +389,9 @@ public class Tools_Core extends AndroidNonvisibleComponent
             Boolean.valueOf(bold), Boolean.valueOf(visible) });
   }
 
-  @SimpleFunction(description = "Jalan pintas: bikin TextBox dinamis ber-id "
+  @SimpleFunction(description = "CALL: Jalan pintas: bikin TextBox dinamis ber-id "
       + "lengkap dengan hint, warna, ukuran font, tebal, visibilitas.")
-  public void CreateDynamicTextBox(AndroidViewComponent container, int id,
+  public void CallCreateDynamicTextBox(AndroidViewComponent container, int id,
       String hint, int textColor, int backgroundColor, float fontSize,
       boolean bold, boolean visible) {
     build("TextBox", container, id,
@@ -402,10 +402,10 @@ public class Tools_Core extends AndroidNonvisibleComponent
             Boolean.valueOf(bold), Boolean.valueOf(visible) });
   }
 
-  @SimpleFunction(description = "Jalan pintas: bikin Image (gambar MIT) "
+  @SimpleFunction(description = "CALL: Jalan pintas: bikin Image (gambar MIT) "
       + "dinamis ber-id dengan picture + visibilitas. Isi picture seperti "
       + "Image.Picture biasa (path/asset/URL).")
-  public void CreateDynamicImage(AndroidViewComponent container, int id,
+  public void CallCreateDynamicImage(AndroidViewComponent container, int id,
       String picturePath, boolean visible) {
     build("Image", container, id,
         new String[] { "Picture", "Visible" },
@@ -444,8 +444,8 @@ public class Tools_Core extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Panggil fungsi komponen dinamis ber-id "
-      + "(nama fungsi MIT + list argumen). Hasil dikembalikan sebagai teks "
-      + "(kosong bila void/gagal; gagal via ErrorOccurred).")
+      + "(nama fungsi MIT + list argumen). Sinkron: hasil langsung dikembalikan "
+      + "sebagai teks (kosong bila void/gagal; gagal via ErrorOccurred).")
   public String InvokeDynamic(int id, String name, YailList args) {
     Component comp;
     synchronized (compLock) {
@@ -555,9 +555,9 @@ public class Tools_Core extends AndroidNonvisibleComponent
     clearStatic(id);
   }
 
-  @SimpleFunction(description = "Hapus SEMUA komponen dinamis Tools_Core "
+  @SimpleFunction(description = "SET: Hapus SEMUA komponen dinamis Tools_Core "
       + "(id ikut dilepas).")
-  public void ClearDynamicComponents() {
+  public void SetClearDynamicComponents() {
     ArrayList<Integer> all;
     synchronized (compLock) {
       all = new ArrayList<Integer>(comps.keySet());

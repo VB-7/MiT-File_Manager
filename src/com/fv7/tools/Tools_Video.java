@@ -177,16 +177,17 @@ public class Tools_Video extends AndroidNonvisibleComponent
       + "atau http(s) URL (streaming). id dari CreateVideoId / Tools_Base CreateUniqueId. "
       + "Atur tinggi arrangement (mis. 300px) agar video kelihatan. "
       + "Double-tap: kiri = mundur, kanan = maju, tengah = pause/resume. "
-      + "Kembali: id, atau -1 bila gagal mulai.")
-  public int PlayVideoIn(final AndroidViewComponent container, final FileScope scope,
-      final String path, final int id) {
+      + "Sukses menembak VideoStarted; gagal via ErrorOccurred. scope: helper "
+      + "Scope, teks, atau absolut.")
+  public void CallPlayVideoIn(final AndroidViewComponent container,
+      final String path, final String scope, final int id) {
     if (id < 1) {
       Shared.err(this, "Video", id, "id harus >= 1 (pakai CreateVideoId)");
-      return -1;
+      return;
     }
     if (!Ids.register(Ids.VIDEO, id)) {
       Shared.err(this, "Video", id, "ID " + id + " sedang dipakai video lain");
-      return -1;
+      return;
     }
     try {
       form.runOnUiThread(new Runnable() {
@@ -269,7 +270,7 @@ public class Tools_Video extends AndroidNonvisibleComponent
             } else if (sv.startsWith("file://")) {
               fVv.setVideoPath(Shared.normalizePath(
                   Shared.stripLeadingSlash(sv.substring(7))));
-            } else if (scope == FileScope.Asset || Shared.isAssetPath(sv)) {
+            } else if (Shared.effScope(scope, sv) == FileScope.Asset || Shared.isAssetPath(sv)) {
               File cache = context.getCacheDir();
               if (!cache.exists()) {
                 cache.mkdirs();
@@ -297,7 +298,7 @@ public class Tools_Video extends AndroidNonvisibleComponent
               }
               fVv.setVideoPath(dst.getAbsolutePath());
             } else {
-              File f = Shared.resolve(context, scope, sv);
+              File f = Shared.resolve(context, Shared.effScope(scope, sv), sv);
               if (f == null || !f.exists()) {
                 Ids.unregister(Ids.VIDEO, id);
                 Shared.err(Tools_Video.this, "Video", id, "file tidak ada");
@@ -320,9 +321,8 @@ public class Tools_Video extends AndroidNonvisibleComponent
       Ids.unregister(Ids.VIDEO, id);
       String m = e.getMessage();
       Shared.err(this, "Video", id, m == null ? "video gagal diputar" : m);
-      return -1;
+      return;
     }
-    return id;
   }
 
   private VideoView buildView(final int id) {
@@ -461,8 +461,8 @@ public class Tools_Video extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Jeda video yang sedang main. (per id)")
-  public void PauseVideo(int id) {
+  @SimpleFunction(description = "SET: Jeda video yang sedang main. (per id)")
+  public void SetPauseVideo(int id) {
     try {
       VideoView vv = viewOf(id);
       if (vv != null && readyOf(id) && vv.isPlaying()) {
@@ -478,8 +478,8 @@ public class Tools_Video extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Lanjutkan video yang dijeda. (per id)")
-  public void ResumeVideo(int id) {
+  @SimpleFunction(description = "SET: Lanjutkan video yang dijeda. (per id)")
+  public void SetResumeVideo(int id) {
     try {
       VideoView vv = viewOf(id);
       if (vv != null && readyOf(id) && !vv.isPlaying()) {
@@ -495,9 +495,9 @@ public class Tools_Video extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Hentikan video + lepas dari layout (per id). "
+  @SimpleFunction(description = "SET: Hentikan video + lepas dari layout (per id). "
       + "Id tetap tercatat (Play lagi langsung bisa). Bersih total via RemoveVideoId.")
-  public void StopVideo(int id) {
+  public void SetStopVideo(int id) {
     try {
       VideoView vv = viewOf(id);
       if (vv != null) {
@@ -526,8 +526,8 @@ public class Tools_Video extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Lompat video ke posisi (ms). Bisa dipasang ke Slider. (per id)")
-  public void SeekVideo(int id, int position) {
+  @SimpleFunction(description = "SET: Lompat video ke posisi (ms). Bisa dipasang ke Slider. (per id)")
+  public void SetSeekVideo(int id, int position) {
     try {
       VideoView vv = viewOf(id);
       if (vv != null && readyOf(id)) {
@@ -541,8 +541,8 @@ public class Tools_Video extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Maju video sejauh SkipSeconds detik. (per id)")
-  public void ForwardVideo(int id) {
+  @SimpleFunction(description = "SET: Maju video sejauh SkipSeconds detik. (per id)")
+  public void SetForwardVideo(int id) {
     try {
       VideoView vv = viewOf(id);
       if (vv != null && readyOf(id)) {
@@ -568,8 +568,8 @@ public class Tools_Video extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Mundur video sejauh SkipSeconds detik. (per id)")
-  public void BackwardVideo(int id) {
+  @SimpleFunction(description = "SET: Mundur video sejauh SkipSeconds detik. (per id)")
+  public void SetBackwardVideo(int id) {
     try {
       VideoView vv = viewOf(id);
       if (vv != null && readyOf(id)) {
@@ -585,7 +585,7 @@ public class Tools_Video extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Posisi video sekarang (ms). (per id)")
-  public int VideoPosition(int id) {
+  public int GetVideoPosition(int id) {
     try {
       VideoView vv = viewOf(id);
       if (vv != null && readyOf(id)) {
@@ -598,7 +598,7 @@ public class Tools_Video extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Durasi video (ms). 0 bila belum siap. (per id)")
-  public int VideoDuration(int id) {
+  public int GetVideoDuration(int id) {
     try {
       VideoView vv = viewOf(id);
       if (vv != null && readyOf(id)) {
@@ -621,9 +621,9 @@ public class Tools_Video extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Hapus SEMUA video Tools_Video dari layout itu (id ikut dilepas, "
+  @SimpleFunction(description = "SET: Hapus SEMUA video Tools_Video dari layout itu (id ikut dilepas, "
       + "komponen lain tidak diusik). Video ikut di-pause.")
-  public void ClearVideo(final AndroidViewComponent container) {
+  public void SetClearVideo(final AndroidViewComponent container) {
     try {
       form.runOnUiThread(new Runnable() {
         public void run() {
@@ -713,7 +713,7 @@ public class Tools_Video extends AndroidNonvisibleComponent
 
   // ================= ID =================
 
-  @SimpleFunction(description = "Buat id video unik baru (Number, siap pakai ke PlayVideoIn).")
+  @SimpleFunction(description = "Buat id video unik baru (Number, siap pakai ke CallPlayVideoIn).")
   public int CreateVideoId() {
     int id = Ids.createFor(Ids.VIDEO);
     if (id < 1) {
@@ -857,7 +857,7 @@ public class Tools_Video extends AndroidNonvisibleComponent
         Integer.valueOf(percent));
   }
 
-  @SimpleEvent(description = "Video selesai (tidak loop). Putar lagi via PlayVideoIn.")
+  @SimpleEvent(description = "Video selesai (tidak loop). Putar lagi via CallPlayVideoIn.")
   public void VideoFinished(int id) {
     EventDispatcher.dispatchEvent(this, "VideoFinished", Integer.valueOf(id));
   }

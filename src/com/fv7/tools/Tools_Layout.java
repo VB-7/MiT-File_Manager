@@ -215,29 +215,29 @@ public class Tools_Layout extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Bikin VerticalArrangement dinamis ber-id di "
+  @SimpleFunction(description = "CALL: Bikin VerticalArrangement dinamis ber-id di "
       + "dalam layout induk. Sukses menembak LayoutCreated; gagal via "
       + "ErrorOccurred.")
-  public void CreateVerticalLayout(AndroidViewComponent container, int id) {
+  public void CallCreateVerticalLayout(AndroidViewComponent container, int id) {
     make(container, id, "VerticalArrangement");
   }
 
-  @SimpleFunction(description = "Bikin HorizontalArrangement dinamis ber-id di "
+  @SimpleFunction(description = "CALL: Bikin HorizontalArrangement dinamis ber-id di "
       + "dalam layout induk.")
-  public void CreateHorizontalLayout(AndroidViewComponent container, int id) {
+  public void CallCreateHorizontalLayout(AndroidViewComponent container, int id) {
     make(container, id, "HorizontalArrangement");
   }
 
-  @SimpleFunction(description = "Bikin VerticalScrollArrangement dinamis "
+  @SimpleFunction(description = "CALL: Bikin VerticalScrollArrangement dinamis "
       + "ber-id (bisa scroll atas-bawah) di dalam layout induk.")
-  public void CreateVerticalScrollLayout(AndroidViewComponent container,
+  public void CallCreateVerticalScrollLayout(AndroidViewComponent container,
       int id) {
     make(container, id, "VerticalScrollArrangement");
   }
 
-  @SimpleFunction(description = "Bikin HorizontalScrollArrangement dinamis "
+  @SimpleFunction(description = "CALL: Bikin HorizontalScrollArrangement dinamis "
       + "ber-id (bisa scroll kiri-kanan) di dalam layout induk.")
-  public void CreateHorizontalScrollLayout(AndroidViewComponent container,
+  public void CallCreateHorizontalScrollLayout(AndroidViewComponent container,
       int id) {
     make(container, id, "HorizontalScrollArrangement");
   }
@@ -309,9 +309,9 @@ public class Tools_Layout extends AndroidNonvisibleComponent
     clearStatic(id);
   }
 
-  @SimpleFunction(description = "Hapus SEMUA layout dinamis Tools_Layout "
+  @SimpleFunction(description = "SET: Hapus SEMUA layout dinamis Tools_Layout "
       + "(id ikut dilepas).")
-  public void ClearLayouts() {
+  public void SetClearLayouts() {
     ArrayList<Integer> all;
     synchronized (layoutLock) {
       all = new ArrayList<Integer>(layouts.keySet());

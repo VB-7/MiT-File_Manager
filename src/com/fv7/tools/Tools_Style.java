@@ -96,7 +96,7 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     return new GradientDrawable();
   }
 
-  @SimpleFunction(description = "Atur sudut membulat (radius, dp). Background "
+  @SimpleFunction(description = "SET: Atur sudut membulat (radius, dp). Background "
       + "bawaan diganti.")
   public void SetCornerRadius(AndroidViewComponent comp, float radiusDp) {
     View v = viewOf(comp, "Radius");
@@ -112,7 +112,7 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "Atur garis tepi: warna + tebal (dp). "
+  @SimpleFunction(description = "SET: Atur garis tepi: warna + tebal (dp). "
       + "Background bawaan diganti.")
   public void SetBorder(AndroidViewComponent comp, int color, float widthDp) {
     View v = viewOf(comp, "Border");
@@ -128,7 +128,7 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "Atur gradien banyak warna (list warna) + arah "
+  @SimpleFunction(description = "SET: Atur gradien banyak warna (list warna) + arah "
       + "angka: 0=atas-bawah, 1=kananATAS-kiriBAWAH, 2=kanan-kiri, 3=kananBAWAH-"
       + "kiriATAS, 4=bawah-atas, 5=kiriBAWAH-kananATAS, 6=kiri-kanan, "
       + "7=kiriATAS-kananBAWAH. Background bawaan diganti.")
@@ -190,7 +190,7 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "Atur gradien radial: warna tengah, warna tepi, "
+  @SimpleFunction(description = "SET: Atur gradien radial: warna tengah, warna tepi, "
       + "radius (dp). Background bawaan diganti.")
   public void SetRadialGradient(AndroidViewComponent comp, int centerColor,
       int edgeColor, float radiusDp) {
@@ -209,7 +209,7 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "Atur bentuk background angka: pakai properti "
+  @SimpleFunction(description = "SET: Atur bentuk background angka: pakai properti "
       + "ShapeRectangle/ShapeOval/ShapeLine/ShapeRing.")
   public void SetShape(AndroidViewComponent comp, int shape) {
     View v = viewOf(comp, "Shape");
@@ -253,7 +253,7 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     return GradientDrawable.RING;
   }
 
-  @SimpleFunction(description = "Atur visibilitas angka: pakai properti "
+  @SimpleFunction(description = "SET: Atur visibilitas angka: pakai properti "
       + "VisibilityVisible/VisibilityInvisible/VisibilityGone.")
   public void SetVisibility(AndroidViewComponent comp, int visibility) {
     View v = viewOf(comp, "Visibility");
@@ -285,7 +285,7 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     return View.GONE;
   }
 
-  @SimpleFunction(description = "Atur putaran komponen (derajat, searah jarum jam).")
+  @SimpleFunction(description = "SET: Atur putaran komponen (derajat, searah jarum jam).")
   public void SetRotation(AndroidViewComponent comp, float degrees) {
     View v = viewOf(comp, "Rotation");
     if (v == null) {
@@ -298,7 +298,7 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "Efek ripple (gelombang sentuh) warna tertentu. "
+  @SimpleFunction(description = "SET: Efek ripple (gelombang sentuh) warna tertentu. "
       + "Background bawaan diganti RippleDrawable.")
   public void SetRipple(AndroidViewComponent comp, int color) {
     View v = viewOf(comp, "Ripple");
@@ -322,7 +322,7 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "Garis tepi putus-putus: warna, tebal (dp), "
+  @SimpleFunction(description = "SET: Garis tepi putus-putus: warna, tebal (dp), "
       + "panjang garis (dp), jarak garis (dp). dashed=false = garis penuh.")
   public void SetStroke(AndroidViewComponent comp, boolean dashed,
       float widthDp, int color, float dashLengthDp, float dashGapDp) {
@@ -344,7 +344,7 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "Atur spasi teks (khusus Label/TextBox/Button): "
+  @SimpleFunction(description = "SET: Atur spasi teks (khusus Label/TextBox/Button): "
       + "jarak baris (dp) + jarak huruf (em). Selain teks: error.")
   public void SetTextSpace(AndroidViewComponent comp, float lineSpaceDp,
       float letterSpace) {
@@ -369,9 +369,9 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "Jadikan lingkaran/oval (cocok untuk foto "
+  @SimpleFunction(description = "SET: Jadikan lingkaran/oval (cocok untuk foto "
       + "profil). Untuk lingkaran sempurna pakai komponen persegi.")
-  public void MakeCircular(AndroidViewComponent comp) {
+  public void SetCircular(AndroidViewComponent comp) {
     View v = viewOf(comp, "Circular");
     if (v == null) {
       return;
@@ -385,9 +385,9 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "Lingkaran + garis tepi warna (cocok untuk foto "
+  @SimpleFunction(description = "SET: Lingkaran + garis tepi warna (cocok untuk foto "
       + "profil).")
-  public void MakeCircularWithBorder(AndroidViewComponent comp, int color,
+  public void SetCircularBorder(AndroidViewComponent comp, int color,
       float widthDp) {
     View v = viewOf(comp, "CircularBorder");
     if (v == null) {
@@ -403,9 +403,9 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "Kembalikan efek sementara: hapus animasi, "
+  @SimpleFunction(description = "SET: Kembalikan efek sementara: hapus animasi, "
       + "alpha/rotasi/skala/posisi ke normal. Background tidak diubah.")
-  public void ResetEffects(AndroidViewComponent comp) {
+  public void SetResetEffects(AndroidViewComponent comp) {
     View v = viewOf(comp, "Reset");
     if (v == null) {
       return;
@@ -423,7 +423,7 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "Atur warna background polos. Background "
+  @SimpleFunction(description = "SET: Atur warna background polos. Background "
       + "bawaan diganti.")
   public void SetBackgroundColor(AndroidViewComponent comp, int color) {
     View v = viewOf(comp, "BackgroundColor");
@@ -439,10 +439,10 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "Atur gambar background (file/asset, scope+"
+  @SimpleFunction(description = "SET: Atur gambar background (file/asset, scope+"
       + "path). Cocok untuk wadah.")
-  public void SetBackgroundImage(AndroidViewComponent comp, FileScope scope,
-      final String path) {
+  public void SetBackgroundImage(AndroidViewComponent comp,
+      final String path, final String scope) {
     final View v = viewOf(comp, "BackgroundImage");
     if (v == null) {
       return;
@@ -452,7 +452,7 @@ public class Tools_Style extends AndroidNonvisibleComponent {
       Shared.err(this, "Style", 0, "path kosong");
       return;
     }
-    final FileScope fS = scope;
+    final FileScope fS = Shared.effScope(scope, p);
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         Bitmap bmp = null;
@@ -530,7 +530,7 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     });
   }
 
-  @SimpleFunction(description = "Atur bayangan/elevasi (dp). Efek terlihat di "
+  @SimpleFunction(description = "SET: Atur bayangan/elevasi (dp). Efek terlihat di "
       + "Android 5.0+.")
   public void SetElevation(AndroidViewComponent comp, float dp) {
     View v = viewOf(comp, "Elevation");
@@ -544,7 +544,7 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "Atur jarak dalam/padding (dp): "
+  @SimpleFunction(description = "SET: Atur jarak dalam/padding (dp): "
       + "kiri, atas, kanan, bawah.")
   public void SetPadding(AndroidViewComponent comp, float leftDp,
       float topDp, float rightDp, float bottomDp) {
@@ -559,7 +559,7 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "Atur jarak luar/margin (dp): kiri, atas, "
+  @SimpleFunction(description = "SET: Atur jarak luar/margin (dp): kiri, atas, "
       + "kanan, bawah. Hanya bila induk mendukung margin.")
   public void SetMargin(AndroidViewComponent comp, float leftDp,
       float topDp, float rightDp, float bottomDp) {
@@ -581,7 +581,7 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "Atur transparansi 0-100 (100 = penuh).")
+  @SimpleFunction(description = "SET: Atur transparansi 0-100 (100 = penuh).")
   public void SetOpacity(AndroidViewComponent comp, int percent) {
     View v = viewOf(comp, "Opacity");
     if (v == null) {
@@ -640,10 +640,10 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "Animasi fade: startPercent ke endPercent "
+  @SimpleFunction(description = "CALL: Animasi fade: startPercent ke endPercent "
       + "(0-100). Mis. 0->100 muncul, 100->0 hilang. Menembak "
       + "AnimationStarted/AnimationEnded.")
-  public void AnimateFade(AndroidViewComponent comp, int durationMs,
+  public void CallAnimateFade(AndroidViewComponent comp, int durationMs,
       int startPercent, int endPercent) {
     View v = viewOf(comp, "Fade");
     if (v == null) {
@@ -656,9 +656,9 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     play(comp, v, a, durationMs, "fade", "fade");
   }
 
-  @SimpleFunction(description = "Animasi geser-masuk: direction = "
+  @SimpleFunction(description = "CALL: Animasi geser-masuk: direction = "
       + "left/right/top/bottom. durationMs mis. 300.")
-  public void AnimateSlideIn(AndroidViewComponent comp, String direction,
+  public void CallAnimateSlideIn(AndroidViewComponent comp, String direction,
       int durationMs) {
     View v = viewOf(comp, "SlideIn");
     if (v == null) {
@@ -690,9 +690,9 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     play(comp, v, a, durationMs, "slidein", "slide");
   }
 
-  @SimpleFunction(description = "Animasi skala: ke toXPercent/toYPercent "
+  @SimpleFunction(description = "CALL: Animasi skala: ke toXPercent/toYPercent "
       + "(100 = normal). durationMs mis. 300.")
-  public void AnimateScale(AndroidViewComponent comp, int durationMs,
+  public void CallAnimateScale(AndroidViewComponent comp, int durationMs,
       int toXPercent, int toYPercent) {
     View v = viewOf(comp, "Scale");
     if (v == null) {
@@ -705,9 +705,9 @@ public class Tools_Style extends AndroidNonvisibleComponent {
         durationMs, "scale", "scale");
   }
 
-  @SimpleFunction(description = "Animasi putar (derajat, searah jarum jam). "
+  @SimpleFunction(description = "CALL: Animasi putar (derajat, searah jarum jam). "
       + "durationMs mis. 300.")
-  public void AnimateRotation(AndroidViewComponent comp, int durationMs,
+  public void CallAnimateRotation(AndroidViewComponent comp, int durationMs,
       float degrees) {
     View v = viewOf(comp, "RotationAnim");
     if (v == null) {

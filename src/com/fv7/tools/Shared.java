@@ -96,11 +96,50 @@ public final class Shared {
   }
 
   public static boolean isAssetPath(String p) {
-    return normalizePath(p).startsWith("//");
+    String s = normalizePath(p);
+    if (s.startsWith("//")) {
+      return true;
+    }
+    return "Asset".equals(scopeOf(p));
   }
 
   public static String assetName(String p) {
-    return stripLeadingSlash(normalizePath(p));
+    return stripLeadingSlash(normalizePath(stripScopePrefix(p)));
+  }
+
+  /** Salin satu file asset ke cache (untuk operasi yang butuh java.io.File,
+   *  mis. ZIP). Kembali null bila gagal. */
+  public static File assetToCache(Context context, String assetPath) {
+    try {
+      String name = assetName(assetPath);
+      File cache = context.getCacheDir();
+      if (cache != null && !cache.exists()) {
+        cache.mkdirs();
+      }
+      File dst = new File(cache, "asset_" + sanitize(fileNameOf(name)));
+      InputStream in = context.getAssets().open(name);
+      try {
+        FileOutputStream out = new FileOutputStream(dst);
+        try {
+          copyStream(in, out);
+        } finally {
+          try {
+            out.close();
+          } catch (Exception e) {
+            // abaikan
+          }
+        }
+      } finally {
+        try {
+          in.close();
+        } catch (Exception e) {
+          // abaikan
+        }
+      }
+      return dst;
+    } catch (Exception e) {
+      return null;
+    }
   }
 
   public static File externalRoot() {
@@ -158,15 +197,49 @@ public final class Shared {
   public static synchronized void setDefaultScope(FileScope s) {
     if (s != null) {
       defaultScope = s;
+      defaultScopeName = s.name();
+      defaultAbsolute = false;
     }
   }
 
   public static synchronized FileScope getDefaultScope() {
+    if (defaultAbsolute) {
+      return null;
+    }
     return defaultScope;
   }
 
   private static final String[] SCOPE_NAMES = {"App", "Private", "Cache",
       "Shared", "Legacy", "Asset"};
+
+  private static String defaultScopeName = "App";
+  private static boolean defaultAbsolute = false;
+
+  /** Atur scope bawaan pakai NAMA TEKS ("App"/"Private"/"Cache"/"Shared"/
+   *  "Legacy"/"Asset", bebas huruf besar-kecil) atau "" = absolut (berlaku
+   *  apa adanya). Nama tak dikenal = diabaikan. Kembali true bila diubah. */
+  public static synchronized boolean setDefaultScopeName(String name) {
+    String s = name == null ? "" : name.trim();
+    if (s.length() == 0) {
+      defaultAbsolute = true;
+      defaultScopeName = "";
+      return true;
+    }
+    for (int i = 0; i < SCOPE_NAMES.length; i = i + 1) {
+      if (s.equalsIgnoreCase(SCOPE_NAMES[i])) {
+        defaultScopeName = SCOPE_NAMES[i];
+        defaultAbsolute = false;
+        defaultScope = scopeByName(SCOPE_NAMES[i]);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Baca nama scope bawaan ("App"/.../"Asset", atau "" = absolut). */
+  public static synchronized String getDefaultScopeName() {
+    return defaultAbsolute ? "" : defaultScopeName;
+  }
 
   /** Nama scope dari prefix "NamaScope:path" (blok Scope Tools_Base).
    *  Kembali "" bila tidak ada prefix valid. Case-insensitive. */
@@ -211,12 +284,12 @@ public final class Shared {
     return null;
   }
 
-  /** Scoop TEKS ala draft user: "App"/"Private"/"Cache"/"Shared"/"Legacy"/
+  /** Scope TEKS ala draft user: "App"/"Private"/"Cache"/"Shared"/"Legacy"/
    *  "Asset" (bebas huruf besar-kecil) atau "" = path absolut / root kartu
    *  SD. Tak dikenal = defaultScope. Kembali null untuk "" (ditangani
-   *  khusus di resolveScoop). */
-  public static FileScope scoopToScope(String scoop) {
-    String s = scoop == null ? "" : scoop.trim();
+   *  khusus di resolveScope). */
+  public static FileScope scopeToScope(String scope) {
+    String s = scope == null ? "" : scope.trim();
     if (s.length() == 0) {
       return null;
     }
@@ -233,19 +306,43 @@ public final class Shared {
     } else if (s.equalsIgnoreCase("Asset")) {
       return FileScope.Asset;
     }
+    if (defaultAbsolute) {
+      return null;
+    }
     return getDefaultScope();
   }
 
-  /** Resolve path pakai scoop TEKS. scoop "" = absolut dipakai apa adanya,
-   *  relatif ditempel ke root kartu SD (ala draft point 1). Prefix
-   *  "NamaScope:" di path DIABAIKAN (scoop parameter yang menang). */
-  public static File resolveScoop(Context context, String scoop, String path) {
-    String raw = path == null ? "" : path.trim();
-    String body = raw;
-    if (scopeOf(raw).length() > 0) {
-      body = raw.substring(raw.indexOf(':') + 1);
+  /** Scope efektif: prefix "NamaScope:" di path (keluaran helper Scope)
+   *  MENANG bila ada; tanpa prefix pakai scope param. */
+  public static FileScope effScope(String scope, String path) {
+    String tagged = scopeOf(path);
+    if (tagged.length() > 0) {
+      FileScope f = scopeByName(tagged);
+      if (f != null) {
+        return f;
+      }
     }
-    FileScope s = scoopToScope(scoop);
+    return scopeToScope(scope);
+  }
+
+  /** Resolve path pakai scope TEKS (helper Scope ATAU string manual).
+   *  Aturan:
+   *  - Prefix "NamaScope:" di path (keluaran helper Scope) MENANG bila ada.
+   *  - Tanpa prefix: pakai parameter scope ("App"/.../"").
+   *  - scope "" = absolut dipakai apa adanya, relatif = root kartu SD
+   *    (ala draft point 1). Tak dikenal = scope bawaan. */
+  public static File resolveScope(Context context, String scope,
+      String path) {
+    String raw = path == null ? "" : path.trim();
+    String tagged = scopeOf(raw);
+    FileScope s;
+    String body = raw;
+    if (tagged.length() > 0) {
+      s = scopeToScope(tagged);
+      body = raw.substring(raw.indexOf(':') + 1);
+    } else {
+      s = scopeToScope(scope);
+    }
     if (s == null) {
       String p = normalizePath(body);
       if (p.length() == 0) {

@@ -204,26 +204,27 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     Ids.unregister(Ids.AUDIO, id);
   }
 
-  @SimpleFunction(description = "Putar audio ber-id (background, tanpa tampilan). Bisa jalan bareng "
+  @SimpleFunction(description = "CALL: Putar audio ber-id (background, tanpa tampilan). Bisa jalan bareng "
       + "(satu id = satu audio). path bisa file scope, file:/// absolut, atau http(s) URL "
       + "(streaming). id dari CreateAudioId / Tools_Base CreateUniqueId (reservasi diadopsi). "
       + "Tampilan (Slider/Label) bikin sendiri dari AudioStarted/ProgressChanged/Finished. "
-      + "Kembali: id, atau -1 bila gagal mulai.")
-  public int PlayAudio(final FileScope scope, final String path, final int id) {
+      + "Sukses menembak AudioStarted; gagal via ErrorOccurred. scope: helper "
+      + "Scope, teks, atau absolut.")
+  public void CallPlayAudio(final String path, final String scope, final int id) {
     if (id < 1) {
       Shared.err(this, "Audio", id, "id harus >= 1 (pakai CreateAudioId)");
-      return -1;
+      return;
     }
     if (!Ids.register(Ids.AUDIO, id)) {
       Shared.err(this, "Audio", id, "ID " + id + " sedang dipakai audio lain");
-      return -1;
+      return;
     }
     synchronized (audioLock) {
       if (players.containsKey(Integer.valueOf(id))) {
         if (Ids.isActive(Ids.AUDIO, id)) {
           Shared.err(this, "Audio", id, "ID " + id + " masih bunyi "
               + "(tunggu selesai / Pause / Stop dulu)");
-          return -1;
+          return;
         }
       }
     }
@@ -244,7 +245,7 @@ public class Tools_Audio extends AndroidNonvisibleComponent
             } else if (sa.startsWith("file://")) {
               mp.setDataSource(Shared.normalizePath(
                   Shared.stripLeadingSlash(sa.substring(7))));
-            } else if (scope == FileScope.Asset || Shared.isAssetPath(sa)) {
+            } else if (Shared.effScope(scope, sa) == FileScope.Asset || Shared.isAssetPath(sa)) {
               android.content.res.AssetFileDescriptor afd =
                   context.getAssets().openFd(Shared.assetName(sa));
               try {
@@ -258,7 +259,7 @@ public class Tools_Audio extends AndroidNonvisibleComponent
                 }
               }
             } else {
-              File f = Shared.resolve(context, scope, sa);
+              File f = Shared.resolve(context, Shared.effScope(scope, sa), sa);
               if (f == null || !f.exists()) {
                 Ids.unregister(Ids.AUDIO, id);
                 Shared.err(Tools_Audio.this, "Audio", id, "file tidak ada");
@@ -350,13 +351,12 @@ public class Tools_Audio extends AndroidNonvisibleComponent
       Ids.unregister(Ids.AUDIO, id);
       String m = e.getMessage();
       Shared.err(this, "Audio", id, m == null ? "audio gagal diputar" : m);
-      return -1;
+      return;
     }
-    return id;
   }
 
-  @SimpleFunction(description = "Jeda audio yang sedang bunyi (per id).")
-  public void PauseAudio(int id) {
+  @SimpleFunction(description = "SET: jeda audio yang sedang bunyi (per id). Tanpa feedback.")
+  public void SetPauseAudio(int id) {
     try {
       MediaPlayer mp;
       boolean ready;
@@ -378,8 +378,8 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Lanjutkan audio yang dijeda (per id).")
-  public void ResumeAudio(int id) {
+  @SimpleFunction(description = "SET: lanjutkan audio yang dijeda (per id). Tanpa feedback.")
+  public void SetResumeAudio(int id) {
     try {
       MediaPlayer mp;
       boolean ready;
@@ -401,8 +401,8 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Hentikan audio (per id). Putar lagi via PlayAudio.")
-  public void StopAudio(int id) {
+  @SimpleFunction(description = "SET: Hentikan audio (per id). Putar lagi via CallPlayAudio.")
+  public void SetStopAudio(int id) {
     try {
       boolean has;
       synchronized (audioLock) {
@@ -420,8 +420,8 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Lompat audio ke posisi (ms). Bisa dipasang ke Slider. (per id)")
-  public void SeekAudio(int id, int position) {
+  @SimpleFunction(description = "SET: Lompat audio ke posisi (ms). Bisa dipasang ke Slider. (per id)")
+  public void SetSeekAudio(int id, int position) {
     try {
       MediaPlayer mp;
       boolean ready;
@@ -441,8 +441,8 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Maju audio sejauh SkipSeconds detik. (per id)")
-  public void ForwardAudio(int id) {
+  @SimpleFunction(description = "SET: Maju audio sejauh SkipSeconds detik. (per id)")
+  public void SetForwardAudio(int id) {
     try {
       MediaPlayer mp;
       boolean ready;
@@ -474,8 +474,8 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Mundur audio sejauh SkipSeconds detik. (per id)")
-  public void BackwardAudio(int id) {
+  @SimpleFunction(description = "SET: Mundur audio sejauh SkipSeconds detik. (per id)")
+  public void SetBackwardAudio(int id) {
     try {
       MediaPlayer mp;
       boolean ready;
@@ -497,7 +497,7 @@ public class Tools_Audio extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Posisi audio sekarang (ms). (per id)")
-  public int AudioPosition(int id) {
+  public int GetAudioPosition(int id) {
     try {
       synchronized (audioLock) {
         MediaPlayer mp = players.get(Integer.valueOf(id));
@@ -513,7 +513,7 @@ public class Tools_Audio extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Durasi audio (ms). 0 bila belum siap. (per id)")
-  public int AudioDuration(int id) {
+  public int GetAudioDuration(int id) {
     try {
       synchronized (audioLock) {
         MediaPlayer mp = players.get(Integer.valueOf(id));
@@ -544,7 +544,7 @@ public class Tools_Audio extends AndroidNonvisibleComponent
 
   // ================= ID =================
 
-  @SimpleFunction(description = "Buat id audio unik baru (Number, siap pakai ke PlayAudio).")
+  @SimpleFunction(description = "Buat id audio unik baru (Number, siap pakai ke CallPlayAudio).")
   public int CreateAudioId() {
     int id = Ids.createFor(Ids.AUDIO);
     if (id < 1) {
@@ -678,7 +678,7 @@ public class Tools_Audio extends AndroidNonvisibleComponent
         Integer.valueOf(percent));
   }
 
-  @SimpleEvent(description = "Audio selesai (tidak loop). Putar lagi via PlayAudio.")
+  @SimpleEvent(description = "Audio selesai (tidak loop). Putar lagi via CallPlayAudio.")
   public void AudioFinished(int id) {
     EventDispatcher.dispatchEvent(this, "AudioFinished", Integer.valueOf(id));
   }

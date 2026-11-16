@@ -162,14 +162,15 @@ public class Tools_Image extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Tampilkan gambar ber-id ke layout (Arrangement MIT / dinamis). "
-      + "Bisa jalan bareng (satu id = satu gambar). source kosong = pakai scope+path. "
+  @SimpleFunction(description = "CALL: tampilkan gambar ber-id ke layout (Arrangement MIT / dinamis). "
+      + "Bisa jalan bareng (satu id = satu gambar). source kosong = pakai path + scope "
+      + "(helper Scope, teks, atau absolut). "
       + "source bisa: path file, file:/// absolut, http(s) URL (di-cache otomatis), "
       + "atau base64 (mentah / data:...). id = penanda (minta ke CreateImageId / "
-      + "Tools_Base CreateUniqueId, reservasi otomatis diadopsi). Sukses tidak menembak "
-      + "event (gambar langsung kelihatan); gagal via ErrorOccurred.")
-  public void ShowImage(final AndroidViewComponent container, final String source,
-      final FileScope scope, final String path, final int id) {
+      + "Tools_Base CreateUniqueId, reservasi otomatis diadopsi). Sukses menembak "
+      + "ImageShown; gagal via ErrorOccurred.")
+  public void CallShowImage(final AndroidViewComponent container, final String source,
+      final String path, final String scope, final int id) {
     if (id < 1) {
       Shared.err(this, "Image", id, "id harus >= 1 (pakai CreateImageId)");
       return;
@@ -187,8 +188,8 @@ public class Tools_Image extends AndroidNonvisibleComponent
     }
     Ids.setActive(Ids.IMAGE, id, true);
     final String src = Shared.clean(source == null ? "" : source);
-    final FileScope fS = scope;
-    final String fP = path == null ? "" : path;
+    final String fP = Shared.clean(path == null ? "" : path);
+    final FileScope fS = Shared.effScope(scope, src.length() > 0 ? src : fP);
     final AndroidViewComponent fContainer = container;
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
@@ -299,7 +300,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
                 disp = usePath;
               }
             } else {
-              File f = Shared.resolve(context, scope, usePath);
+              File f = Shared.resolve(context, fS, usePath);
               if (f == null || !f.exists()) {
                 err = "file tidak ada";
               } else {
@@ -329,6 +330,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
         }
         final Bitmap fBmp = bmp;
         final String fErr = err;
+        final String fDisp = disp;
         if (fBmp == null) {
           Ids.setActive(Ids.IMAGE, id, false);
           Ids.unregister(Ids.IMAGE, id);
@@ -375,6 +377,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
                     ViewGroup.LayoutParams.WRAP_CONTENT);
                 iv.setImageBitmap(fBmp);
                 vg.addView(iv, lp);
+                ImageShown(id, fDisp);
               } catch (Exception e) {
                 String m = e.getMessage();
                 Ids.setActive(Ids.IMAGE, id, false);
@@ -418,9 +421,9 @@ public class Tools_Image extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Hapus SEMUA gambar Tools_Image dari layout itu "
-      + "(komponen lain tidak diusik, id ikut dilepas).")
-  public void ClearImage(final AndroidViewComponent container) {
+  @SimpleFunction(description = "SET: hapus SEMUA gambar Tools_Image dari layout itu "
+      + "(komponen lain tidak diusik, id ikut dilepas). Tanpa feedback.")
+  public void SetClearImage(final AndroidViewComponent container) {
     try {
       form.runOnUiThread(new Runnable() {
         public void run() {
@@ -716,7 +719,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Aktif/matikan cubit-zoom (pinch) + geser "
+  @SimpleFunction(description = "SET: Aktif/matikan cubit-zoom (pinch) + geser "
       + "gambar ber-id. Aktif memakai mode MATRIX (klik tetap jalan untuk tap "
       + "tanpa zoom). Perubahan skala menembak ZoomChanged; baca kapan saja "
       + "via GetZoom.")
@@ -773,8 +776,8 @@ public class Tools_Image extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Kembalikan zoom gambar ber-id ke pas (1.0).")
-  public void ResetZoom(final int id) {
+  @SimpleFunction(description = "SET: kembalikan zoom gambar ber-id ke pas (1.0). Tanpa feedback.")
+  public void SetResetZoom(final int id) {
     try {
       form.runOnUiThread(new Runnable() {
         public void run() {
@@ -803,7 +806,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
 
   // ================= SLIDER =================
 
-  private Bitmap loadBitmap(String src, FileScope scope, String fallbackPath) {
+  private Bitmap loadBitmap(String src, String scopeText, String fallbackPath) {
     try {
       String s = Shared.clean(src == null ? "" : src);
       String usePath = s.length() > 0 ? s : Shared.clean(fallbackPath);
@@ -854,7 +857,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
         return null;
       }
       byte[] data = null;
-      if (scope == FileScope.Asset || Shared.isAssetPath(p)) {
+      if (Shared.effScope(scopeText, p) == FileScope.Asset || Shared.isAssetPath(p)) {
         InputStream in = context.getAssets().open(Shared.assetName(p));
         try {
           data = Shared.readAll(in);
@@ -866,7 +869,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
           }
         }
       } else {
-        File f = Shared.resolve(context, scope, p);
+        File f = Shared.resolve(context, Shared.effScope(scopeText, p), p);
         if (f == null || !f.exists()) {
           return null;
         }
@@ -919,11 +922,11 @@ public class Tools_Image extends AndroidNonvisibleComponent
     return out;
   }
 
-  @SimpleFunction(description = "Bikin slider gambar ber-id (geser kanan-kiri "
+  @SimpleFunction(description = "CALL: bikin slider gambar ber-id (geser kanan-kiri "
       + "bila horizontal=true, atas-bawah bila false — lebih dari Iago/Boson "
       + "yang cuma kiri-kanan). Isi via SetSliderImages. Geser menembak "
       + "SliderChanged; baca kapan saja via GetSliderIndex.")
-  public void CreateImageSlider(final AndroidViewComponent container,
+  public void CallCreateImageSlider(final AndroidViewComponent container,
       final int id, final boolean horizontal) {
     if (id < 1) {
       Shared.err(this, "Slider", id, "id harus >= 1 (pakai CreateSliderId)");
@@ -1089,12 +1092,12 @@ public class Tools_Image extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Isi slider ber-id dengan daftar gambar "
+  @SimpleFunction(description = "SET: isi slider ber-id dengan daftar gambar "
       + "(list teks: path file/asset, URL http, atau base64 — sama fleksibelnya "
       + "dengan ShowImage; scope+path dipakai bila item kosong). Maks 20 "
       + "gambar. Gagal via ErrorOccurred.")
-  public void SetSliderImages(final int sliderId, final FileScope scope,
-      final Object paths) {
+  public void SetSliderImages(final int sliderId,
+      final Object paths, final String scope) {
     final List<String> list = toStrList(paths);
     if (list.isEmpty()) {
       Shared.err(this, "Slider", sliderId, "list gambar kosong");
@@ -1109,13 +1112,12 @@ public class Tools_Image extends AndroidNonvisibleComponent
       return;
     }
     final List<String> use = list.size() > 20 ? list.subList(0, 20) : list;
-    final FileScope fS = scope;
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         final ArrayList<Bitmap> bmps = new ArrayList<Bitmap>();
         int fail = 0;
         for (int i = 0; i < use.size(); i = i + 1) {
-          Bitmap b = loadBitmap(use.get(i), fS, "");
+          Bitmap b = loadBitmap(use.get(i), scope, "");
           if (b == null) {
             fail = fail + 1;
           } else {
@@ -1186,18 +1188,18 @@ public class Tools_Image extends AndroidNonvisibleComponent
     });
   }
 
-  @SimpleFunction(description = "Geser slider ke halaman berikut (berputar).")
-  public void SliderNext(final int id) {
+  @SimpleFunction(description = "SET: geser slider ke halaman berikut (berputar). Tanpa feedback.")
+  public void SetSliderNext(final int id) {
     slideTo(id, 1, false);
   }
 
-  @SimpleFunction(description = "Geser slider ke halaman sebelum (berputar).")
-  public void SliderPrevious(final int id) {
+  @SimpleFunction(description = "SET: geser slider ke halaman sebelum (berputar). Tanpa feedback.")
+  public void SetSliderPrevious(final int id) {
     slideTo(id, -1, false);
   }
 
-  @SimpleFunction(description = "Lompat ke halaman index (0 = pertama).")
-  public void SliderGoTo(final int id, final int index) {
+  @SimpleFunction(description = "SET: lompat ke halaman index (0 = pertama). Tanpa feedback.")
+  public void SetSliderGoTo(final int id, final int index) {
     Slider s;
     synchronized (viewLock) {
       s = sliders.get(Integer.valueOf(id));
@@ -1239,7 +1241,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Auto-putar slider tiap intervalMs "
+  @SimpleFunction(description = "SET: Auto-putar slider tiap intervalMs "
       + "(0 = mati).")
   public void SetSliderAutoPlay(final int id, final long intervalMs) {
     Slider s;
@@ -1346,7 +1348,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
 
   // ================= ID =================
 
-  @SimpleFunction(description = "Buat id gambar unik baru (Number, siap pakai ke ShowImage).")
+  @SimpleFunction(description = "Buat id gambar unik baru (Number, siap pakai ke CallShowImage).")
   public int CreateImageId() {
     int id = Ids.createFor(Ids.IMAGE);
     if (id < 1) {
@@ -1398,7 +1400,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Buat id slider unik baru (Number, siap pakai "
-      + "ke CreateImageSlider).")
+      + "ke CallCreateImageSlider).")
   public int CreateSliderId() {
     int id = Ids.createFor(Ids.SLIDER);
     if (id < 1) {
@@ -1466,13 +1468,14 @@ public class Tools_Image extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Decode base64 jadi gambar di cache. Path hasil langsung bisa "
+  @SimpleFunction(description = "CALL: decode base64 jadi gambar di cache. Path hasil langsung bisa "
       + "dipasang ke Image.Picture. Hasil lewat AfterPictureBase64Ready. "
       + "Satu proses per saat.")
-  public boolean Base64ToPicture(final String base64) {
+  public void CallBase64ToPicture(final String base64) {
     if (!Shared.claimSlot("b64pic")) {
       Shared.err(this, "Base64", 0, "masih ada proses gambar berjalan");
-      return false;
+      AfterPictureBase64Ready(false, "", "", "", "masih ada proses gambar berjalan");
+      return;
     }
     final String b64 = base64 == null ? "" : base64;
     PictureStarted();
@@ -1554,19 +1557,18 @@ public class Tools_Image extends AndroidNonvisibleComponent
         }
       }
     });
-    return true;
   }
 
   @SimpleFunction(description = "Lebar dan tinggi gambar (pixel). Kembali: list [lebar, tinggi]. "
       + "[0, 0] bila bukan gambar / tidak ada.")
-  public List<Integer> GetImageSize(FileScope scope, String path) {
+  public List<Integer> GetImageSize(String path, String scope) {
     ArrayList<Integer> out = new ArrayList<Integer>();
     out.add(Integer.valueOf(0));
     out.add(Integer.valueOf(0));
     try {
       String p = Shared.clean(path);
       byte[] data = null;
-      if (scope == FileScope.Asset || Shared.isAssetPath(p)) {
+      if (Shared.effScope(scope, p) == FileScope.Asset || Shared.isAssetPath(p)) {
         InputStream in = context.getAssets().open(Shared.assetName(p));
         try {
           data = Shared.readAll(in);
@@ -1578,7 +1580,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
           }
         }
       } else {
-        File f = Shared.resolve(context, scope, path);
+        File f = Shared.resolve(context, Shared.effScope(scope, p), path);
         if (f == null || !f.exists()) {
           Shared.err(this, "Image", 0, "file tidak ada");
           return out;
@@ -1611,6 +1613,11 @@ public class Tools_Image extends AndroidNonvisibleComponent
   }
 
   // ================= EVENTS =================
+
+  @SimpleEvent(description = "Hasil CallShowImage: gambar ber-id tampil. id + path tampil.")
+  public void ImageShown(int id, String path) {
+    EventDispatcher.dispatchEvent(this, "ImageShown", Integer.valueOf(id), path);
+  }
 
   @SimpleEvent(description = "Gambar ber-id di-klik: id.")
   public void ImageClicked(int id) {
@@ -1653,7 +1660,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
     EventDispatcher.dispatchEvent(this, "PictureStarted");
   }
 
-  @SimpleEvent(description = "Hasil Base64ToPicture: success pertama, scope menemani path "
+  @SimpleEvent(description = "Hasil CallBase64ToPicture: success pertama, scope menemani path "
       + "(selalu Cache), fileName paling belakang. Path siap ke Image.Picture.")
   public void AfterPictureBase64Ready(boolean success, String scope, String path,
       String fileName, String message) {

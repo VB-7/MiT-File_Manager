@@ -38,7 +38,7 @@ import java.util.Map;
     version = 1,
     description = "Tools_File (sistem draft): awalan Is = boolean (colok ke if), "
         + "awalan Call = async + hasil lewat event, awalan Set = tanpa feedback. "
-        + "Semua blok path bawa scoop teks: App/Private/Cache/Shared/Legacy/"
+        + "Semua blok path bawa scope teks: App/Private/Cache/Shared/Legacy/"
         + "Asset (bebas huruf) atau \"\" = path absolut dipakai apa adanya, "
         + "relatif = root kartu SD. Salin/pindah digabung satu blok "
         + "CallCopyOrMoveFile (isMove) + info duplikat.",
@@ -72,24 +72,29 @@ public class Tools_File extends AndroidNonvisibleComponent
     this.activity = container.$context();
   }
 
-  // ================= bantu scoop =================
+  // ================= bantu scope =================
 
-  private File scoopFile(String scoop, String path) {
-    return Shared.resolveScoop(context, scoop, path);
+  private File scopeFile(String scope, String path) {
+    return Shared.resolveScope(context, scope, path);
   }
 
-  private boolean wantAsset(String scoop, String path) {
-    if (Shared.scoopToScope(scoop) == null) {
-      return false;
+  private boolean wantAsset(String scope, String path) {
+    String p = Shared.clean(path);
+    String tagged = Shared.scopeOf(p);
+    if (tagged.length() > 0) {
+      return tagged.equals("Asset") || Shared.isAssetPath(Shared.stripScopePrefix(p));
+    }
+    if (Shared.scopeToScope(scope) == null) {
+      return Shared.isAssetPath(p);
     }
     try {
-      if (Shared.scoopToScope(scoop).name().equals("Asset")) {
+      if (Shared.scopeToScope(scope).name().equals("Asset")) {
         return true;
       }
     } catch (Exception e) {
       // abaikan
     }
-    return Shared.isAssetPath(Shared.clean(path));
+    return Shared.isAssetPath(p);
   }
 
   private boolean existsInAssets(String assetPath) {
@@ -112,8 +117,8 @@ public class Tools_File extends AndroidNonvisibleComponent
   }
 
   /** Cari folder dengan toleransi titik: "x" tidak ada -> coba ".x". */
-  private File findDir(String scoop, String folder) {
-    File d = scoopFile(scoop, folder);
+  private File findDir(String scope, String folder) {
+    File d = scopeFile(scope, folder);
     if (d != null && d.isDirectory()) {
       return d;
     }
@@ -124,7 +129,7 @@ public class Tools_File extends AndroidNonvisibleComponent
         String parent = Shared.parentOf(p);
         String alt = parent.length() == 0 ? "." + name
             : parent + "/." + name;
-        File g = scoopFile(scoop, alt);
+        File g = scopeFile(scope, alt);
         if (g != null && g.isDirectory()) {
           return g;
         }
@@ -181,16 +186,16 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   // ================= IS (boolean, colok ke if) =================
 
-  @SimpleFunction(description = "Apakah file ada di jalur. scoop: App/Private/"
+  @SimpleFunction(description = "Apakah file ada di jalur. scope: App/Private/"
       + "Cache/Shared/Legacy/Asset (bebas huruf) atau \"\" = absolut. "
       + "Asset bisa dicek.")
-  public boolean IsFileExists(String fileName, String scoop) {
+  public boolean IsFileExists(String fileName, String scope) {
     try {
       String p = Shared.clean(fileName);
-      if (wantAsset(scoop, p)) {
+      if (wantAsset(scope, p)) {
         return existsInAssets(p);
       }
-      File f = scoopFile(scoop, p);
+      File f = scopeFile(scope, p);
       return f != null && f.isFile();
     } catch (Exception e) {
       return false;
@@ -198,11 +203,11 @@ public class Tools_File extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Apakah directory/folder ada di jalur. "
-      + "scoop seperti IsFileExists.")
-  public boolean IsDirectoryExists(String directory, String scoop) {
+      + "scope seperti IsFileExists.")
+  public boolean IsDirectoryExists(String directory, String scope) {
     try {
       String p = Shared.clean(directory);
-      if (wantAsset(scoop, p)) {
+      if (wantAsset(scope, p)) {
         try {
           String[] l = context.getAssets().list(Shared.assetName(p));
           return l != null && l.length > 0;
@@ -210,7 +215,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           return false;
         }
       }
-      File d = scoopFile(scoop, p);
+      File d = scopeFile(scope, p);
       return d != null && d.isDirectory();
     } catch (Exception e) {
       return false;
@@ -218,11 +223,11 @@ public class Tools_File extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Apakah file .nomedia ada di dalam folder. "
-      + "scoop seperti IsFileExists.")
-  public boolean IsNomediaExists(String folder, String scoop) {
+      + "scope seperti IsFileExists.")
+  public boolean IsNomediaExists(String folder, String scope) {
     try {
       String p = Shared.clean(folder);
-      if (wantAsset(scoop, p)) {
+      if (wantAsset(scope, p)) {
         try {
           String[] l = context.getAssets().list(Shared.assetName(p));
           if (l != null) {
@@ -237,7 +242,7 @@ public class Tools_File extends AndroidNonvisibleComponent
         }
         return false;
       }
-      File d = scoopFile(scoop, p);
+      File d = scopeFile(scope, p);
       if (d == null || !d.isDirectory()) {
         return false;
       }
@@ -249,14 +254,14 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "Apakah directory ada di jalur DAN hidden "
       + "(nama diawali titik). Boleh tulis dengan/tanpa titik. "
-      + "scoop seperti IsFileExists.")
-  public boolean IsHiddenDirectory(String directory, String scoop) {
+      + "scope seperti IsFileExists.")
+  public boolean IsHiddenDirectory(String directory, String scope) {
     try {
       String p = Shared.clean(directory);
-      if (wantAsset(scoop, p)) {
+      if (wantAsset(scope, p)) {
         return Shared.fileNameOf(Shared.assetName(p)).startsWith(".");
       }
-      File d = findDir(scoop, p);
+      File d = findDir(scope, p);
       if (d == null || !d.isDirectory()) {
         return false;
       }
@@ -277,12 +282,12 @@ public class Tools_File extends AndroidNonvisibleComponent
   @SimpleFunction(description = "CALL: jadikan directory hidden (nama jadi "
       + ".nama). Sudah hidden = success. Hasil lewat DirectoryHidden.")
   public void CallSetHiddenDirectory(final String directory,
-      final String scoop) {
+      final String scope) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         String need = "";
         try {
-          File d = findDir(scoop, directory);
+          File d = findDir(scope, directory);
           if (d == null || !d.isDirectory()) {
             final String msg = "directory tidak ada";
             Shared.err(Tools_File.this, "Directory", 0, msg);
@@ -351,11 +356,11 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "CALL: buat file .nomedia di dalam folder "
       + "(sembunyikan dari galeri/musik). Hasil lewat NomediaFileCreated.")
-  public void CallMakeNomediaFile(final String folder, final String scoop) {
+  public void CallMakeNomediaFile(final String folder, final String scope) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         try {
-          if (wantAsset(scoop, folder)) {
+          if (wantAsset(scope, folder)) {
             final String msg = "tidak bisa tulis ke Asset";
             Shared.err(Tools_File.this, "Directory", 0, msg);
             fireOnUi(new Runnable() {
@@ -365,7 +370,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             });
             return;
           }
-          File d = scoopFile(scoop, folder);
+          File d = scopeFile(scope, folder);
           if (d == null) {
             final String msg = "folder tidak valid";
             Shared.err(Tools_File.this, "Directory", 0, msg);
@@ -422,11 +427,11 @@ public class Tools_File extends AndroidNonvisibleComponent
   @SimpleFunction(description = "CALL: hapus file .nomedia di folder. "
       + "Tidak ada = success. Hasil lewat NomediaFileDeleted.")
   public void CallDeleteNomediaFile(final String folder,
-      final String scoop) {
+      final String scope) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         try {
-          if (wantAsset(scoop, folder)) {
+          if (wantAsset(scope, folder)) {
             final String msg = "tidak bisa tulis ke Asset";
             Shared.err(Tools_File.this, "Directory", 0, msg);
             fireOnUi(new Runnable() {
@@ -436,7 +441,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             });
             return;
           }
-          File d = scoopFile(scoop, folder);
+          File d = scopeFile(scope, folder);
           if (d == null || !d.isDirectory()) {
             final String msg = "folder tidak ada";
             Shared.err(Tools_File.this, "Directory", 0, msg);
@@ -485,11 +490,11 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "CALL: buat folder (termasuk induknya). "
       + "Sudah ada = success. Hasil lewat DirectoryCreated.")
-  public void CallMakeDirectory(final String folder, final String scoop) {
+  public void CallMakeDirectory(final String folder, final String scope) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         try {
-          if (wantAsset(scoop, folder)) {
+          if (wantAsset(scope, folder)) {
             final String msg = "tidak bisa tulis ke Asset";
             Shared.err(Tools_File.this, "Directory", 0, msg);
             fireOnUi(new Runnable() {
@@ -499,7 +504,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             });
             return;
           }
-          File d = scoopFile(scoop, folder);
+          File d = scopeFile(scope, folder);
           if (d == null) {
             final String msg = "folder tidak valid";
             Shared.err(Tools_File.this, "Directory", 0, msg);
@@ -550,11 +555,11 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "CALL: hapus file/folder (folder rekursif). "
       + "Tidak ada = success. Hasil lewat FileDeleted.")
-  public void CallDeleteFile(final String path, final String scoop) {
+  public void CallDeleteFile(final String path, final String scope) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         try {
-          if (wantAsset(scoop, path)) {
+          if (wantAsset(scope, path)) {
             final String msg = "tidak bisa hapus dari Asset";
             Shared.err(Tools_File.this, "File", 0, msg);
             fireOnUi(new Runnable() {
@@ -564,7 +569,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             });
             return;
           }
-          File f = scoopFile(scoop, path);
+          File f = scopeFile(scope, path);
           if (f == null) {
             final String msg = "path tidak valid";
             Shared.err(Tools_File.this, "File", 0, msg);
@@ -612,7 +617,7 @@ public class Tools_File extends AndroidNonvisibleComponent
   @SimpleFunction(description = "CALL: hapus BANYAK path sekaligus (tanpa loop "
       + "manual). paths = list / teks koma. Hasil lewat FileListDeleted "
       + "(total + terhapus).")
-  public void CallDeleteList(final Object paths, final String scoop) {
+  public void CallDeleteList(final Object paths, final String scope) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         try {
@@ -631,10 +636,10 @@ public class Tools_File extends AndroidNonvisibleComponent
           int done = 0;
           for (int i = 0; i < l.size(); i = i + 1) {
             try {
-              if (wantAsset(scoop, l.get(i))) {
+              if (wantAsset(scope, l.get(i))) {
                 continue;
               }
-              File f = scoopFile(scoop, l.get(i));
+              File f = scopeFile(scope, l.get(i));
               if (f != null && Shared.deleteRecursive(f)) {
                 done = done + 1;
               }
@@ -671,11 +676,11 @@ public class Tools_File extends AndroidNonvisibleComponent
   @SimpleFunction(description = "CALL: ganti nama FILE (tanpa pindah folder). "
       + "newName = nama saja. Hasil lewat FileRenamed (path = nama baru).")
   public void CallRenameFile(final String path, final String newName,
-      final String scoop) {
+      final String scope) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         try {
-          if (wantAsset(scoop, path)) {
+          if (wantAsset(scope, path)) {
             final String msg = "tidak bisa rename di Asset";
             Shared.err(Tools_File.this, "File", 0, msg);
             fireOnUi(new Runnable() {
@@ -685,7 +690,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             });
             return;
           }
-          File f = scoopFile(scoop, path);
+          File f = scopeFile(scope, path);
           if (f == null || !f.isFile()) {
             final String msg = "file tidak ada";
             Shared.err(Tools_File.this, "File", 0, msg);
@@ -745,11 +750,11 @@ public class Tools_File extends AndroidNonvisibleComponent
   @SimpleFunction(description = "CALL: ganti nama FOLDER (tanpa pindah). "
       + "newName = nama saja. Hasil lewat FolderRenamed.")
   public void CallRenameFolder(final String path, final String newName,
-      final String scoop) {
+      final String scope) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         try {
-          if (wantAsset(scoop, path)) {
+          if (wantAsset(scope, path)) {
             final String msg = "tidak bisa rename di Asset";
             Shared.err(Tools_File.this, "File", 0, msg);
             fireOnUi(new Runnable() {
@@ -759,7 +764,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             });
             return;
           }
-          File f = findDir(scoop, path);
+          File f = findDir(scope, path);
           if (f == null || !f.isDirectory()) {
             final String msg = "folder tidak ada";
             Shared.err(Tools_File.this, "File", 0, msg);
@@ -820,11 +825,11 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "CALL: buat file kosong (folder induk dibuat "
       + "otomatis). Sudah ada = success. Hasil lewat EmptyFileCreated.")
-  public void CallCreateEmptyFile(final String path, final String scoop) {
+  public void CallCreateEmptyFile(final String path, final String scope) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         try {
-          if (wantAsset(scoop, path)) {
+          if (wantAsset(scope, path)) {
             final String msg = "tidak bisa tulis ke Asset";
             Shared.err(Tools_File.this, "File", 0, msg);
             fireOnUi(new Runnable() {
@@ -834,7 +839,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             });
             return;
           }
-          File f = scoopFile(scoop, path);
+          File f = scopeFile(scope, path);
           if (f == null) {
             final String msg = "path tidak valid";
             Shared.err(Tools_File.this, "File", 0, msg);
@@ -892,11 +897,11 @@ public class Tools_File extends AndroidNonvisibleComponent
   @SimpleFunction(description = "CALL: tulis teks ke file (UTF-8). "
       + "append=true = sambung di akhir. Hasil lewat FileSaved.")
   public void CallSaveFile(final String path, final String content,
-      final boolean append, final String scoop) {
+      final boolean append, final String scope) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         try {
-          if (wantAsset(scoop, path)) {
+          if (wantAsset(scope, path)) {
             final String msg = "tidak bisa tulis ke Asset";
             Shared.err(Tools_File.this, "File", 0, msg);
             fireOnUi(new Runnable() {
@@ -906,7 +911,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             });
             return;
           }
-          File f = scoopFile(scoop, path);
+          File f = scopeFile(scope, path);
           if (f == null) {
             final String msg = "path tidak valid";
             Shared.err(Tools_File.this, "File", 0, msg);
@@ -964,11 +969,11 @@ public class Tools_File extends AndroidNonvisibleComponent
       + "(tanpa validasi gambar, lebih cepat). Hasil lewat Base64FileSaved. "
       + "Polling: GetLastBase64FilePath.")
   public void CallSaveBase64ToFile(final String base64, final String path,
-      final String scoop) {
+      final String scope) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         try {
-          if (wantAsset(scoop, path)) {
+          if (wantAsset(scope, path)) {
             lastBase64Path = "";
             final String msg = "tidak bisa tulis ke Asset";
             Shared.err(Tools_File.this, "Base64", 0, msg);
@@ -979,7 +984,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             });
             return;
           }
-          File f = scoopFile(scoop, path);
+          File f = scopeFile(scope, path);
           if (f == null) {
             lastBase64Path = "";
             final String msg = "path tidak valid";
@@ -1064,18 +1069,18 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "CALL: baca file teks (UTF-8) di background. "
       + "Hasil lewat GotText (content = isi file). Mulai lewat ReadStarted.")
-  public void CallReadText(final String path, final String scoop) {
+  public void CallReadText(final String path, final String scope) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         final String p = Shared.clean(path);
-        final String sc = scoop == null ? "" : scoop.trim();
+        final String sc = scope == null ? "" : scope.trim();
         fireOnUi(new Runnable() {
           public void run() {
             ReadStarted(sc, p);
           }
         });
         try {
-          if (wantAsset(scoop, p)) {
+          if (wantAsset(scope, p)) {
             InputStream in = context.getAssets().open(Shared.assetName(p));
             byte[] data;
             try {
@@ -1096,7 +1101,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             });
             return;
           }
-          File f = scoopFile(scoop, p);
+          File f = scopeFile(scope, p);
           if (f == null || !f.isFile()) {
             final String msg = "file tidak ada";
             Shared.err(Tools_File.this, "Read", 0, msg);
@@ -1151,12 +1156,12 @@ public class Tools_File extends AndroidNonvisibleComponent
   // ================= CALL: salin / pindah =================
 
   @SimpleFunction(description = "CALL: salin ATAU pindah file (isMove=true = "
-      + "pindah). from/to bawa scoop sendiri-sendiri. Nama tujuan boleh beda. "
+      + "pindah). from/to bawa scope sendiri-sendiri. Nama tujuan boleh beda. "
       + "Bila tujuan SUDAH ADA: tidak disalin, Finished(success=true, "
       + "isDuplicated=true) -> rename manual ala contoh. Asset hanya bisa "
       + "jadi sumber. Satu job per saat.")
   public void CallCopyOrMoveFile(final String fromFileName,
-      final String fromScoop, final String toFileName, final String toScoop,
+      final String fromScope, final String toFileName, final String toScope,
       final boolean isMove) {
     if (!Shared.claimSlot("copyormove")) {
       final String msg = "masih ada salinan/pindahan berjalan";
@@ -1169,7 +1174,7 @@ public class Tools_File extends AndroidNonvisibleComponent
       });
       return;
     }
-    if (wantAsset(toScoop, toFileName)) {
+    if (wantAsset(toScope, toFileName)) {
       Shared.releaseSlot("copyormove");
       final String msg = "tidak bisa salin ke Asset";
       Shared.err(this, "CopyOrMove", 0, msg);
@@ -1184,7 +1189,7 @@ public class Tools_File extends AndroidNonvisibleComponent
     copyMoveCancel = false;
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
-        runCopyOrMove(isMove, fromScoop, fromFileName, toScoop, toFileName);
+        runCopyOrMove(isMove, fromScope, fromFileName, toScope, toFileName);
       }
     });
   }
@@ -1201,7 +1206,7 @@ public class Tools_File extends AndroidNonvisibleComponent
     InputStream in = null;
     boolean fromAsset = false;
     String aName = "";
-    File src = scoopFile(fS, fP);
+    File src = scopeFile(fS, fP);
     long total = 0;
     try {
       if (src == null) {
@@ -1223,7 +1228,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             "file sumber tidak ada");
         return;
       }
-      File dst = scoopFile(tS, tP);
+      File dst = scopeFile(tS, tP);
       if (dst == null) {
         finishCopyOrMove(move, false, "", "",
             Shared.fileNameOf(tP), false, "tujuan tidak valid");
@@ -1370,7 +1375,7 @@ public class Tools_File extends AndroidNonvisibleComponent
   // ================= GET / query =================
 
   @SimpleFunction(description = "Nama file dari sebuah path (buang foldernya). "
-      + "Olah string saja, tanpa scoop.")
+      + "Olah string saja, tanpa scope.")
   public String GetFileName(String path) {
     return Shared.fileNameOf(path);
   }
@@ -1387,14 +1392,14 @@ public class Tools_File extends AndroidNonvisibleComponent
     return Shared.parentOf(path);
   }
 
-  @SimpleFunction(description = "Path absolut dari scoop+path. URL/base64/"
-      + "Asset = kosong. scoop \"\" = absolut apa adanya.")
-  public String GetFullPath(String path, String scoop) {
+  @SimpleFunction(description = "Path absolut dari scope+path. URL/base64/"
+      + "Asset = kosong. scope \"\" = absolut apa adanya.")
+  public String GetFullPath(String path, String scope) {
     try {
-      if (wantAsset(scoop, path)) {
+      if (wantAsset(scope, path)) {
         return "//" + Shared.assetName(Shared.clean(path));
       }
-      File f = scoopFile(scoop, path);
+      File f = scopeFile(scope, path);
       return f == null ? "" : f.getAbsolutePath();
     } catch (Exception e) {
       return "";
@@ -1402,10 +1407,10 @@ public class Tools_File extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Ukuran file dalam byte. Folder = total isi "
-      + "rekursif. scoop seperti IsFileExists.")
-  public long FileSize(String path, String scoop) {
+      + "rekursif. scope seperti IsFileExists.")
+  public long FileSize(String path, String scope) {
     try {
-      if (wantAsset(scoop, path)) {
+      if (wantAsset(scope, path)) {
         try {
           return context.getAssets().openFd(
               Shared.assetName(Shared.clean(path))).getLength();
@@ -1413,7 +1418,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           return -1L;
         }
       }
-      File f = scoopFile(scoop, path);
+      File f = scopeFile(scope, path);
       if (f == null || !f.exists()) {
         return -1L;
       }
@@ -1427,10 +1432,10 @@ public class Tools_File extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Sisa ruang kosong (byte) di penyimpanan "
-      + "scoop itu. scoop \"\" = kartu SD.")
-  public long FreeSpace(String scoop) {
+      + "scope itu. scope \"\" = kartu SD.")
+  public long FreeSpace(String scope) {
     try {
-      File r = scoopFile(scoop, "");
+      File r = scopeFile(scope, "");
       if (r == null) {
         return -1L;
       }
@@ -1440,11 +1445,11 @@ public class Tools_File extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Total kapasitas (byte) penyimpanan scoop "
+  @SimpleFunction(description = "Total kapasitas (byte) penyimpanan scope "
       + "itu. -1 bila gagal.")
-  public long TotalSpace(String scoop) {
+  public long TotalSpace(String scope) {
     try {
-      File r = scoopFile(scoop, "");
+      File r = scopeFile(scope, "");
       if (r == null) {
         return -1L;
       }
@@ -1456,9 +1461,9 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "Daftar file (path lengkap). filter = "
       + "ekstensi tanpa titik (boleh koma: jpg,png; kosong = semua). "
-      + "recursive = sertakan isi subfolder. scoop seperti IsFileExists.")
+      + "recursive = sertakan isi subfolder. scope seperti IsFileExists.")
   public List<String> ListFiles(String path, String filter, boolean recursive,
-      String scoop) {
+      String scope) {
     ArrayList<String> out = new ArrayList<String>();
     try {
       String p = Shared.clean(path);
@@ -1476,7 +1481,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           }
         }
       }
-      if (wantAsset(scoop, p)) {
+      if (wantAsset(scope, p)) {
         String[] l = context.getAssets().list(Shared.assetName(p));
         if (l != null) {
           for (int i = 0; i < l.length; i = i + 1) {
@@ -1489,7 +1494,7 @@ public class Tools_File extends AndroidNonvisibleComponent
         Collections.sort(out);
         return out;
       }
-      File d = scoopFile(scoop, p);
+      File d = scopeFile(scope, p);
       if (d == null || !d.isDirectory()) {
         Shared.err(this, "File", 0, "folder tidak ada");
         return out;
@@ -1523,15 +1528,15 @@ public class Tools_File extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Daftar subfolder (path lengkap, tanpa "
-      + "rekursif). scoop seperti IsFileExists.")
-  public List<String> ListFolders(String folder, String scoop) {
+      + "rekursif). scope seperti IsFileExists.")
+  public List<String> ListFolders(String folder, String scope) {
     ArrayList<String> out = new ArrayList<String>();
     try {
       String p = Shared.clean(folder);
-      if (wantAsset(scoop, p)) {
+      if (wantAsset(scope, p)) {
         return out;
       }
-      File d = scoopFile(scoop, p);
+      File d = scopeFile(scope, p);
       if (d == null || !d.isDirectory()) {
         Shared.err(this, "File", 0, "folder tidak ada");
         return out;
@@ -1564,9 +1569,9 @@ public class Tools_File extends AndroidNonvisibleComponent
       + "cocok. type = image/audio/video/text/archive/document/apk (boleh "
       + "alias: gambar/musik/vidio/teks/arsip/dokumen) atau salah satu blok "
       + "TypeImage/dll. recursive = sertakan isi subfolder. "
-      + "scoop seperti IsFileExists.")
+      + "scope seperti IsFileExists.")
   public List<String> ListFilesByType(String folder, String type,
-      boolean recursive, String scoop) {
+      boolean recursive, String scope) {
     ArrayList<String> out = new ArrayList<String>();
     String cat = Shared.normCategory(type);
     if (cat.length() == 0) {
@@ -1576,7 +1581,7 @@ public class Tools_File extends AndroidNonvisibleComponent
     }
     try {
       String p = Shared.clean(folder);
-      if (wantAsset(scoop, p)) {
+      if (wantAsset(scope, p)) {
         String[] l = context.getAssets().list(Shared.assetName(p));
         if (l != null) {
           for (int i = 0; i < l.length; i = i + 1) {
@@ -1588,7 +1593,7 @@ public class Tools_File extends AndroidNonvisibleComponent
         Collections.sort(out);
         return out;
       }
-      File d = scoopFile(scoop, p);
+      File d = scopeFile(scope, p);
       if (d == null || !d.isDirectory()) {
         Shared.err(this, "File", 0, "folder tidak ada");
         return out;
@@ -1849,14 +1854,14 @@ public class Tools_File extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Buka file dengan aplikasi lain (musik, "
-      + "gambar, PDF, ...). scoop seperti IsFileExists. Hasil lewat "
+      + "gambar, PDF, ...). scope seperti IsFileExists. Hasil lewat "
       + "AfterOpenFile. Asset disalin ke cache dulu.")
-  public void OpenFile(String path, String scoop) {
+  public void OpenFile(String path, String scope) {
     try {
       String p = Shared.clean(path);
-      File f = scoopFile(scoop, path);
+      File f = scopeFile(scope, path);
       if (f == null) {
-        if (wantAsset(scoop, p)) {
+        if (wantAsset(scope, p)) {
           File cache = context.getCacheDir();
           if (!cache.exists()) {
             cache.mkdirs();
@@ -2007,7 +2012,7 @@ public class Tools_File extends AndroidNonvisibleComponent
     EventDispatcher.dispatchEvent(this, "ReadStarted", scope, path);
   }
 
-  @SimpleEvent(description = "Hasil CallReadText: success pertama, scoop "
+  @SimpleEvent(description = "Hasil CallReadText: success pertama, scope "
       + "menemani path, fileName paling belakang, content = isi file.")
   public void GotText(boolean success, String scope, String path,
       String fileName, String content) {

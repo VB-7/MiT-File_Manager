@@ -216,8 +216,10 @@ public class Tools_Sheet extends AndroidNonvisibleComponent
           } catch (Exception e) {
             // abaikan
           }
-          forget(id);
-          if (!s.silent) {
+          if (s.silent) {
+            forget(id);
+          } else {
+            Ids.setActive(Ids.SHEET, id, false);
             SheetHidden(id);
           }
         }
@@ -395,7 +397,7 @@ public class Tools_Sheet extends AndroidNonvisibleComponent
                 go = ddy > h / 3.0f;
               }
               if (go) {
-                DismissSheet(id);
+                CallDismissSheet(id);
                 return true;
               }
             } catch (Exception ex) {
@@ -412,9 +414,9 @@ public class Tools_Sheet extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Tampilkan sheet ber-id (animasi geser naik "
-      + "otomatis).")
-  public void ShowSheet(final int id) {
+  @SimpleFunction(description = "CALL: Tampilkan sheet ber-id (animasi geser naik "
+      + "otomatis). Hasil lewat SheetShown.")
+  public void CallShowSheet(final int id) {
     final Sheet s = need(id, "Show");
     if (s == null) {
       return;
@@ -434,6 +436,8 @@ public class Tools_Sheet extends AndroidNonvisibleComponent
             s.dialog.show();
             wireSwipe(id, s, box);
             slideIn(s, box);
+            Ids.setActive(Ids.SHEET, id, true);
+            SheetShown(id);
           } catch (Exception e) {
             String m = e.getMessage();
             Shared.err(Tools_Sheet.this, "Sheet", id,
@@ -447,9 +451,9 @@ public class Tools_Sheet extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Tutup sheet ber-id (animasi keluar, "
-      + "lalu menembak SheetHidden).")
-  public void DismissSheet(final int id) {
+  @SimpleFunction(description = "CALL: Tutup sheet ber-id (animasi keluar). "
+      + "Hasil lewat SheetHidden (registrasi tetap, bisa CallShowSheet lagi).")
+  public void CallDismissSheet(final int id) {
     final Sheet s = need(id, "Dismiss");
     if (s == null) {
       return;
@@ -459,6 +463,8 @@ public class Tools_Sheet extends AndroidNonvisibleComponent
         public void run() {
           try {
             if (s.dialog == null || !s.dialog.isShowing()) {
+              Ids.setActive(Ids.SHEET, id, false);
+              SheetHidden(id);
               return;
             }
             View dec = null;
@@ -552,9 +558,9 @@ public class Tools_Sheet extends AndroidNonvisibleComponent
 
   // ================= TOAST =================
 
-  @SimpleFunction(description = "Tampilkan toast (pesan singkat bawah layar). "
+  @SimpleFunction(description = "SET: Tampilkan toast (pesan singkat bawah layar). "
       + "longDuration = tampil lebih lama. Gagal via ErrorOccurred.")
-  public void ShowToast(final String message, final boolean longDuration) {
+  public void SetShowToast(final String message, final boolean longDuration) {
     final String m = message == null ? "" : message;
     try {
       activity.runOnUiThread(new Runnable() {
@@ -599,9 +605,9 @@ public class Tools_Sheet extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Minta izin notifikasi (Android 13+). "
+  @SimpleFunction(description = "SET: Minta izin notifikasi (Android 13+). "
       + "Best-effort: bila ditolak, izinkan manual di Setelan aplikasi.")
-  public void RequestNotificationPermission() {
+  public void SetRequestNotificationPermission() {
     try {
       if (Build.VERSION.SDK_INT >= 33) {
         activity.requestPermissions(
@@ -613,10 +619,10 @@ public class Tools_Sheet extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Tampilkan notifikasi bar status: id (angka "
+  @SimpleFunction(description = "SET: Tampilkan notifikasi bar status: id (angka "
       + "unik, mis. 1), judul, isi. Tap notifikasi membuka aplikasi. "
       + "Gagal (mis. izin belum ada) via ErrorOccurred.")
-  public void ShowNotification(final int id, final String title,
+  public void SetShowNotification(final int id, final String title,
       final String text) {
     ensureChannel();
     final String t = title == null ? "" : title;
@@ -688,8 +694,8 @@ public class Tools_Sheet extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Hapus notifikasi ber-id.")
-  public void CancelNotification(int id) {
+  @SimpleFunction(description = "SET: Hapus notifikasi ber-id.")
+  public void SetCancelNotification(int id) {
     try {
       NotificationManager nm = (NotificationManager) context
           .getSystemService(Context.NOTIFICATION_SERVICE);
@@ -704,8 +710,8 @@ public class Tools_Sheet extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Hapus SEMUA notifikasi Tools_Sheet.")
-  public void CancelAllNotifications() {
+  @SimpleFunction(description = "SET: Hapus SEMUA notifikasi Tools_Sheet.")
+  public void SetCancelAllNotifications() {
     try {
       NotificationManager nm = (NotificationManager) context
           .getSystemService(Context.NOTIFICATION_SERVICE);
@@ -805,9 +811,9 @@ public class Tools_Sheet extends AndroidNonvisibleComponent
     return Ids.isActive(Ids.SHEET, id);
   }
 
-  @SimpleFunction(description = "Hapus SEMUA sheet Tools_Sheet (tutup "
+  @SimpleFunction(description = "SET: Hapus SEMUA sheet Tools_Sheet (tutup "
       + "diam-diam, konten dikembalikan, id dilepas).")
-  public void ClearSheets() {
+  public void SetClearSheets() {
     ArrayList<Integer> all;
     synchronized (sheetLock) {
       all = new ArrayList<Integer>(sheets.keySet());
@@ -881,9 +887,15 @@ public class Tools_Sheet extends AndroidNonvisibleComponent
 
   // ================= EVENTS =================
 
-  @SimpleEvent(description = "Sheet ber-id tertutup (back/luar/Dismiss): id.")
+  @SimpleEvent(description = "Sheet ber-id tertutup (back/luar/Dismiss): id. "
+      + "Registrasi tetap, tampilkan lagi via CallShowSheet.")
   public void SheetHidden(int id) {
     EventDispatcher.dispatchEvent(this, "SheetHidden", Integer.valueOf(id));
+  }
+
+  @SimpleEvent(description = "Sheet ber-id tampil (hasil CallShowSheet): id.")
+  public void SheetShown(int id) {
+    EventDispatcher.dispatchEvent(this, "SheetShown", Integer.valueOf(id));
   }
 
   @SimpleEvent(description = "SATU-SATUNYA error Tools_Sheet (Sheet, Toast, "
