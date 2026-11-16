@@ -251,15 +251,25 @@ public class Tools_Base extends AndroidNonvisibleComponent {
 
   // ================= ID TAG (helper komponen LUAR) =================
 
+  @SimpleFunction(description = "Buat id unik baru di tag ini (Number, angka terkecil yang belum "
+      + "dipakai, langsung di-reservasi). Untuk saat kamulah yang menentukan id-nya "
+      + "(mis. bikin tab sendiri). Beda dengan SaveTagId yang mencatat id dari luar.")
+  public int CreateTagId(String tag) {
+    int id = TagIds.create(tag);
+    if (id < 0) {
+      Shared.err(this, "Id", 0, "tag kosong");
+    }
+    return id;
+  }
+
   @SimpleFunction(description = "Simpan id komponen LUAR ke tag (mis. WebView pihak ketiga). "
       + "id boleh Number ATAU teks angka (\"5\" = 5, otomatis dikonversi). "
-      + "Id dobel = tetap satu. Kembali: true bila tercatat.")
-  public boolean SaveTagId(Object id, String tag) {
+      + "Id dobel = tetap satu. Gagal (tag kosong / bukan angka) via ErrorOccurred.")
+  public void SaveTagId(Object id, String tag) {
     boolean ok = TagIds.save(id, tag);
     if (!ok) {
       Shared.err(this, "Id", 0, "tag kosong / id bukan angka");
     }
-    return ok;
   }
 
   @SimpleFunction(description = "Semua id di tag ini (Number semua, URUT MENYIMPAN, "
@@ -296,9 +306,12 @@ public class Tools_Base extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "Hapus satu id dari tag (hanya lepas catatan, komponen luar "
-      + "tidak diusik). Tag yang kosong ikut dibuang. Kembali: true bila terhapus.")
-  public boolean RemoveTagId(Object id, String tag) {
-    return TagIds.remove(id, tag);
+      + "tidak diusik). Tag yang kosong ikut dibuang. Tidak tercatat via ErrorOccurred.")
+  public void RemoveTagId(Object id, String tag) {
+    boolean gone = TagIds.remove(id, tag);
+    if (!gone) {
+      Shared.err(this, "Id", 0, "id tidak tercatat di tag itu");
+    }
   }
 
   @SimpleFunction(description = "Buang SELURUH isi satu tag.")
@@ -384,7 +397,7 @@ public class Tools_Base extends AndroidNonvisibleComponent {
 
   @SimpleFunction(description = "Versi paket Tools (sama untuk semua Tools_* dalam satu .aix).")
   public int ToolsVersion() {
-    return 4;
+    return 5;
   }
 
   // ================= OP + ERROR =================

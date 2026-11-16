@@ -278,14 +278,15 @@ public class Tools_File extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Tulis teks ke file (UTF-8). append=true = sambung di akhir. "
-      + "Folder dibuat otomatis. Asset tidak bisa ditulis.")
-  public boolean SaveFile(FileScope scope, String path, String content, boolean append) {
+      + "Folder dibuat otomatis. Asset tidak bisa ditulis. Gagal via ErrorOccurred "
+      + "(seperti File bawaan MIT, tanpa nilai balik).")
+  public void SaveFile(FileScope scope, String path, String content, boolean append) {
     java.io.Writer w = null;
     try {
       File f = Shared.resolve(context, scope, path);
       if (f == null) {
         Shared.err(this, "File", 0, "tidak bisa tulis ke Asset");
-        return false;
+        return;
       }
       if (f.getParentFile() != null) {
         f.getParentFile().mkdirs();
@@ -293,11 +294,11 @@ public class Tools_File extends AndroidNonvisibleComponent
       w = new java.io.OutputStreamWriter(new FileOutputStream(f, append), "UTF-8");
       w.write(content == null ? "" : content);
       w.flush();
-      return true;
+      return;
     } catch (Exception e) {
       String m = e.getMessage();
       Shared.err(this, "File", 0, m == null ? "tulis gagal" : m);
-      return false;
+      return;
     } finally {
       if (w != null) {
         try {
@@ -338,12 +339,12 @@ public class Tools_File extends AndroidNonvisibleComponent
       + "lebih cepat dari Base64ToPicture). base64 boleh mentah atau data:.../...;base64,.... "
       + "path = lokasi TUJUAN termasuk nama file (mis. folder/hasil.bin). Folder dibuat "
       + "otomatis. Asset tidak bisa jadi tujuan. Hasil lewat AfterBase64FileReady. "
-      + "Satu proses per saat; sibuk = false + error. Kembali: true = mulai.")
-  public boolean SaveBase64ToFile(final String base64, final FileScope scope,
+      + "Satu proses per saat; sibuk via ErrorOccurred.")
+  public void SaveBase64ToFile(final String base64, final FileScope scope,
       final String path) {
     if (!Shared.claimSlot("b64file")) {
       Shared.err(this, "Base64", 0, "masih ada proses base64-file berjalan");
-      return false;
+      return;
     }
     final String b64 = base64 == null ? "" : base64;
     final FileScope fS = scope;
@@ -420,7 +421,6 @@ public class Tools_File extends AndroidNonvisibleComponent
         }
       }
     });
-    return true;
   }
 
   // ================= INSTAN: nomedia =================

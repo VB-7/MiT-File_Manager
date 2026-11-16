@@ -64,9 +64,31 @@ public final class TagIds {
     }
   }
 
+  /** Buat id unik baru di tag ini (angka terkecil >= 0 yang belum dipakai,
+   *  langsung di-reservasi). Untuk saat kamulah yang menentukan id-nya. */
+  public static synchronized int create(String tag) {
+    String t = norm(tag);
+    if (t.length() == 0) {
+      return -1;
+    }
+    LinkedHashSet<Integer> s = tags.get(t);
+    if (s == null) {
+      s = new LinkedHashSet<Integer>();
+      tags.put(t, s);
+    }
+    int id = 0;
+    while (s.contains(Integer.valueOf(id))) {
+      id = id + 1;
+      if (id < 0) {
+        return -1;
+      }
+    }
+    s.add(Integer.valueOf(id));
+    return id;
+  }
+
   /** Simpan id ke tag. Id dobel = tetap satu (urutan pertama menang). */
-  public static synchronized boolean save(Object idIn, String tag) {
-    int id = toId(idIn);
+  public static synchronized boolean save(Object idIn, String tag) {    int id = toId(idIn);
     String t = norm(tag);
     if (t.length() == 0 || id < 0) {
       return false;
