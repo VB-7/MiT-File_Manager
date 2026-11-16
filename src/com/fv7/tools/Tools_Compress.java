@@ -420,7 +420,7 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
             }
             done = done + 1;
           }
-        } catch (Exception e) {
+        } catch (Exception ex) {
           fail = fail + 1;
         }
         try {
