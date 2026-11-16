@@ -1195,8 +1195,8 @@ public class Tools_File extends AndroidNonvisibleComponent
     copyMoveCancel = true;
   }
 
-  private void runCopyOrMove(boolean move, String fS, String fP, String tS,
-      String tP) {
+  private void runCopyOrMove(final boolean move, final String fS,
+      final String fP, final String tS, final String tP) {
     String comp = "CopyOrMove";
     InputStream in = null;
     boolean fromAsset = false;
