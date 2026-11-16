@@ -5,9 +5,6 @@ on:
     branches: [main]
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -22,21 +19,9 @@ jobs:
       - name: Fetch AI2 deps
         run: git clone --depth 1 https://github.com/mit-cml/extension-deps.git lib/appinventor
       - name: Build extension
-        run: |
-          set +e
-          ant extensions > /tmp/build-output.txt 2>&1
-          CODE=$?
-          cp /tmp/build-output.txt build-last-log.txt
-          git config user.name "ci-log"
-          git config user.email "ci-log@local"
-          git add build-last-log.txt
-          git commit -m "ci: build log [skip ci]" || true
-          git push origin HEAD:main || true
-          echo "ANT_EXIT=$CODE"
-          exit $CODE
+        run: ant extensions
       - name: Upload AIX
         uses: actions/upload-artifact@v4
         with:
           name: Fv7_Manager_File
           path: out/*.aix
-# trigger run log-build
