@@ -267,7 +267,8 @@ public class Tools_Video extends AndroidNonvisibleComponent
             if (sv.regionMatches(true, 0, "http", 0, 4)) {
               fVv.setVideoURI(Uri.parse(sv));
             } else if (sv.startsWith("file://")) {
-              fVv.setVideoPath(Shared.stripLeadingSlash(sv.substring(7)));
+              fVv.setVideoPath(Shared.normalizePath(
+                  Shared.stripLeadingSlash(sv.substring(7))));
             } else if (scope == FileScope.Asset || Shared.isAssetPath(sv)) {
               File cache = context.getCacheDir();
               if (!cache.exists()) {

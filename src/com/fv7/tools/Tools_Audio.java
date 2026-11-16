@@ -242,7 +242,8 @@ public class Tools_Audio extends AndroidNonvisibleComponent
             if (sa.regionMatches(true, 0, "http", 0, 4)) {
               mp.setDataSource(sa);
             } else if (sa.startsWith("file://")) {
-              mp.setDataSource(Shared.stripLeadingSlash(sa.substring(7)));
+              mp.setDataSource(Shared.normalizePath(
+                  Shared.stripLeadingSlash(sa.substring(7))));
             } else if (scope == FileScope.Asset || Shared.isAssetPath(sa)) {
               android.content.res.AssetFileDescriptor afd =
                   context.getAssets().openFd(Shared.assetName(sa));

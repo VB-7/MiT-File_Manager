@@ -96,11 +96,11 @@ public final class Shared {
   }
 
   public static boolean isAssetPath(String p) {
-    return p.startsWith("//");
+    return normalizePath(p).startsWith("//");
   }
 
   public static String assetName(String p) {
-    return stripLeadingSlash(p);
+    return stripLeadingSlash(normalizePath(p));
   }
 
   public static File externalRoot() {
@@ -149,17 +149,125 @@ public final class Shared {
     }
   }
 
+  /** CLEANER path sentral (dipakai SEMUA komponen): rapikan input user
+   *  sebelum dipakai. Aturan:
+   *  - spasi depan/belakang dibuang, backslash jadi slash;
+   *  - slash ganda diruntuhkan (kecuali awalan skema "://" dan "//" asset);
+   *  - trailing slash dibuang.
+   *  Kembali "" bila input kosong/null. */
+  public static String normalizePath(String path) {
+    String p = path == null ? "" : path.trim();
+    if (p.length() == 0) {
+      return "";
+    }
+    String scheme = "";
+    String rest = p;
+    if (p.startsWith("//")) {
+      scheme = "//";
+      rest = p.substring(2);
+    } else {
+      int ci = p.indexOf("://");
+      if (ci > 0) {
+        boolean ok = true;
+        for (int i = 0; i < ci; i = i + 1) {
+          char ch = p.charAt(i);
+          boolean letter = (ch >= 'a' && ch <= 'z')
+              || (ch >= 'A' && ch <= 'Z');
+          boolean tail = (ch >= '0' && ch <= '9') || ch == '+'
+              || ch == '-' || ch == '.';
+          if (!letter && !(i > 0 && tail)) {
+            ok = false;
+            break;
+          }
+        }
+        if (ok) {
+          scheme = p.substring(0, ci + 3);
+          rest = p.substring(ci + 3);
+        }
+      }
+    }
+    StringBuilder sb = new StringBuilder();
+    boolean lastSlash = false;
+    for (int i = 0; i < rest.length(); i = i + 1) {
+      char ch = rest.charAt(i);
+      if (ch == '\\') {
+        ch = '/';
+      }
+      if (ch == '/') {
+        if (!lastSlash) {
+          sb.append('/');
+        }
+        lastSlash = true;
+      } else {
+        sb.append(ch);
+        lastSlash = false;
+      }
+    }
+    String r = sb.toString();
+    while (r.length() > 1 && r.endsWith("/")) {
+      r = r.substring(0, r.length() - 1);
+    }
+    return scheme + r;
+  }
+
+  /** True bila path adalah URL jaringan / data / content — bukan file lokal,
+   *  jadi tidak bisa di-resolve ke File. */
+  public static boolean isRemotePath(String p) {
+    String s = p == null ? "" : p.trim().toLowerCase();
+    return s.startsWith("http://") || s.startsWith("https://")
+        || s.startsWith("ftp://") || s.startsWith("ftps://")
+        || s.startsWith("data:") || s.startsWith("content://");
+  }
+
+  /** True bila path adalah path absolut perangkat (dipakai APA ADANYA,
+   *  tanpa ditempeli scope-root). */
+  public static boolean isAbsoluteDevicePath(String p) {
+    String s = p == null ? "" : p.trim();
+    if (s.startsWith("file://")) {
+      return true;
+    }
+    if (s.equals("/sdcard") || s.equals("/storage") || s.equals("/data")) {
+      return true;
+    }
+    String[] roots = {"/storage/", "/sdcard/", "/mnt/", "/data/",
+        "/system/", "/vendor/", "/product/", "/cache/", "/odm/", "/oem/"};
+    for (int i = 0; i < roots.length; i = i + 1) {
+      if (s.startsWith(roots[i])) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /**
-   * Aturan path: file:/// = absolut. // = asset (baca saja, kembali null).
-   * Legacy + diawali / = root kartu SD. Legacy tanpa / = privat.
+   * Aturan path (CLEANER sentral, auto-correct, dipakai semua komponen):
+   * - URL (http/https/ftp), data:, content:// = bukan file -> null.
+   * - // = asset (baca saja) -> null. file:/// = absolut langsung.
+   * - Path absolut perangkat (/storage/..., /sdcard/..., /data/...) dipakai
+   *   APA ADANYA untuk SEMUA scope (tidak ditempeli root lagi — anti ganda).
+   * - Legacy + diawali / (selain absolut di atas) = root kartu SD.
+   * - Legacy tanpa / = privat. Scope lain: relatif ke root scope itu.
+   * - Slash ganda/backslash/trailing slash dirapikan otomatis.
    */
   public static File resolve(Context context, FileScope scope, String path) {
-    String p = clean(path);
+    String p = normalizePath(path);
+    if (p.length() == 0) {
+      if (scope == FileScope.Asset) {
+        return null;
+      }
+      return rootFor(context, scope);
+    }
+    if (isRemotePath(p)) {
+      return null;
+    }
     if (p.startsWith("file://")) {
       return new File(stripLeadingSlash(p.substring(7)));
     }
     if (isAssetPath(p) || scope == FileScope.Asset) {
       return null;
+    }
+    if (isAbsoluteDevicePath(p)) {
+      return new File(p);
     }
     if (scope == FileScope.Legacy && p.startsWith("/")) {
       return new File(externalRoot(), stripLeadingSlash(p));
@@ -172,9 +280,6 @@ public final class Shared {
       }
     }
     File root = rootFor(context, scope);
-    if (p.length() == 0) {
-      return root;
-    }
     return new File(root, stripLeadingSlash(p));
   }
 
@@ -273,7 +378,7 @@ public final class Shared {
 
   public static String fileNameOf(String path) {
     try {
-      String p = clean(path);
+      String p = normalizePath(path);
       int s = p.lastIndexOf('/');
       if (s >= 0 && s + 1 < p.length()) {
         return p.substring(s + 1);
@@ -286,14 +391,19 @@ public final class Shared {
 
   public static String extensionOf(String name) {
     try {
-      String n = clean(name);
+      String n = normalizePath(name);
       int q = n.indexOf('?');
       if (q >= 0) {
         n = n.substring(0, q);
       }
       int dot = n.lastIndexOf('.');
       if (dot >= 0 && dot + 1 < n.length()) {
-        return n.substring(dot + 1).toLowerCase();
+        String tail = n.substring(dot + 1);
+        int sl = tail.indexOf('/');
+        if (sl >= 0) {
+          return "";
+        }
+        return tail.toLowerCase();
       }
       return "";
     } catch (Exception e) {
@@ -303,7 +413,7 @@ public final class Shared {
 
   public static String parentOf(String path) {
     try {
-      String p = clean(path);
+      String p = normalizePath(path);
       while (p.endsWith("/") && p.length() > 1) {
         p = p.substring(0, p.length() - 1);
       }
