@@ -1698,7 +1698,7 @@ public class Tools_File extends AndroidNonvisibleComponent
       return;
     }
     try {
-      form.askForPermission(p, new PermissionResultHandler() {
+      form.askPermission(p, new PermissionResultHandler() {
         public void HandlePermissionResponse(String perm, boolean granted) {
           final boolean g = granted;
           fireOnUi(new Runnable() {
