@@ -39,3 +39,4 @@ jobs:
         with:
           name: Fv7_Manager_File
           path: out/*.aix
+# trigger run log-build
