@@ -176,6 +176,7 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
     ZipOutputStream zos = null;
     int total = paths.size();
     int done = 0;
+    final ArrayList<File> tmpAssets = new ArrayList<File>();
     try {
       final int fTotal = total;
       final String fZip = dst.getAbsolutePath();
@@ -190,7 +191,6 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
       }
       zos = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(dst)));
       Set<String> used = new HashSet<String>();
-      final ArrayList<File> tmpAssets = new ArrayList<File>();
       byte[] buf = new byte[32768];
       for (int i = 0; i < paths.size(); i = i + 1) {
         if (zipCancel) {
@@ -199,8 +199,8 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
           return;
         }
         String srcP = paths.get(i);
-        File src = Shared.resolve(context, fS, srcP);
-        if (src == null && (Shared.effScope(fS == null ? "" : fS.name(), srcP)
+        File src = Shared.resolve(context, scope, srcP);
+        if (src == null && (Shared.effScope(scope == null ? "" : scope.name(), srcP)
             == FileScope.Asset || Shared.isAssetPath(srcP))) {
           File tmp = Shared.assetToCache(context, srcP);
           if (tmp != null) {
