@@ -423,6 +423,50 @@ public class Tools_Base extends AndroidNonvisibleComponent {
     Tools_Image.clearSliderStatic(id);
   }
 
+  // ================= ID: Task =================
+
+  @SimpleFunction(description = "Semua id tugas/alarm Tools_Task (URUT PEMBUATAN, "
+      + "index 1 = pertama dibuat).")
+  public List<Integer> GetTaskIds() {
+    return Ids.idsOf(Ids.TASK);
+  }
+
+  @SimpleFunction(description = "Id tugas/alarm yang aktif (URUT PEMBUATAN).")
+  public List<Integer> GetActiveTaskIds() {
+    return Ids.activeIdsOf(Ids.TASK);
+  }
+
+  @SimpleFunction(description = "Id tugas terakhir dibuat. -1 bila kosong.")
+  public int CurrentTaskId() {
+    return Ids.currentOf(Ids.TASK);
+  }
+
+  @SimpleFunction(description = "Id tugas index 1 = PERTAMA DIBUAT. -1 bila kosong.")
+  public int GetFirstTaskId() {
+    return Ids.firstOf(Ids.TASK);
+  }
+
+  @SimpleFunction(description = "Id tugas TERAKHIR DIBUAT. -1 bila kosong.")
+  public int GetLastTaskId() {
+    return Ids.lastOf(Ids.TASK);
+  }
+
+  @SimpleFunction(description = "Id tugas yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
+  public int GetPreviousTaskId(int id) {
+    return Ids.previousOf(Ids.TASK, id);
+  }
+
+  @SimpleFunction(description = "True bila id tugas ini aktif (jalan/jeda/alarm terpasang).")
+  public boolean IsTaskIdActive(int id) {
+    return Ids.isActive(Ids.TASK, id);
+  }
+
+  @SimpleFunction(description = "Hapus id tugas: batalkan jadwal + cabut alarm "
+      + "sistem + lepas id.")
+  public void RemoveTaskId(int id) {
+    Tools_Task.clearStaticFull(context, id);
+  }
+
   // ================= ID TAG (helper komponen LUAR) =================
 
   @SimpleFunction(description = "Buat id unik baru di tag ini (Number, angka terkecil yang belum "
@@ -571,7 +615,7 @@ public class Tools_Base extends AndroidNonvisibleComponent {
 
   @SimpleFunction(description = "Versi paket Tools (sama untuk semua Tools_* dalam satu .aix).")
   public int ToolsVersion() {
-    return 6;
+    return 7;
   }
 
   // ================= OP + ERROR =================

@@ -27,6 +27,7 @@ public final class Ids {
   public static final String LAYOUT = "Layout";
   public static final String SHEET = "Sheet";
   public static final String SLIDER = "Slider";
+  public static final String TASK = "Task";
   public static final String RESERVED = "Reserved";
 
   private static final Set<Integer> claimed = new LinkedHashSet<Integer>();
@@ -46,6 +47,7 @@ public final class Ids {
     sets.put(LAYOUT, new LinkedHashSet<Integer>());
     sets.put(SHEET, new LinkedHashSet<Integer>());
     sets.put(SLIDER, new LinkedHashSet<Integer>());
+    sets.put(TASK, new LinkedHashSet<Integer>());
     sets.put(RESERVED, new LinkedHashSet<Integer>());
     actives.put(DOWNLOAD, new LinkedHashSet<Integer>());
     actives.put(IMAGE, new LinkedHashSet<Integer>());
@@ -55,6 +57,7 @@ public final class Ids {
     actives.put(LAYOUT, new LinkedHashSet<Integer>());
     actives.put(SHEET, new LinkedHashSet<Integer>());
     actives.put(SLIDER, new LinkedHashSet<Integer>());
+    actives.put(TASK, new LinkedHashSet<Integer>());
     currents.put(DOWNLOAD, Integer.valueOf(-1));
     currents.put(IMAGE, Integer.valueOf(-1));
     currents.put(AUDIO, Integer.valueOf(-1));
@@ -63,6 +66,7 @@ public final class Ids {
     currents.put(LAYOUT, Integer.valueOf(-1));
     currents.put(SHEET, Integer.valueOf(-1));
     currents.put(SLIDER, Integer.valueOf(-1));
+    currents.put(TASK, Integer.valueOf(-1));
   }
 
   private Ids() {
@@ -76,7 +80,8 @@ public final class Ids {
     return !DOWNLOAD.equals(type) && !IMAGE.equals(type)
         && !AUDIO.equals(type) && !VIDEO.equals(type)
         && !CORE.equals(type) && !LAYOUT.equals(type)
-        && !SHEET.equals(type) && !SLIDER.equals(type);
+        && !SHEET.equals(type) && !SLIDER.equals(type)
+        && !TASK.equals(type);
   }
 
   private static Integer lastOfSet(LinkedHashSet<Integer> s) {
@@ -138,15 +143,30 @@ public final class Ids {
     sets.get(IMAGE).remove(k);
     sets.get(AUDIO).remove(k);
     sets.get(VIDEO).remove(k);
+    sets.get(CORE).remove(k);
+    sets.get(LAYOUT).remove(k);
+    sets.get(SHEET).remove(k);
+    sets.get(SLIDER).remove(k);
+    sets.get(TASK).remove(k);
     sets.get(RESERVED).remove(k);
     actives.get(DOWNLOAD).remove(k);
     actives.get(IMAGE).remove(k);
     actives.get(AUDIO).remove(k);
     actives.get(VIDEO).remove(k);
+    actives.get(CORE).remove(k);
+    actives.get(LAYOUT).remove(k);
+    actives.get(SHEET).remove(k);
+    actives.get(SLIDER).remove(k);
+    actives.get(TASK).remove(k);
     fixCurrent(DOWNLOAD);
     fixCurrent(IMAGE);
     fixCurrent(AUDIO);
     fixCurrent(VIDEO);
+    fixCurrent(CORE);
+    fixCurrent(LAYOUT);
+    fixCurrent(SHEET);
+    fixCurrent(SLIDER);
+    fixCurrent(TASK);
   }
 
   public static synchronized boolean isBusy(int id) {
@@ -234,6 +254,9 @@ public final class Ids {
     actives.get(type).remove(k);
     if (!sets.get(DOWNLOAD).contains(k) && !sets.get(IMAGE).contains(k)
         && !sets.get(AUDIO).contains(k) && !sets.get(VIDEO).contains(k)
+        && !sets.get(CORE).contains(k) && !sets.get(LAYOUT).contains(k)
+        && !sets.get(SHEET).contains(k) && !sets.get(SLIDER).contains(k)
+        && !sets.get(TASK).contains(k)
         && !sets.get(RESERVED).contains(k)) {
       claimed.remove(k);
     }
