@@ -149,6 +149,125 @@ public final class Shared {
     }
   }
 
+  /** Scope bawaan ambient: dipakai semua operasi file bila path tidak bawa
+   *  prefix scope sendiri (blok Scope) dan bila komponen tidak pasang scope
+   *  eksplisit. Diatur dari Designer (properti DefaultScope) atau blok
+   *  Tools_Base SetScope. Default App (selalu bisa tulis, tanpa izin). */
+  private static FileScope defaultScope = FileScope.App;
+
+  public static synchronized void setDefaultScope(FileScope s) {
+    if (s != null) {
+      defaultScope = s;
+    }
+  }
+
+  public static synchronized FileScope getDefaultScope() {
+    return defaultScope;
+  }
+
+  private static final String[] SCOPE_NAMES = {"App", "Private", "Cache",
+      "Shared", "Legacy", "Asset"};
+
+  /** Nama scope dari prefix "NamaScope:path" (blok Scope Tools_Base).
+   *  Kembali "" bila tidak ada prefix valid. Case-insensitive. */
+  public static String scopeOf(String path) {
+    String p = path == null ? "" : path.trim();
+    int ci = p.indexOf(':');
+    if (ci <= 0) {
+      return "";
+    }
+    String head = p.substring(0, ci);
+    for (int i = 0; i < SCOPE_NAMES.length; i = i + 1) {
+      if (head.equalsIgnoreCase(SCOPE_NAMES[i])) {
+        return SCOPE_NAMES[i];
+      }
+    }
+    return "";
+  }
+
+  /** Buang prefix "NamaScope:" bila ada (untuk display/nama file). */
+  public static String stripScopePrefix(String path) {
+    String p = path == null ? "" : path.trim();
+    if (scopeOf(p).length() > 0) {
+      return p.substring(p.indexOf(':') + 1);
+    }
+    return p;
+  }
+
+  private static FileScope scopeByName(String name) {
+    if ("App".equals(name)) {
+      return FileScope.App;
+    } else if ("Private".equals(name)) {
+      return FileScope.Private;
+    } else if ("Cache".equals(name)) {
+      return FileScope.Cache;
+    } else if ("Shared".equals(name)) {
+      return FileScope.Shared;
+    } else if ("Legacy".equals(name)) {
+      return FileScope.Legacy;
+    } else if ("Asset".equals(name)) {
+      return FileScope.Asset;
+    }
+    return null;
+  }
+
+  /** Scoop TEKS ala draft user: "App"/"Private"/"Cache"/"Shared"/"Legacy"/
+   *  "Asset" (bebas huruf besar-kecil) atau "" = path absolut / root kartu
+   *  SD. Tak dikenal = defaultScope. Kembali null untuk "" (ditangani
+   *  khusus di resolveScoop). */
+  public static FileScope scoopToScope(String scoop) {
+    String s = scoop == null ? "" : scoop.trim();
+    if (s.length() == 0) {
+      return null;
+    }
+    if (s.equalsIgnoreCase("App")) {
+      return FileScope.App;
+    } else if (s.equalsIgnoreCase("Private")) {
+      return FileScope.Private;
+    } else if (s.equalsIgnoreCase("Cache")) {
+      return FileScope.Cache;
+    } else if (s.equalsIgnoreCase("Shared")) {
+      return FileScope.Shared;
+    } else if (s.equalsIgnoreCase("Legacy")) {
+      return FileScope.Legacy;
+    } else if (s.equalsIgnoreCase("Asset")) {
+      return FileScope.Asset;
+    }
+    return getDefaultScope();
+  }
+
+  /** Resolve path pakai scoop TEKS. scoop "" = absolut dipakai apa adanya,
+   *  relatif ditempel ke root kartu SD (ala draft point 1). Prefix
+   *  "NamaScope:" di path DIABAIKAN (scoop parameter yang menang). */
+  public static File resolveScoop(Context context, String scoop, String path) {
+    String raw = path == null ? "" : path.trim();
+    String body = raw;
+    if (scopeOf(raw).length() > 0) {
+      body = raw.substring(raw.indexOf(':') + 1);
+    }
+    FileScope s = scoopToScope(scoop);
+    if (s == null) {
+      String p = normalizePath(body);
+      if (p.length() == 0) {
+        return externalRoot();
+      }
+      if (isRemotePath(p)) {
+        return null;
+      }
+      if (p.startsWith("file://")) {
+        return new File(stripLeadingSlash(p.substring(7)));
+      }
+      if (isAssetPath(p)) {
+        return null;
+      }
+      if (isAbsoluteDevicePath(p)) {
+        return new File(p);
+      }
+      return new File(externalRoot(), stripLeadingSlash(p));
+    }
+    return resolve(context, s, body);
+  }
+
   /** CLEANER path sentral (dipakai SEMUA komponen): rapikan input user
    *  sebelum dipakai. Aturan:
    *  - spasi depan/belakang dibuang, backslash jadi slash;
@@ -241,6 +360,8 @@ public final class Shared {
 
   /**
    * Aturan path (CLEANER sentral, auto-correct, dipakai semua komponen):
+   * - Prefix "NamaScope:path" (dari blok Scope Tools_Base, mis. "App:a.txt")
+   *   MENANG atas scope parameter — hanya path itu yang pakai scope itu.
    * - URL (http/https/ftp), data:, content:// = bukan file -> null.
    * - // = asset (baca saja) -> null. file:/// = absolut langsung.
    * - Path absolut perangkat (/storage/..., /sdcard/..., /data/...) dipakai
@@ -250,12 +371,23 @@ public final class Shared {
    * - Slash ganda/backslash/trailing slash dirapikan otomatis.
    */
   public static File resolve(Context context, FileScope scope, String path) {
-    String p = normalizePath(path);
+    String raw = path == null ? "" : path.trim();
+    FileScope eff = scope;
+    String tagged = scopeOf(raw);
+    String rest = raw;
+    if (tagged.length() > 0) {
+      FileScope f = scopeByName(tagged);
+      if (f != null) {
+        eff = f;
+      }
+      rest = raw.substring(raw.indexOf(':') + 1);
+    }
+    String p = normalizePath(rest);
     if (p.length() == 0) {
-      if (scope == FileScope.Asset) {
+      if (eff == FileScope.Asset) {
         return null;
       }
-      return rootFor(context, scope);
+      return rootFor(context, eff);
     }
     if (isRemotePath(p)) {
       return null;
@@ -263,23 +395,23 @@ public final class Shared {
     if (p.startsWith("file://")) {
       return new File(stripLeadingSlash(p.substring(7)));
     }
-    if (isAssetPath(p) || scope == FileScope.Asset) {
+    if (isAssetPath(p) || eff == FileScope.Asset) {
       return null;
     }
     if (isAbsoluteDevicePath(p)) {
       return new File(p);
     }
-    if (scope == FileScope.Legacy && p.startsWith("/")) {
+    if (eff == FileScope.Legacy && p.startsWith("/")) {
       return new File(externalRoot(), stripLeadingSlash(p));
     }
-    if (scope == FileScope.Legacy && p.length() > 0 && !p.startsWith("/")) {
+    if (eff == FileScope.Legacy && p.length() > 0 && !p.startsWith("/")) {
       try {
         return new File(context.getFilesDir(), p);
       } catch (Exception e) {
         return new File(externalRoot(), p);
       }
     }
-    File root = rootFor(context, scope);
+    File root = rootFor(context, eff);
     return new File(root, stripLeadingSlash(p));
   }
 
@@ -378,7 +510,7 @@ public final class Shared {
 
   public static String fileNameOf(String path) {
     try {
-      String p = normalizePath(path);
+      String p = normalizePath(stripScopePrefix(path));
       int s = p.lastIndexOf('/');
       if (s >= 0 && s + 1 < p.length()) {
         return p.substring(s + 1);
@@ -413,7 +545,7 @@ public final class Shared {
 
   public static String parentOf(String path) {
     try {
-      String p = normalizePath(path);
+      String p = normalizePath(stripScopePrefix(path));
       while (p.endsWith("/") && p.length() > 1) {
         p = p.substring(0, p.length() - 1);
       }

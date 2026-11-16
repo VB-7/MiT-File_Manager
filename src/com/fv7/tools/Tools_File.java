@@ -16,12 +16,12 @@ import com.google.appinventor.components.annotations.SimpleObject;
 import com.google.appinventor.components.annotations.SimpleProperty;
 import com.google.appinventor.components.annotations.UsesPermissions;
 import com.google.appinventor.components.common.ComponentCategory;
-import com.google.appinventor.components.common.FileScope;
 import com.google.appinventor.components.runtime.ActivityResultListener;
 import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
 import com.google.appinventor.components.runtime.ComponentContainer;
 import com.google.appinventor.components.runtime.EventDispatcher;
 import com.google.appinventor.components.runtime.OnDestroyListener;
+import com.google.appinventor.components.runtime.PermissionResultHandler;
 import com.google.appinventor.components.runtime.util.AsynchUtil;
 
 import java.io.File;
@@ -36,10 +36,12 @@ import java.util.Map;
 
 @DesignerComponent(
     version = 1,
-    description = "Tools_File: semua operasi file instan (tanpa id) + salin/pindah "
-        + "(Started/ProgressChanged/Finished, single-slot) + batch list + file picker "
-        + "+ buka file + nomedia + hidden + simpan base64 langsung ke storage "
-        + "(SaveBase64ToFile, tanpa validasi gambar, lebih cepat).",
+    description = "Tools_File (sistem draft): awalan Is = boolean (colok ke if), "
+        + "awalan Call = async + hasil lewat event, awalan Set = tanpa feedback. "
+        + "Semua blok path bawa scoop teks: App/Private/Cache/Shared/Legacy/"
+        + "Asset (bebas huruf) atau \"\" = path absolut dipakai apa adanya, "
+        + "relatif = root kartu SD. Salin/pindah digabung satu blok "
+        + "CallCopyOrMoveFile (isMove) + info duplikat.",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,
@@ -53,12 +55,16 @@ public class Tools_File extends AndroidNonvisibleComponent
   private final Context context;
   private final Activity activity;
 
-  private volatile boolean copyCancel = false;
-  private volatile boolean moveCancel = false;
-  private volatile boolean batchCancel = false;
+  private volatile boolean copyMoveCancel = false;
+  private volatile String lastBase64Path = "";
 
   private final Map<Integer, Integer> picks = new HashMap<Integer, Integer>();
   private static final long PROGRESS_MIN_MS = 400;
+
+  private static final String READ_PERM =
+      "android.permission.READ_EXTERNAL_STORAGE";
+  private static final String WRITE_PERM =
+      "android.permission.WRITE_EXTERNAL_STORAGE";
 
   public Tools_File(ComponentContainer container) {
     super(container.$form());
@@ -66,42 +72,137 @@ public class Tools_File extends AndroidNonvisibleComponent
     this.activity = container.$context();
   }
 
-  // ================= INSTAN: cek =================
+  // ================= bantu scoop =================
 
-  @SimpleFunction(description = "Apakah file/folder ada (Asset bisa dicek).")
-  public boolean Exists(FileScope scope, String path) {
+  private File scoopFile(String scoop, String path) {
+    return Shared.resolveScoop(context, scoop, path);
+  }
+
+  private boolean wantAsset(String scoop, String path) {
+    if (Shared.scoopToScope(scoop) == null) {
+      return false;
+    }
     try {
-      String p = Shared.clean(path);
-      if (scope == FileScope.Asset || Shared.isAssetPath(p)) {
-        try {
-          InputStream in = context.getAssets().open(Shared.assetName(p));
-          try {
-            in.close();
-          } catch (Exception e) {
-            // abaikan
+      if (Shared.scoopToScope(scoop).name().equals("Asset")) {
+        return true;
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    return Shared.isAssetPath(Shared.clean(path));
+  }
+
+  private boolean existsInAssets(String assetPath) {
+    try {
+      InputStream in = context.getAssets().open(Shared.assetName(assetPath));
+      try {
+        in.close();
+      } catch (Exception e) {
+        // abaikan
+      }
+      return true;
+    } catch (Exception e) {
+      try {
+        String[] l = context.getAssets().list(Shared.assetName(assetPath));
+        return l != null && l.length > 0;
+      } catch (Exception e2) {
+        return false;
+      }
+    }
+  }
+
+  /** Cari folder dengan toleransi titik: "x" tidak ada -> coba ".x". */
+  private File findDir(String scoop, String folder) {
+    File d = scoopFile(scoop, folder);
+    if (d != null && d.isDirectory()) {
+      return d;
+    }
+    try {
+      String p = Shared.clean(folder);
+      String name = Shared.fileNameOf(p);
+      if (name.length() > 0 && !name.startsWith(".")) {
+        String parent = Shared.parentOf(p);
+        String alt = parent.length() == 0 ? "." + name
+            : parent + "/." + name;
+        File g = scoopFile(scoop, alt);
+        if (g != null && g.isDirectory()) {
+          return g;
+        }
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    return d;
+  }
+
+  private void fireOnUi(final Runnable r) {
+    try {
+      form.runOnUiThread(r);
+    } catch (Exception e) {
+      try {
+        activity.runOnUiThread(r);
+      } catch (Exception e2) {
+        // abaikan
+      }
+    }
+  }
+
+  private List<String> toStringList(Object paths) {
+    ArrayList<String> out = new ArrayList<String>();
+    try {
+      if (paths instanceof List) {
+        List<?> l = (List<?>) paths;
+        for (int i = 0; i < l.size(); i = i + 1) {
+          Object o = l.get(i);
+          if (o != null) {
+            String s = String.valueOf(o).trim();
+            if (s.length() > 0) {
+              out.add(s);
+            }
           }
-          return true;
-        } catch (Exception e) {
-          try {
-            String[] l = context.getAssets().list(Shared.assetName(p));
-            return l != null && l.length > 0;
-          } catch (Exception e2) {
-            return false;
+        }
+      } else if (paths != null) {
+        String s = String.valueOf(paths).trim();
+        if (s.length() > 0) {
+          String[] parts = s.split(",");
+          for (int i = 0; i < parts.length; i = i + 1) {
+            String t = parts[i].trim();
+            if (t.length() > 0) {
+              out.add(t);
+            }
           }
         }
       }
-      File f = Shared.resolve(context, scope, path);
-      return f != null && f.exists();
+    } catch (Exception e) {
+      // abaikan
+    }
+    return out;
+  }
+
+  // ================= IS (boolean, colok ke if) =================
+
+  @SimpleFunction(description = "Apakah file ada di jalur. scoop: App/Private/"
+      + "Cache/Shared/Legacy/Asset (bebas huruf) atau \"\" = absolut. "
+      + "Asset bisa dicek.")
+  public boolean IsFileExists(String fileName, String scoop) {
+    try {
+      String p = Shared.clean(fileName);
+      if (wantAsset(scoop, p)) {
+        return existsInAssets(p);
+      }
+      File f = scoopFile(scoop, p);
+      return f != null && f.isFile();
     } catch (Exception e) {
       return false;
     }
   }
 
-  @SimpleFunction(description = "Apakah path adalah folder.")
-  public boolean IsDirectory(FileScope scope, String path) {
+  @SimpleFunction(description = "Apakah directory/folder ada di jalur. "
+      + "scoop seperti IsFileExists.")
+  public boolean IsDirectoryExists(String directory, String scoop) {
     try {
-      String p = Shared.clean(path);
-      if (scope == FileScope.Asset || Shared.isAssetPath(p)) {
+      String p = Shared.clean(directory);
+      if (wantAsset(scoop, p)) {
         try {
           String[] l = context.getAssets().list(Shared.assetName(p));
           return l != null && l.length > 0;
@@ -109,454 +210,1278 @@ public class Tools_File extends AndroidNonvisibleComponent
           return false;
         }
       }
-      File f = Shared.resolve(context, scope, path);
-      return f != null && f.isDirectory();
+      File d = scoopFile(scoop, p);
+      return d != null && d.isDirectory();
     } catch (Exception e) {
       return false;
     }
   }
 
-  @SimpleFunction(description = "Apakah nama file/folder diawali titik (hidden ala Android/Linux).")
-  public boolean IsHidden(FileScope scope, String path) {
+  @SimpleFunction(description = "Apakah file .nomedia ada di dalam folder. "
+      + "scoop seperti IsFileExists.")
+  public boolean IsNomediaExists(String folder, String scoop) {
     try {
-      String p = Shared.clean(path);
-      String n;
-      if (scope == FileScope.Asset || Shared.isAssetPath(p)) {
-        n = Shared.fileNameOf(Shared.assetName(p));
-      } else {
-        File f = Shared.resolve(context, scope, path);
-        if (f == null) {
-          return false;
-        }
-        n = f.getName();
-      }
-      return n.startsWith(".");
-    } catch (Exception e) {
-      return false;
-    }
-  }
-
-  @SimpleFunction(description = "Sembunyikan (hidden=true, nama jadi .nama) atau tampilkan lagi. "
-      + "Sudah sesuai kondisi = true.")
-  public boolean SetHidden(FileScope scope, String path, boolean hidden) {
-    try {
-      File f = Shared.resolve(context, scope, path);
-      if (f == null || !f.exists()) {
-        Shared.err(this, "File", 0, "file tidak ada");
-        return false;
-      }
-      String n = f.getName();
-      boolean now = n.startsWith(".");
-      if (now == hidden) {
-        return true;
-      }
-      String target = hidden ? "." + n : n.substring(1);
-      if (target.length() == 0) {
-        Shared.err(this, "File", 0, "nama tidak valid");
-        return false;
-      }
-      return f.renameTo(new File(f.getParentFile(), target));
-    } catch (Exception e) {
-      String m = e.getMessage();
-      Shared.err(this, "File", 0, m == null ? "gagal ubah hidden" : m);
-      return false;
-    }
-  }
-
-  // ================= INSTAN: buat/hapus/rename =================
-
-  @SimpleFunction(description = "Buat folder (termasuk induknya). Sudah ada = true.")
-  public boolean MakeDirectory(FileScope scope, String path) {
-    try {
-      File d = Shared.resolve(context, scope, path);
-      if (d == null) {
-        Shared.err(this, "File", 0, "tidak bisa buat folder di Asset");
-        return false;
-      }
-      if (d.exists()) {
-        return true;
-      }
-      return d.mkdirs();
-    } catch (Exception e) {
-      String m = e.getMessage();
-      Shared.err(this, "File", 0, m == null ? "buat folder gagal" : m);
-      return false;
-    }
-  }
-
-  @SimpleFunction(description = "Pastikan folder ada (buat bila belum). Selalu true bila beres. "
-      + "Pasangan pola: if IsDirectory(...) then ... (tidak perlu, cukup blok ini).")
-  public boolean EnsureDirectory(FileScope scope, String path) {
-    return MakeDirectory(scope, path);
-  }
-
-  @SimpleFunction(description = "Hapus file/folder (folder rekursif). Tidak ada = true. "
-      + "Asset tidak bisa dihapus.")
-  public boolean Delete(FileScope scope, String path) {
-    try {
-      File f = Shared.resolve(context, scope, path);
-      if (f == null) {
-        Shared.err(this, "File", 0, "tidak bisa hapus Asset");
-        return false;
-      }
-      if (!f.exists()) {
-        return true;
-      }
-      return Shared.deleteRecursive(f);
-    } catch (Exception e) {
-      String m = e.getMessage();
-      Shared.err(this, "File", 0, m == null ? "hapus gagal" : m);
-      return false;
-    }
-  }
-
-  @SimpleFunction(description = "Hapus BANYAK path sekaligus (tanpa loop manual). "
-      + "Kembali: jumlah yang berhasil terhapus.")
-  public int DeleteList(FileScope scope, Object paths) {
-    int done = 0;
-    try {
-      List<String> list = toStringList(paths);
-      for (int i = 0; i < list.size(); i = i + 1) {
+      String p = Shared.clean(folder);
+      if (wantAsset(scoop, p)) {
         try {
-          File f = Shared.resolve(context, scope, list.get(i));
-          if (f != null && f.exists() && Shared.deleteRecursive(f)) {
-            done = done + 1;
-          } else if (f != null && !f.exists()) {
-            done = done + 1;
+          String[] l = context.getAssets().list(Shared.assetName(p));
+          if (l != null) {
+            for (int i = 0; i < l.length; i = i + 1) {
+              if (".nomedia".equals(l[i])) {
+                return true;
+              }
+            }
           }
-        } catch (Exception e) {
-          // lanjut ke berikutnya, dihitung gagal
-        }
-      }
-    } catch (Exception e) {
-      String m = e.getMessage();
-      Shared.err(this, "File", 0, m == null ? "hapus batch gagal" : m);
-    }
-    return done;
-  }
-
-  @SimpleFunction(description = "Ganti nama FILE (tanpa pindah folder). newName = nama saja.")
-  public boolean RenameFile(FileScope scope, String path, String newName) {
-    try {
-      File src = Shared.resolve(context, scope, path);
-      if (src == null || !src.exists() || src.isDirectory()) {
-        Shared.err(this, "File", 0, "file tidak ada");
-        return false;
-      }
-      String nn = Shared.sanitize(Shared.clean(newName));
-      if (nn.length() == 0 || nn.indexOf('/') >= 0) {
-        Shared.err(this, "File", 0, "nama baru tidak valid");
-        return false;
-      }
-      return src.renameTo(new File(src.getParentFile(), nn));
-    } catch (Exception e) {
-      String m = e.getMessage();
-      Shared.err(this, "File", 0, m == null ? "rename gagal" : m);
-      return false;
-    }
-  }
-
-  @SimpleFunction(description = "Ganti nama FOLDER (tanpa pindah). newName = nama saja.")
-  public boolean RenameFolder(FileScope scope, String path, String newName) {
-    try {
-      File src = Shared.resolve(context, scope, path);
-      if (src == null || !src.exists() || !src.isDirectory()) {
-        Shared.err(this, "File", 0, "folder tidak ada");
-        return false;
-      }
-      String nn = Shared.sanitize(Shared.clean(newName));
-      if (nn.length() == 0 || nn.indexOf('/') >= 0) {
-        Shared.err(this, "File", 0, "nama baru tidak valid");
-        return false;
-      }
-      return src.renameTo(new File(src.getParentFile(), nn));
-    } catch (Exception e) {
-      String m = e.getMessage();
-      Shared.err(this, "File", 0, m == null ? "rename gagal" : m);
-      return false;
-    }
-  }
-
-  @SimpleFunction(description = "Tulis teks ke file (UTF-8). append=true = sambung di akhir. "
-      + "Folder dibuat otomatis. Asset tidak bisa ditulis. Gagal via ErrorOccurred "
-      + "(seperti File bawaan MIT, tanpa nilai balik).")
-  public void SaveFile(FileScope scope, String path, String content, boolean append) {
-    java.io.Writer w = null;
-    try {
-      File f = Shared.resolve(context, scope, path);
-      if (f == null) {
-        Shared.err(this, "File", 0, "tidak bisa tulis ke Asset");
-        return;
-      }
-      if (f.getParentFile() != null) {
-        f.getParentFile().mkdirs();
-      }
-      w = new java.io.OutputStreamWriter(new FileOutputStream(f, append), "UTF-8");
-      w.write(content == null ? "" : content);
-      w.flush();
-      return;
-    } catch (Exception e) {
-      String m = e.getMessage();
-      Shared.err(this, "File", 0, m == null ? "tulis gagal" : m);
-      return;
-    } finally {
-      if (w != null) {
-        try {
-          w.close();
         } catch (Exception e) {
           // abaikan
         }
-      }
-    }
-  }
-
-  @SimpleFunction(description = "Buat file kosong (folder induk dibuat otomatis). "
-      + "Sudah ada = true.")
-  public boolean CreateEmptyFile(FileScope scope, String path) {
-    try {
-      File f = Shared.resolve(context, scope, path);
-      if (f == null) {
-        Shared.err(this, "File", 0, "tidak bisa buat file di Asset");
         return false;
       }
-      if (f.exists()) {
-        return true;
+      File d = scoopFile(scoop, p);
+      if (d == null || !d.isDirectory()) {
+        return false;
       }
-      if (f.getParentFile() != null) {
-        f.getParentFile().mkdirs();
-      }
-      return f.createNewFile();
+      return new File(d, ".nomedia").isFile();
     } catch (Exception e) {
-      String m = e.getMessage();
-      Shared.err(this, "File", 0, m == null ? "buat file gagal" : m);
       return false;
     }
   }
 
-  // ================= BASE64 KE FILE =================
-
-  /** Fallback polling untuk AfterBase64FileReady: path file terakhir yang jadi. */
-  private static String lastBase64FilePath = "";
-
-  @SimpleFunction(description = "Fallback polling untuk AfterBase64FileReady: "
-      + "path file terakhir yang berhasil ditulis (kosong bila belum ada).")
-  public String GetLastBase64FilePath() {
-    return lastBase64FilePath;
+  @SimpleFunction(description = "Apakah directory ada di jalur DAN hidden "
+      + "(nama diawali titik). Boleh tulis dengan/tanpa titik. "
+      + "scoop seperti IsFileExists.")
+  public boolean IsHiddenDirectory(String directory, String scoop) {
+    try {
+      String p = Shared.clean(directory);
+      if (wantAsset(scoop, p)) {
+        return Shared.fileNameOf(Shared.assetName(p)).startsWith(".");
+      }
+      File d = findDir(scoop, p);
+      if (d == null || !d.isDirectory()) {
+        return false;
+      }
+      return d.getName().startsWith(".");
+    } catch (Exception e) {
+      return false;
+    }
   }
 
-  @SimpleFunction(description = "Simpan base64 LANGSUNG ke storage (tanpa validasi gambar, "
-      + "lebih cepat dari Base64ToPicture). base64 boleh mentah atau data:.../...;base64,.... "
-      + "path = lokasi TUJUAN termasuk nama file (mis. folder/hasil.bin). Folder dibuat "
-      + "otomatis. Asset tidak bisa jadi tujuan. Hasil lewat AfterBase64FileReady. "
-      + "Satu proses per saat; sibuk via ErrorOccurred.")
-  public void SaveBase64ToFile(final String base64, final FileScope scope,
-      final String path) {
-    if (!Shared.claimSlot("b64file")) {
-      Shared.err(this, "Base64", 0, "masih ada proses base64-file berjalan");
-      return;
-    }
-    final String b64 = base64 == null ? "" : base64;
-    final FileScope fS = scope;
-    final String fP = path == null ? "" : path;
-    Base64FileStarted();
+  @SimpleFunction(description = "True bila ada salinan/pindahan "
+      + "CallCopyOrMoveFile yang masih berjalan.")
+  public boolean IsBusy() {
+    return Shared.slotBusy("copyormove");
+  }
+
+  // ================= CALL: direktori & nomedia =================
+
+  @SimpleFunction(description = "CALL: jadikan directory hidden (nama jadi "
+      + ".nama). Sudah hidden = success. Hasil lewat DirectoryHidden.")
+  public void CallSetHiddenDirectory(final String directory,
+      final String scoop) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
-        boolean ok = false;
-        String outPath = "";
-        String outName = "";
-        String outScope = "";
-        String msg = "";
+        String need = "";
         try {
-          String s = Shared.clean(b64);
-          int comma = s.indexOf(',');
-          if (s.startsWith("data:") && comma >= 0) {
-            s = s.substring(comma + 1).trim();
-          }
-          if (s.length() == 0) {
-            msg = "base64 kosong";
-          } else {
-            byte[] data = Base64.decode(s, Base64.DEFAULT);
-            File dst = Shared.resolve(context, fS, fP);
-            if (dst == null) {
-              msg = "tidak bisa tulis ke Asset";
-            } else if (dst.isDirectory()) {
-              msg = "path adalah folder (tambah nama file)";
-            } else {
-              if (dst.getParentFile() != null) {
-                dst.getParentFile().mkdirs();
+          File d = findDir(scoop, directory);
+          if (d == null || !d.isDirectory()) {
+            final String msg = "directory tidak ada";
+            Shared.err(Tools_File.this, "Directory", 0, msg);
+            fireOnUi(new Runnable() {
+              public void run() {
+                DirectoryHidden(Shared.clean(directory), false, msg, "");
               }
-              FileOutputStream out = new FileOutputStream(dst);
-              try {
-                out.write(data);
-                out.flush();
-              } finally {
-                try {
-                  out.close();
-                } catch (Exception e) {
-                  // abaikan
-                }
-              }
-              ok = true;
-              outPath = dst.getAbsolutePath();
-              outName = dst.getName();
-              outScope = fS == null ? "" : fS.name();
-              msg = "OK";
-            }
+            });
+            return;
           }
-        } catch (IllegalArgumentException e) {
-          msg = "base64 tidak valid";
-        } catch (Exception e) {
-          String m = e.getMessage();
-          msg = m == null ? "simpan base64 gagal" : m;
-        } finally {
-          Shared.releaseSlot("b64file");
-        }
-        final boolean fOk = ok;
-        final String fPath = outPath;
-        final String fName = outName;
-        final String fSc = outScope;
-        final String fMsg = msg;
-        try {
-          form.runOnUiThread(new Runnable() {
+          final String abs = d.getAbsolutePath();
+          if (d.getName().startsWith(".")) {
+            fireOnUi(new Runnable() {
+              public void run() {
+                DirectoryHidden(abs, true, "sudah hidden", "");
+              }
+            });
+            return;
+          }
+          File t = new File(d.getParentFile(), "." + d.getName());
+          if (t.exists()) {
+            final String msg = "nama hidden sudah dipakai";
+            Shared.err(Tools_File.this, "Directory", 0, msg);
+            fireOnUi(new Runnable() {
+              public void run() {
+                DirectoryHidden(abs, false, msg, "");
+              }
+            });
+            return;
+          }
+          final boolean ok = d.renameTo(t);
+          final String np = ok ? t.getAbsolutePath() : abs;
+          final String msg = ok ? "" : "rename gagal (mungkin izin)";
+          if (!ok) {
+            need = WRITE_PERM;
+            Shared.err(Tools_File.this, "Directory", 0, msg);
+          }
+          final String needF = need;
+          fireOnUi(new Runnable() {
             public void run() {
-              if (fOk) {
-                lastBase64FilePath = fPath;
-              }
-              AfterBase64FileReady(fOk, fSc, fPath, fName, fMsg);
+              DirectoryHidden(np, ok, msg, needF);
+            }
+          });
+        } catch (SecurityException se) {
+          final String msg = "ditolak sistem (izin)";
+          Shared.err(Tools_File.this, "Directory", 0, msg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              DirectoryHidden(Shared.clean(directory), false, msg,
+                  WRITE_PERM);
             }
           });
         } catch (Exception e) {
-          if (fOk) {
-            lastBase64FilePath = fPath;
-          }
-          AfterBase64FileReady(fOk, fSc, fPath, fName, fMsg);
-        }
-        if (!fOk) {
-          Shared.err(Tools_File.this, "Base64", 0, fMsg);
+          final String m = e.getMessage();
+          final String msg = m == null ? "gagal hidden" : m;
+          Shared.err(Tools_File.this, "Directory", 0, msg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              DirectoryHidden(Shared.clean(directory), false, msg, "");
+            }
+          });
         }
       }
     });
   }
 
-  // ================= INSTAN: nomedia =================
-
-  @SimpleFunction(description = "Buat file .nomedia di folder (sembunyikan dari galeri/musik). "
-      + "Sudah ada = true.")
-  public boolean CreateNomedia(FileScope scope, String folder) {
-    try {
-      File d = Shared.resolve(context, scope, folder);
-      if (d == null) {
-        Shared.err(this, "File", 0, "tidak bisa tulis ke Asset");
-        return false;
-      }
-      if (!d.exists()) {
-        d.mkdirs();
-      }
-      File n = new File(d, ".nomedia");
-      if (n.exists()) {
-        return true;
-      }
-      return n.createNewFile();
-    } catch (Exception e) {
-      String m = e.getMessage();
-      Shared.err(this, "File", 0, m == null ? "buat .nomedia gagal" : m);
-      return false;
-    }
-  }
-
-  @SimpleFunction(description = "Hapus file .nomedia di folder. Tidak ada = true.")
-  public boolean DeleteNomedia(FileScope scope, String folder) {
-    try {
-      File d = Shared.resolve(context, scope, folder);
-      if (d == null) {
-        Shared.err(this, "File", 0, "tidak bisa hapus di Asset");
-        return false;
-      }
-      File n = new File(d, ".nomedia");
-      if (!n.exists()) {
-        return true;
-      }
-      return n.delete();
-    } catch (Exception e) {
-      String m = e.getMessage();
-      Shared.err(this, "File", 0, m == null ? "hapus .nomedia gagal" : m);
-      return false;
-    }
-  }
-
-  @SimpleFunction(description = "Apakah folder punya file .nomedia.")
-  public boolean NomediaExists(FileScope scope, String folder) {
-    try {
-      File d = Shared.resolve(context, scope, folder);
-      if (d == null || !d.isDirectory()) {
-        return false;
-      }
-      return new File(d, ".nomedia").exists();
-    } catch (Exception e) {
-      return false;
-    }
-  }
-
-  // ================= INSTAN: info =================
-
-  @SimpleFunction(description = "Ukuran file dalam byte. Folder = total isi rekursif. "
-      + "-1 bila tidak ada.")
-  public long FileSize(FileScope scope, String path) {
-    try {
-      String p = Shared.clean(path);
-      if (scope == FileScope.Asset || Shared.isAssetPath(p)) {
+  @SimpleFunction(description = "CALL: buat file .nomedia di dalam folder "
+      + "(sembunyikan dari galeri/musik). Hasil lewat NomediaFileCreated.")
+  public void CallMakeNomediaFile(final String folder, final String scoop) {
+    AsynchUtil.runAsynchronously(new Runnable() {
+      public void run() {
         try {
-          return context.getAssets().openFd(Shared.assetName(p)).getLength();
+          if (wantAsset(scoop, folder)) {
+            final String msg = "tidak bisa tulis ke Asset";
+            Shared.err(Tools_File.this, "Directory", 0, msg);
+            fireOnUi(new Runnable() {
+              public void run() {
+                NomediaFileCreated(Shared.clean(folder), false, msg, "");
+              }
+            });
+            return;
+          }
+          File d = scoopFile(scoop, folder);
+          if (d == null) {
+            final String msg = "folder tidak valid";
+            Shared.err(Tools_File.this, "Directory", 0, msg);
+            fireOnUi(new Runnable() {
+              public void run() {
+                NomediaFileCreated(Shared.clean(folder), false, msg, "");
+              }
+            });
+            return;
+          }
+          d.mkdirs();
+          File n = new File(d, ".nomedia");
+          boolean ok = n.isFile();
+          if (!ok) {
+            try {
+              ok = n.createNewFile();
+            } catch (SecurityException se) {
+              final String msg = "ditolak sistem (izin)";
+              Shared.err(Tools_File.this, "Directory", 0, msg);
+              final String abs = d.getAbsolutePath();
+              fireOnUi(new Runnable() {
+                public void run() {
+                  NomediaFileCreated(abs, false, msg, WRITE_PERM);
+                }
+              });
+              return;
+            }
+          }
+          final String abs = n.getAbsolutePath();
+          final boolean okF = ok;
+          final String msg = ok ? "" : "gagal buat .nomedia";
+          if (!ok) {
+            Shared.err(Tools_File.this, "Directory", 0, msg);
+          }
+          fireOnUi(new Runnable() {
+            public void run() {
+              NomediaFileCreated(abs, okF, msg, okF ? "" : WRITE_PERM);
+            }
+          });
+        } catch (Exception e) {
+          final String m = e.getMessage();
+          final String msg = m == null ? "gagal buat .nomedia" : m;
+          Shared.err(Tools_File.this, "Directory", 0, msg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              NomediaFileCreated(Shared.clean(folder), false, msg, "");
+            }
+          });
+        }
+      }
+    });
+  }
+
+  @SimpleFunction(description = "CALL: hapus file .nomedia di folder. "
+      + "Tidak ada = success. Hasil lewat NomediaFileDeleted.")
+  public void CallDeleteNomediaFile(final String folder,
+      final String scoop) {
+    AsynchUtil.runAsynchronously(new Runnable() {
+      public void run() {
+        try {
+          if (wantAsset(scoop, folder)) {
+            final String msg = "tidak bisa tulis ke Asset";
+            Shared.err(Tools_File.this, "Directory", 0, msg);
+            fireOnUi(new Runnable() {
+              public void run() {
+                NomediaFileDeleted(Shared.clean(folder), false, msg, "");
+              }
+            });
+            return;
+          }
+          File d = scoopFile(scoop, folder);
+          if (d == null || !d.isDirectory()) {
+            final String msg = "folder tidak ada";
+            Shared.err(Tools_File.this, "Directory", 0, msg);
+            fireOnUi(new Runnable() {
+              public void run() {
+                NomediaFileDeleted(Shared.clean(folder), false, msg, "");
+              }
+            });
+            return;
+          }
+          File n = new File(d, ".nomedia");
+          final String abs = n.getAbsolutePath();
+          boolean ok = !n.exists() || n.delete();
+          final boolean okF = ok;
+          final String msg = ok ? "" : "gagal hapus .nomedia";
+          if (!ok) {
+            Shared.err(Tools_File.this, "Directory", 0, msg);
+          }
+          fireOnUi(new Runnable() {
+            public void run() {
+              NomediaFileDeleted(abs, okF, msg, okF ? "" : WRITE_PERM);
+            }
+          });
+        } catch (SecurityException se) {
+          final String msg = "ditolak sistem (izin)";
+          Shared.err(Tools_File.this, "Directory", 0, msg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              NomediaFileDeleted(Shared.clean(folder), false, msg,
+                  WRITE_PERM);
+            }
+          });
+        } catch (Exception e) {
+          final String m = e.getMessage();
+          final String msg = m == null ? "gagal hapus .nomedia" : m;
+          Shared.err(Tools_File.this, "Directory", 0, msg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              NomediaFileDeleted(Shared.clean(folder), false, msg, "");
+            }
+          });
+        }
+      }
+    });
+  }
+
+  @SimpleFunction(description = "CALL: buat folder (termasuk induknya). "
+      + "Sudah ada = success. Hasil lewat DirectoryCreated.")
+  public void CallMakeDirectory(final String folder, final String scoop) {
+    AsynchUtil.runAsynchronously(new Runnable() {
+      public void run() {
+        try {
+          if (wantAsset(scoop, folder)) {
+            final String msg = "tidak bisa tulis ke Asset";
+            Shared.err(Tools_File.this, "Directory", 0, msg);
+            fireOnUi(new Runnable() {
+              public void run() {
+                DirectoryCreated(Shared.clean(folder), false, msg, "");
+              }
+            });
+            return;
+          }
+          File d = scoopFile(scoop, folder);
+          if (d == null) {
+            final String msg = "folder tidak valid";
+            Shared.err(Tools_File.this, "Directory", 0, msg);
+            fireOnUi(new Runnable() {
+              public void run() {
+                DirectoryCreated(Shared.clean(folder), false, msg, "");
+              }
+            });
+            return;
+          }
+          if (!d.isDirectory()) {
+            d.mkdirs();
+          }
+          final String abs = d.getAbsolutePath();
+          final boolean ok = d.isDirectory();
+          final String msg = ok ? "" : "gagal buat folder (mungkin izin)";
+          if (!ok) {
+            Shared.err(Tools_File.this, "Directory", 0, msg);
+          }
+          fireOnUi(new Runnable() {
+            public void run() {
+              DirectoryCreated(abs, ok, msg, ok ? "" : WRITE_PERM);
+            }
+          });
+        } catch (SecurityException se) {
+          final String msg = "ditolak sistem (izin)";
+          Shared.err(Tools_File.this, "Directory", 0, msg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              DirectoryCreated(Shared.clean(folder), false, msg, WRITE_PERM);
+            }
+          });
+        } catch (Exception e) {
+          final String m = e.getMessage();
+          final String msg = m == null ? "gagal buat folder" : m;
+          Shared.err(Tools_File.this, "Directory", 0, msg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              DirectoryCreated(Shared.clean(folder), false, msg, "");
+            }
+          });
+        }
+      }
+    });
+  }
+
+  // ================= CALL: hapus & rename =================
+
+  @SimpleFunction(description = "CALL: hapus file/folder (folder rekursif). "
+      + "Tidak ada = success. Hasil lewat FileDeleted.")
+  public void CallDeleteFile(final String path, final String scoop) {
+    AsynchUtil.runAsynchronously(new Runnable() {
+      public void run() {
+        try {
+          if (wantAsset(scoop, path)) {
+            final String msg = "tidak bisa hapus dari Asset";
+            Shared.err(Tools_File.this, "File", 0, msg);
+            fireOnUi(new Runnable() {
+              public void run() {
+                FileDeleted(Shared.clean(path), false, msg, "");
+              }
+            });
+            return;
+          }
+          File f = scoopFile(scoop, path);
+          if (f == null) {
+            final String msg = "path tidak valid";
+            Shared.err(Tools_File.this, "File", 0, msg);
+            fireOnUi(new Runnable() {
+              public void run() {
+                FileDeleted(Shared.clean(path), false, msg, "");
+              }
+            });
+            return;
+          }
+          final String abs = f.getAbsolutePath();
+          boolean ok = Shared.deleteRecursive(f);
+          final boolean okF = ok;
+          final String msg = ok ? "" : "gagal hapus (mungkin izin)";
+          if (!ok) {
+            Shared.err(Tools_File.this, "File", 0, msg);
+          }
+          fireOnUi(new Runnable() {
+            public void run() {
+              FileDeleted(abs, okF, msg, okF ? "" : WRITE_PERM);
+            }
+          });
+        } catch (SecurityException se) {
+          final String msg = "ditolak sistem (izin)";
+          Shared.err(Tools_File.this, "File", 0, msg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              FileDeleted(Shared.clean(path), false, msg, WRITE_PERM);
+            }
+          });
+        } catch (Exception e) {
+          final String m = e.getMessage();
+          final String msg = m == null ? "gagal hapus" : m;
+          Shared.err(Tools_File.this, "File", 0, msg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              FileDeleted(Shared.clean(path), false, msg, "");
+            }
+          });
+        }
+      }
+    });
+  }
+
+  @SimpleFunction(description = "CALL: hapus BANYAK path sekaligus (tanpa loop "
+      + "manual). paths = list / teks koma. Hasil lewat FileListDeleted "
+      + "(total + terhapus).")
+  public void CallDeleteList(final Object paths, final String scoop) {
+    AsynchUtil.runAsynchronously(new Runnable() {
+      public void run() {
+        try {
+          List<String> l = toStringList(paths);
+          final int total = l.size();
+          if (total == 0) {
+            final String msg = "daftar kosong";
+            Shared.err(Tools_File.this, "File", 0, msg);
+            fireOnUi(new Runnable() {
+              public void run() {
+                FileListDeleted(false, 0, 0, msg, "");
+              }
+            });
+            return;
+          }
+          int done = 0;
+          for (int i = 0; i < l.size(); i = i + 1) {
+            try {
+              if (wantAsset(scoop, l.get(i))) {
+                continue;
+              }
+              File f = scoopFile(scoop, l.get(i));
+              if (f != null && Shared.deleteRecursive(f)) {
+                done = done + 1;
+              }
+            } catch (Exception e) {
+              // lanjut ke berikutnya
+            }
+          }
+          final int doneF = done;
+          final boolean ok = doneF == total;
+          final String msg = ok ? "" : "sebagian gagal (" + doneF
+              + "/" + total + ")";
+          if (!ok) {
+            Shared.err(Tools_File.this, "File", 0, msg);
+          }
+          fireOnUi(new Runnable() {
+            public void run() {
+              FileListDeleted(ok, total, doneF, msg, ok ? "" : WRITE_PERM);
+            }
+          });
+        } catch (Exception e) {
+          final String m = e.getMessage();
+          final String msg = m == null ? "gagal hapus list" : m;
+          Shared.err(Tools_File.this, "File", 0, msg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              FileListDeleted(false, 0, 0, msg, "");
+            }
+          });
+        }
+      }
+    });
+  }
+
+  @SimpleFunction(description = "CALL: ganti nama FILE (tanpa pindah folder). "
+      + "newName = nama saja. Hasil lewat FileRenamed (path = nama baru).")
+  public void CallRenameFile(final String path, final String newName,
+      final String scoop) {
+    AsynchUtil.runAsynchronously(new Runnable() {
+      public void run() {
+        try {
+          if (wantAsset(scoop, path)) {
+            final String msg = "tidak bisa rename di Asset";
+            Shared.err(Tools_File.this, "File", 0, msg);
+            fireOnUi(new Runnable() {
+              public void run() {
+                FileRenamed(Shared.clean(path), false, msg, "");
+              }
+            });
+            return;
+          }
+          File f = scoopFile(scoop, path);
+          if (f == null || !f.isFile()) {
+            final String msg = "file tidak ada";
+            Shared.err(Tools_File.this, "File", 0, msg);
+            fireOnUi(new Runnable() {
+              public void run() {
+                FileRenamed(Shared.clean(path), false, msg, "");
+              }
+            });
+            return;
+          }
+          String nn = Shared.sanitize(Shared.clean(newName));
+          File t = new File(f.getParentFile(), nn);
+          if (t.exists()) {
+            final String msg = "nama sudah dipakai";
+            Shared.err(Tools_File.this, "File", 0, msg);
+            final String abs = f.getAbsolutePath();
+            fireOnUi(new Runnable() {
+              public void run() {
+                FileRenamed(abs, false, msg, "");
+              }
+            });
+            return;
+          }
+          final boolean ok = f.renameTo(t);
+          final String np = ok ? t.getAbsolutePath() : f.getAbsolutePath();
+          final String msg = ok ? "" : "rename gagal (mungkin izin)";
+          if (!ok) {
+            Shared.err(Tools_File.this, "File", 0, msg);
+          }
+          fireOnUi(new Runnable() {
+            public void run() {
+              FileRenamed(np, ok, msg, ok ? "" : WRITE_PERM);
+            }
+          });
+        } catch (SecurityException se) {
+          final String msg = "ditolak sistem (izin)";
+          Shared.err(Tools_File.this, "File", 0, msg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              FileRenamed(Shared.clean(path), false, msg, WRITE_PERM);
+            }
+          });
+        } catch (Exception e) {
+          final String m = e.getMessage();
+          final String msg = m == null ? "rename gagal" : m;
+          Shared.err(Tools_File.this, "File", 0, msg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              FileRenamed(Shared.clean(path), false, msg, "");
+            }
+          });
+        }
+      }
+    });
+  }
+
+  @SimpleFunction(description = "CALL: ganti nama FOLDER (tanpa pindah). "
+      + "newName = nama saja. Hasil lewat FolderRenamed.")
+  public void CallRenameFolder(final String path, final String newName,
+      final String scoop) {
+    AsynchUtil.runAsynchronously(new Runnable() {
+      public void run() {
+        try {
+          if (wantAsset(scoop, path)) {
+            final String msg = "tidak bisa rename di Asset";
+            Shared.err(Tools_File.this, "File", 0, msg);
+            fireOnUi(new Runnable() {
+              public void run() {
+                FolderRenamed(Shared.clean(path), false, msg, "");
+              }
+            });
+            return;
+          }
+          File f = findDir(scoop, path);
+          if (f == null || !f.isDirectory()) {
+            final String msg = "folder tidak ada";
+            Shared.err(Tools_File.this, "File", 0, msg);
+            fireOnUi(new Runnable() {
+              public void run() {
+                FolderRenamed(Shared.clean(path), false, msg, "");
+              }
+            });
+            return;
+          }
+          String nn = Shared.sanitize(Shared.clean(newName));
+          File t = new File(f.getParentFile(), nn);
+          if (t.exists()) {
+            final String msg = "nama sudah dipakai";
+            Shared.err(Tools_File.this, "File", 0, msg);
+            final String abs = f.getAbsolutePath();
+            fireOnUi(new Runnable() {
+              public void run() {
+                FolderRenamed(abs, false, msg, "");
+              }
+            });
+            return;
+          }
+          final boolean ok = f.renameTo(t);
+          final String np = ok ? t.getAbsolutePath() : f.getAbsolutePath();
+          final String msg = ok ? "" : "rename gagal (mungkin izin)";
+          if (!ok) {
+            Shared.err(Tools_File.this, "File", 0, msg);
+          }
+          fireOnUi(new Runnable() {
+            public void run() {
+              FolderRenamed(np, ok, msg, ok ? "" : WRITE_PERM);
+            }
+          });
+        } catch (SecurityException se) {
+          final String msg = "ditolak sistem (izin)";
+          Shared.err(Tools_File.this, "File", 0, msg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              FolderRenamed(Shared.clean(path), false, msg, WRITE_PERM);
+            }
+          });
+        } catch (Exception e) {
+          final String m = e.getMessage();
+          final String msg = m == null ? "rename gagal" : m;
+          Shared.err(Tools_File.this, "File", 0, msg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              FolderRenamed(Shared.clean(path), false, msg, "");
+            }
+          });
+        }
+      }
+    });
+  }
+
+  // ================= CALL: tulis =================
+
+  @SimpleFunction(description = "CALL: buat file kosong (folder induk dibuat "
+      + "otomatis). Sudah ada = success. Hasil lewat EmptyFileCreated.")
+  public void CallCreateEmptyFile(final String path, final String scoop) {
+    AsynchUtil.runAsynchronously(new Runnable() {
+      public void run() {
+        try {
+          if (wantAsset(scoop, path)) {
+            final String msg = "tidak bisa tulis ke Asset";
+            Shared.err(Tools_File.this, "File", 0, msg);
+            fireOnUi(new Runnable() {
+              public void run() {
+                EmptyFileCreated(Shared.clean(path), false, msg, "");
+              }
+            });
+            return;
+          }
+          File f = scoopFile(scoop, path);
+          if (f == null) {
+            final String msg = "path tidak valid";
+            Shared.err(Tools_File.this, "File", 0, msg);
+            fireOnUi(new Runnable() {
+              public void run() {
+                EmptyFileCreated(Shared.clean(path), false, msg, "");
+              }
+            });
+            return;
+          }
+          if (f.getParentFile() != null) {
+            f.getParentFile().mkdirs();
+          }
+          boolean ok = f.isFile();
+          if (!ok) {
+            try {
+              ok = f.createNewFile();
+            } catch (SecurityException se) {
+              final String msg = "ditolak sistem (izin)";
+              Shared.err(Tools_File.this, "File", 0, msg);
+              fireOnUi(new Runnable() {
+                public void run() {
+                  EmptyFileCreated(Shared.clean(path), false, msg,
+                      WRITE_PERM);
+                }
+              });
+              return;
+            }
+          }
+          final String abs = f.getAbsolutePath();
+          final boolean okF = ok;
+          final String msg = ok ? "" : "gagal buat file";
+          if (!ok) {
+            Shared.err(Tools_File.this, "File", 0, msg);
+          }
+          fireOnUi(new Runnable() {
+            public void run() {
+              EmptyFileCreated(abs, okF, msg, okF ? "" : WRITE_PERM);
+            }
+          });
+        } catch (Exception e) {
+          final String m = e.getMessage();
+          final String msg = m == null ? "gagal buat file" : m;
+          Shared.err(Tools_File.this, "File", 0, msg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              EmptyFileCreated(Shared.clean(path), false, msg, "");
+            }
+          });
+        }
+      }
+    });
+  }
+
+  @SimpleFunction(description = "CALL: tulis teks ke file (UTF-8). "
+      + "append=true = sambung di akhir. Hasil lewat FileSaved.")
+  public void CallSaveFile(final String path, final String content,
+      final boolean append, final String scoop) {
+    AsynchUtil.runAsynchronously(new Runnable() {
+      public void run() {
+        try {
+          if (wantAsset(scoop, path)) {
+            final String msg = "tidak bisa tulis ke Asset";
+            Shared.err(Tools_File.this, "File", 0, msg);
+            fireOnUi(new Runnable() {
+              public void run() {
+                FileSaved(Shared.clean(path), false, msg, "");
+              }
+            });
+            return;
+          }
+          File f = scoopFile(scoop, path);
+          if (f == null) {
+            final String msg = "path tidak valid";
+            Shared.err(Tools_File.this, "File", 0, msg);
+            fireOnUi(new Runnable() {
+              public void run() {
+                FileSaved(Shared.clean(path), false, msg, "");
+              }
+            });
+            return;
+          }
+          if (f.getParentFile() != null) {
+            f.getParentFile().mkdirs();
+          }
+          byte[] b = (content == null ? "" : content).getBytes("UTF-8");
+          FileOutputStream out = new FileOutputStream(f, append);
+          try {
+            out.write(b);
+            out.flush();
+          } finally {
+            try {
+              out.close();
+            } catch (Exception e) {
+              // abaikan
+            }
+          }
+          final String abs = f.getAbsolutePath();
+          fireOnUi(new Runnable() {
+            public void run() {
+              FileSaved(abs, true, "", "");
+            }
+          });
+        } catch (SecurityException se) {
+          final String msg = "ditolak sistem (izin)";
+          Shared.err(Tools_File.this, "File", 0, msg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              FileSaved(Shared.clean(path), false, msg, WRITE_PERM);
+            }
+          });
+        } catch (Exception e) {
+          final String m = e.getMessage();
+          final String msg = m == null ? "gagal simpan" : m;
+          Shared.err(Tools_File.this, "File", 0, msg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              FileSaved(Shared.clean(path), false, msg, "");
+            }
+          });
+        }
+      }
+    });
+  }
+
+  @SimpleFunction(description = "CALL: simpan base64 LANGSUNG ke storage "
+      + "(tanpa validasi gambar, lebih cepat). Hasil lewat Base64FileSaved. "
+      + "Polling: GetLastBase64FilePath.")
+  public void CallSaveBase64ToFile(final String base64, final String path,
+      final String scoop) {
+    AsynchUtil.runAsynchronously(new Runnable() {
+      public void run() {
+        try {
+          if (wantAsset(scoop, path)) {
+            lastBase64Path = "";
+            final String msg = "tidak bisa tulis ke Asset";
+            Shared.err(Tools_File.this, "Base64", 0, msg);
+            fireOnUi(new Runnable() {
+              public void run() {
+                Base64FileSaved(Shared.clean(path), false, msg, "");
+              }
+            });
+            return;
+          }
+          File f = scoopFile(scoop, path);
+          if (f == null) {
+            lastBase64Path = "";
+            final String msg = "path tidak valid";
+            Shared.err(Tools_File.this, "Base64", 0, msg);
+            fireOnUi(new Runnable() {
+              public void run() {
+                Base64FileSaved(Shared.clean(path), false, msg, "");
+              }
+            });
+            return;
+          }
+          String b = base64 == null ? "" : base64.trim();
+          int ci = b.indexOf("base64,");
+          if (ci >= 0) {
+            b = b.substring(ci + 7);
+          }
+          b = b.replaceAll("\\s", "");
+          if (b.length() == 0) {
+            lastBase64Path = "";
+            final String msg = "base64 kosong";
+            Shared.err(Tools_File.this, "Base64", 0, msg);
+            fireOnUi(new Runnable() {
+              public void run() {
+                Base64FileSaved(Shared.clean(path), false, msg, "");
+              }
+            });
+            return;
+          }
+          byte[] data = Base64.decode(b, Base64.DEFAULT);
+          if (f.getParentFile() != null) {
+            f.getParentFile().mkdirs();
+          }
+          FileOutputStream out = new FileOutputStream(f);
+          try {
+            out.write(data);
+            out.flush();
+          } finally {
+            try {
+              out.close();
+            } catch (Exception e) {
+              // abaikan
+            }
+          }
+          lastBase64Path = f.getAbsolutePath();
+          final String abs = lastBase64Path;
+          fireOnUi(new Runnable() {
+            public void run() {
+              Base64FileSaved(abs, true, "", "");
+            }
+          });
+        } catch (SecurityException se) {
+          lastBase64Path = "";
+          final String msg = "ditolak sistem (izin)";
+          Shared.err(Tools_File.this, "Base64", 0, msg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              Base64FileSaved(Shared.clean(path), false, msg, WRITE_PERM);
+            }
+          });
+        } catch (Exception e) {
+          lastBase64Path = "";
+          final String m = e.getMessage();
+          final String msg = m == null ? "gagal simpan base64" : m;
+          Shared.err(Tools_File.this, "Base64", 0, msg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              Base64FileSaved(Shared.clean(path), false, msg, "");
+            }
+          });
+        }
+      }
+    });
+  }
+
+  @SimpleFunction(description = "Fallback polling untuk Base64FileSaved: "
+      + "path file base64 terakhir (kosong bila gagal/belum ada).")
+  public String GetLastBase64FilePath() {
+    return lastBase64Path == null ? "" : lastBase64Path;
+  }
+
+  // ================= CALL: baca teks =================
+
+  @SimpleFunction(description = "CALL: baca file teks (UTF-8) di background. "
+      + "Hasil lewat GotText (content = isi file). Mulai lewat ReadStarted.")
+  public void CallReadText(final String path, final String scoop) {
+    AsynchUtil.runAsynchronously(new Runnable() {
+      public void run() {
+        final String p = Shared.clean(path);
+        final String sc = scoop == null ? "" : scoop.trim();
+        fireOnUi(new Runnable() {
+          public void run() {
+            ReadStarted(sc, p);
+          }
+        });
+        try {
+          if (wantAsset(scoop, p)) {
+            InputStream in = context.getAssets().open(Shared.assetName(p));
+            byte[] data;
+            try {
+              data = Shared.readAll(in);
+            } finally {
+              try {
+                in.close();
+              } catch (Exception e) {
+                // abaikan
+              }
+            }
+            final String txt = new String(data, "UTF-8");
+            final String nm = Shared.fileNameOf(Shared.assetName(p));
+            fireOnUi(new Runnable() {
+              public void run() {
+                GotText(true, sc, "//" + Shared.assetName(p), nm, txt);
+              }
+            });
+            return;
+          }
+          File f = scoopFile(scoop, p);
+          if (f == null || !f.isFile()) {
+            final String msg = "file tidak ada";
+            Shared.err(Tools_File.this, "Read", 0, msg);
+            fireOnUi(new Runnable() {
+              public void run() {
+                GotText(false, sc, p, "", "");
+              }
+            });
+            return;
+          }
+          FileInputStream in = new FileInputStream(f);
+          byte[] data;
+          try {
+            data = Shared.readAll(in);
+          } finally {
+            try {
+              in.close();
+            } catch (Exception e) {
+              // abaikan
+            }
+          }
+          final String txt = new String(data, "UTF-8");
+          final String abs = f.getAbsolutePath();
+          final String nm = f.getName();
+          fireOnUi(new Runnable() {
+            public void run() {
+              GotText(true, sc, abs, nm, txt);
+            }
+          });
+        } catch (SecurityException se) {
+          final String msg = "ditolak sistem (izin)";
+          Shared.err(Tools_File.this, "Read", 0, msg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              GotText(false, sc, p, "", "");
+            }
+          });
+        } catch (Exception e) {
+          final String m = e.getMessage();
+          final String msg = m == null ? "baca gagal" : m;
+          Shared.err(Tools_File.this, "Read", 0, msg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              GotText(false, sc, p, "", "");
+            }
+          });
+        }
+      }
+    });
+  }
+
+  // ================= CALL: salin / pindah =================
+
+  @SimpleFunction(description = "CALL: salin ATAU pindah file (isMove=true = "
+      + "pindah). from/to bawa scoop sendiri-sendiri. Nama tujuan boleh beda. "
+      + "Bila tujuan SUDAH ADA: tidak disalin, Finished(success=true, "
+      + "isDuplicated=true) -> rename manual ala contoh. Asset hanya bisa "
+      + "jadi sumber. Satu job per saat.")
+  public void CallCopyOrMoveFile(final String fromFileName,
+      final String fromScoop, final String toFileName, final String toScoop,
+      final boolean isMove) {
+    if (!Shared.claimSlot("copyormove")) {
+      final String msg = "masih ada salinan/pindahan berjalan";
+      Shared.err(this, "CopyOrMove", 0, msg);
+      fireOnUi(new Runnable() {
+        public void run() {
+          CopyOrMoveFinished(false, Shared.clean(toFileName),
+              Shared.fileNameOf(toFileName), false);
+        }
+      });
+      return;
+    }
+    if (wantAsset(toScoop, toFileName)) {
+      Shared.releaseSlot("copyormove");
+      final String msg = "tidak bisa salin ke Asset";
+      Shared.err(this, "CopyOrMove", 0, msg);
+      fireOnUi(new Runnable() {
+        public void run() {
+          CopyOrMoveFinished(false, Shared.clean(toFileName),
+              Shared.fileNameOf(toFileName), false);
+        }
+      });
+      return;
+    }
+    copyMoveCancel = false;
+    AsynchUtil.runAsynchronously(new Runnable() {
+      public void run() {
+        runCopyOrMove(isMove, fromScoop, fromFileName, toScoop, toFileName);
+      }
+    });
+  }
+
+  @SimpleFunction(description = "SET: batalkan salinan/pindahan berjalan. "
+      + "Tanpa feedback (file sebagian dihapus).")
+  public void SetCancelCopyOrMove() {
+    copyMoveCancel = true;
+  }
+
+  private void runCopyOrMove(boolean move, String fS, String fP, String tS,
+      String tP) {
+    String comp = "CopyOrMove";
+    InputStream in = null;
+    boolean fromAsset = false;
+    String aName = "";
+    File src = scoopFile(fS, fP);
+    long total = 0;
+    try {
+      if (src == null) {
+        String p = Shared.clean(fP);
+        if (wantAsset(fS, p)) {
+          fromAsset = true;
+          aName = Shared.assetName(p);
+        } else {
+          finishCopyOrMove(move, false, "", "",
+              Shared.fileNameOf(fP), false, "path sumber tidak valid");
+          return;
+        }
+      } else if (src.isDirectory()) {
+        finishCopyOrMove(move, false, "", "", src.getName(), false,
+            "sumber adalah folder");
+        return;
+      } else if (!src.exists()) {
+        finishCopyOrMove(move, false, "", "", src.getName(), false,
+            "file sumber tidak ada");
+        return;
+      }
+      File dst = scoopFile(tS, tP);
+      if (dst == null) {
+        finishCopyOrMove(move, false, "", "",
+            Shared.fileNameOf(tP), false, "tujuan tidak valid");
+        return;
+      }
+      if (dst.exists() && dst.isDirectory()) {
+        finishCopyOrMove(move, false, "", "", dst.getName(), false,
+            "tujuan adalah folder");
+        return;
+      }
+      if (dst.exists() && dst.isFile()) {
+        // Sudah ada: JANGAN timpa. Lapor duplikat agar user rename manual.
+        finishCopyOrMove(move, true, dst.getAbsolutePath(), tS == null ? ""
+            : tS.trim(), dst.getName(), true, "");
+        return;
+      }
+      if (dst.getParentFile() != null) {
+        dst.getParentFile().mkdirs();
+      }
+      final String dAbs = dst.getAbsolutePath();
+      final String dName = dst.getName();
+      final String tSc = tS == null ? "" : tS.trim();
+      fireOnUi(new Runnable() {
+        public void run() {
+          CopyOrMoveStarted(Shared.clean(fP), dAbs, dName, move);
+        }
+      });
+      if (fromAsset) {
+        try {
+          total = context.getAssets().openFd(aName).getLength();
+        } catch (Exception e) {
+          total = -1;
+        }
+        in = context.getAssets().open(aName);
+      } else {
+        if (move && src.renameTo(dst)) {
+          fireCopyOrMoveProgress(100, 1, 1);
+          finishCopyOrMove(true, true, dAbs, tSc, dName, false, "");
+          return;
+        }
+        total = src.length();
+        in = new FileInputStream(src);
+      }
+      FileOutputStream out = new FileOutputStream(dst);
+      try {
+        byte[] buf = new byte[32768];
+        long done = 0;
+        int lastPct = -1;
+        long lastFire = 0;
+        int n;
+        while ((n = in.read(buf)) > 0) {
+          if (copyMoveCancel) {
+            finishCopyOrMove(move, false, "", "", "", false, "dibatalkan");
+            try {
+              dst.delete();
+            } catch (Exception e) {
+              // abaikan
+            }
+            return;
+          }
+          out.write(buf, 0, n);
+          done = done + n;
+          int pct = total > 0 ? (int) (done * 100L / total) : 0;
+          long now = System.currentTimeMillis();
+          if (pct != lastPct && now - lastFire >= PROGRESS_MIN_MS) {
+            lastPct = pct;
+            lastFire = now;
+            fireCopyOrMoveProgress(pct, done, total);
+          }
+        }
+        out.flush();
+      } finally {
+        try {
+          out.close();
+        } catch (Exception e) {
+          // abaikan
+        }
+      }
+      if (copyMoveCancel) {
+        finishCopyOrMove(move, false, "", "", "", false, "dibatalkan");
+        try {
+          dst.delete();
+        } catch (Exception e) {
+          // abaikan
+        }
+        return;
+      }
+      fireCopyOrMoveProgress(100, total < 0 ? 0 : total,
+          total < 0 ? 0 : total);
+      if (move && !fromAsset) {
+        try {
+          src.delete();
+        } catch (Exception e) {
+          // abaikan
+        }
+      }
+      finishCopyOrMove(move, true, dAbs, tSc, dName, false, "");
+    } catch (SecurityException se) {
+      finishCopyOrMove(move, false, "", "", Shared.fileNameOf(tP), false,
+          "ditolak sistem (izin)");
+    } catch (Exception e) {
+      String m = e.getMessage();
+      finishCopyOrMove(move, false, "", "", Shared.fileNameOf(tP), false,
+          m == null ? "salin/pindah gagal" : m);
+    } finally {
+      try {
+        if (in != null) {
+          in.close();
+        }
+      } catch (Exception e) {
+        // abaikan
+      }
+      Shared.releaseSlot("copyormove");
+    }
+  }
+
+  private void fireCopyOrMoveProgress(final int pct, final long done,
+      final long total) {
+    fireOnUi(new Runnable() {
+      public void run() {
+        CopyOrMoveProgressChanged(pct, done, total);
+      }
+    });
+  }
+
+  private void finishCopyOrMove(final boolean move, final boolean success,
+      final String absPath, final String scope, final String fileName,
+      final boolean duplicated, final String msg) {
+    if (!success && msg.length() > 0) {
+      Shared.err(this, "CopyOrMove", 0, msg);
+    }
+    final boolean s = success;
+    final String p = absPath;
+    final String sc = scope;
+    final String fn = fileName;
+    final boolean dup = duplicated;
+    fireOnUi(new Runnable() {
+      public void run() {
+        CopyOrMoveFinished(s, p, fn, dup);
+      }
+    });
+  }
+
+  // ================= GET / query =================
+
+  @SimpleFunction(description = "Nama file dari sebuah path (buang foldernya). "
+      + "Olah string saja, tanpa scoop.")
+  public String GetFileName(String path) {
+    return Shared.fileNameOf(path);
+  }
+
+  @SimpleFunction(description = "Ekstensi tanpa titik (huruf kecil). "
+      + "Cth: foto.JPG -> jpg. Olah string saja.")
+  public String GetExtension(String path) {
+    return Shared.extensionOf(path);
+  }
+
+  @SimpleFunction(description = "Folder induk dari sebuah path. "
+      + "Cth: /a/b/c.jpg -> /a/b. Olah string saja.")
+  public String GetParentFolder(String path) {
+    return Shared.parentOf(path);
+  }
+
+  @SimpleFunction(description = "Path absolut dari scoop+path. URL/base64/"
+      + "Asset = kosong. scoop \"\" = absolut apa adanya.")
+  public String GetFullPath(String path, String scoop) {
+    try {
+      if (wantAsset(scoop, path)) {
+        return "//" + Shared.assetName(Shared.clean(path));
+      }
+      File f = scoopFile(scoop, path);
+      return f == null ? "" : f.getAbsolutePath();
+    } catch (Exception e) {
+      return "";
+    }
+  }
+
+  @SimpleFunction(description = "Ukuran file dalam byte. Folder = total isi "
+      + "rekursif. scoop seperti IsFileExists.")
+  public long FileSize(String path, String scoop) {
+    try {
+      if (wantAsset(scoop, path)) {
+        try {
+          return context.getAssets().openFd(
+              Shared.assetName(Shared.clean(path))).getLength();
         } catch (Exception e) {
           return -1L;
         }
       }
-      File f = Shared.resolve(context, scope, path);
+      File f = scoopFile(scoop, path);
       if (f == null || !f.exists()) {
         return -1L;
       }
-      return Shared.dirSize(f);
+      if (f.isDirectory()) {
+        return Shared.dirSize(f);
+      }
+      return f.length();
     } catch (Exception e) {
       return -1L;
     }
   }
 
-  @SimpleFunction(description = "Sisa ruang kosong (byte) di penyimpanan scope itu. "
-      + "Cek sebelum unduh/salin besar. -1 bila gagal.")
-  public long FreeSpace(FileScope scope) {
+  @SimpleFunction(description = "Sisa ruang kosong (byte) di penyimpanan "
+      + "scoop itu. scoop \"\" = kartu SD.")
+  public long FreeSpace(String scoop) {
     try {
-      File root = Shared.rootFor(context, scope);
-      android.os.StatFs st = new android.os.StatFs(root.getAbsolutePath());
-      return st.getAvailableBytes();
+      File r = scoopFile(scoop, "");
+      if (r == null) {
+        return -1L;
+      }
+      return r.getFreeSpace();
     } catch (Exception e) {
       return -1L;
     }
   }
 
-  @SimpleFunction(description = "Total kapasitas (byte) penyimpanan scope itu. -1 bila gagal.")
-  public long TotalSpace(FileScope scope) {
+  @SimpleFunction(description = "Total kapasitas (byte) penyimpanan scoop "
+      + "itu. -1 bila gagal.")
+  public long TotalSpace(String scoop) {
     try {
-      File root = Shared.rootFor(context, scope);
-      android.os.StatFs st = new android.os.StatFs(root.getAbsolutePath());
-      return st.getTotalBytes();
+      File r = scoopFile(scoop, "");
+      if (r == null) {
+        return -1L;
+      }
+      return r.getTotalSpace();
     } catch (Exception e) {
       return -1L;
     }
   }
 
-  @SimpleFunction(description = "Daftar file (path lengkap). filter = ekstensi tanpa titik "
-      + "(kosong = semua). includeSubfolders = sertakan isi subfolder.")
-  public List<String> ListFiles(FileScope scope, String path, String filter,
-      boolean includeSubfolders) {
+  @SimpleFunction(description = "Daftar file (path lengkap). filter = "
+      + "ekstensi tanpa titik (boleh koma: jpg,png; kosong = semua). "
+      + "recursive = sertakan isi subfolder. scoop seperti IsFileExists.")
+  public List<String> ListFiles(String path, String filter, boolean recursive,
+      String scoop) {
     ArrayList<String> out = new ArrayList<String>();
     try {
       String p = Shared.clean(path);
-      if (scope == FileScope.Asset || Shared.isAssetPath(p)) {
+      String flt = Shared.clean(filter).toLowerCase().replace(" ", "");
+      ArrayList<String> exts = new ArrayList<String>();
+      if (flt.length() > 0) {
+        String[] parts = flt.split(",");
+        for (int i = 0; i < parts.length; i = i + 1) {
+          String e = parts[i];
+          if (e.startsWith(".")) {
+            e = e.substring(1);
+          }
+          if (e.length() > 0) {
+            exts.add(e);
+          }
+        }
+      }
+      if (wantAsset(scoop, p)) {
         String[] l = context.getAssets().list(Shared.assetName(p));
         if (l != null) {
-          String f = normExt(filter);
           for (int i = 0; i < l.length; i = i + 1) {
-            if (matchExt(l[i], f)) {
+            if (exts.isEmpty() || exts.contains(
+                Shared.extensionOf(l[i]).toLowerCase())) {
               out.add("//" + Shared.assetName(p) + "/" + l[i]);
             }
           }
@@ -564,12 +1489,12 @@ public class Tools_File extends AndroidNonvisibleComponent
         Collections.sort(out);
         return out;
       }
-      File d = Shared.resolve(context, scope, path);
+      File d = scoopFile(scoop, p);
       if (d == null || !d.isDirectory()) {
         Shared.err(this, "File", 0, "folder tidak ada");
         return out;
       }
-      walkFiles(d, normExt(filter), includeSubfolders, out);
+      walkFilesByExt(d, exts, recursive, out);
       Collections.sort(out);
     } catch (Exception e) {
       String m = e.getMessage();
@@ -578,45 +1503,70 @@ public class Tools_File extends AndroidNonvisibleComponent
     return out;
   }
 
-  @SimpleFunction(description = "Daftar subfolder (path lengkap, tanpa rekursif).")
-  public List<String> ListFolders(FileScope scope, String path) {
-    try {
-      String p = Shared.clean(path);
-      if (scope == FileScope.Asset || Shared.isAssetPath(p)) {
-        Shared.err(this, "File", 0, "list folder Asset tidak didukung");
-        return new ArrayList<String>();
+  private void walkFilesByExt(File dir, ArrayList<String> exts,
+      boolean recursive, ArrayList<String> out) {
+    File[] fs = dir.listFiles();
+    if (fs == null) {
+      return;
+    }
+    for (int i = 0; i < fs.length; i = i + 1) {
+      File g = fs[i];
+      if (g.isDirectory()) {
+        if (recursive) {
+          walkFilesByExt(g, exts, true, out);
+        }
+      } else if (exts.isEmpty() || exts.contains(
+          Shared.extensionOf(g.getName()).toLowerCase())) {
+        out.add(g.getAbsolutePath());
       }
-      File d = Shared.resolve(context, scope, path);
-      if (d == null || !d.isDirectory()) {
-        Shared.err(this, "File", 0, "folder tidak ada");
-        return new ArrayList<String>();
-      }
-      return Shared.sortedDirs(d);
-    } catch (Exception e) {
-      String m = e.getMessage();
-      Shared.err(this, "File", 0, m == null ? "list gagal" : m);
-      return new ArrayList<String>();
     }
   }
 
-  // ================= TIPE FILE (helper kategori) =================
+  @SimpleFunction(description = "Daftar subfolder (path lengkap, tanpa "
+      + "rekursif). scoop seperti IsFileExists.")
+  public List<String> ListFolders(String folder, String scoop) {
+    ArrayList<String> out = new ArrayList<String>();
+    try {
+      String p = Shared.clean(folder);
+      if (wantAsset(scoop, p)) {
+        return out;
+      }
+      File d = scoopFile(scoop, p);
+      if (d == null || !d.isDirectory()) {
+        Shared.err(this, "File", 0, "folder tidak ada");
+        return out;
+      }
+      File[] fs = d.listFiles();
+      if (fs != null) {
+        for (int i = 0; i < fs.length; i = i + 1) {
+          if (fs[i].isDirectory()) {
+            out.add(fs[i].getAbsolutePath());
+          }
+        }
+      }
+      Collections.sort(out);
+    } catch (Exception e) {
+      String m = e.getMessage();
+      Shared.err(this, "File", 0, m == null ? "list gagal" : m);
+    }
+    return out;
+  }
 
   @SimpleFunction(description = "Kategori file dari nama/path: image, audio, "
       + "video, text, archive, document, apk, atau unknown. Berdasarkan "
-      + "ekstensi (tak peduli huruf besar: foto.JPG -> image). Bandingkan "
-      + "hasilnya dengan blok TypeImage/TypeAudio/dll. Daftar ekstensi tiap "
-      + "kategori via GetExtensionsForType.")
+      + "ekstensi (tak peduli huruf besar). Bandingkan dengan blok "
+      + "TypeImage/dll. Olah string saja.")
   public String FileTypeOf(String pathOrName) {
     return Shared.fileCategory(pathOrName);
   }
 
   @SimpleFunction(description = "Daftar file (path lengkap) yang kategorinya "
       + "cocok. type = image/audio/video/text/archive/document/apk (boleh "
-      + "juga alias: gambar/musik/vidio/teks/arsip/dokumen) atau salah satu "
-      + "blok TypeImage/dll. includeSubfolders = sertakan isi subfolder. "
-      + "Tipe tak dikenal via ErrorOccurred (OpFile).")
-  public List<String> ListFilesByType(FileScope scope, String folder,
-      String type, boolean includeSubfolders) {
+      + "alias: gambar/musik/vidio/teks/arsip/dokumen) atau salah satu blok "
+      + "TypeImage/dll. recursive = sertakan isi subfolder. "
+      + "scoop seperti IsFileExists.")
+  public List<String> ListFilesByType(String folder, String type,
+      boolean recursive, String scoop) {
     ArrayList<String> out = new ArrayList<String>();
     String cat = Shared.normCategory(type);
     if (cat.length() == 0) {
@@ -626,7 +1576,7 @@ public class Tools_File extends AndroidNonvisibleComponent
     }
     try {
       String p = Shared.clean(folder);
-      if (scope == FileScope.Asset || Shared.isAssetPath(p)) {
+      if (wantAsset(scoop, p)) {
         String[] l = context.getAssets().list(Shared.assetName(p));
         if (l != null) {
           for (int i = 0; i < l.length; i = i + 1) {
@@ -638,12 +1588,12 @@ public class Tools_File extends AndroidNonvisibleComponent
         Collections.sort(out);
         return out;
       }
-      File d = Shared.resolve(context, scope, folder);
+      File d = scoopFile(scoop, p);
       if (d == null || !d.isDirectory()) {
         Shared.err(this, "File", 0, "folder tidak ada");
         return out;
       }
-      walkFilesByCat(d, cat, includeSubfolders, out);
+      walkFilesByCat(d, cat, recursive, out);
       Collections.sort(out);
     } catch (Exception e) {
       String m = e.getMessage();
@@ -671,9 +1621,8 @@ public class Tools_File extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Daftar ekstensi (tanpa titik) yang masuk "
-      + "kategori type. Cth: image -> [bmp, gif, heic, ..., webp]. Berguna "
-      + "untuk melihat cakupan tiap kategori. Tipe tak dikenal = list kosong "
-      + "+ error.")
+      + "kategori type. Tipe tak dikenal = list kosong + error. "
+      + "Olah string saja.")
   public List<String> GetExtensionsForType(String type) {
     String cat = Shared.normCategory(type);
     if (cat.length() == 0) {
@@ -732,696 +1681,57 @@ public class Tools_File extends AndroidNonvisibleComponent
     return "unknown";
   }
 
-  private void walkFiles(File dir, String ext, boolean recursive, ArrayList<String> out) {    File[] fs = dir.listFiles();
-    if (fs == null) {
+  // ================= GET PERMISSION =================
+
+  @SimpleFunction(description = "Minta izin Android (cth: "
+      + "android.permission.READ_EXTERNAL_STORAGE). Hasil lewat "
+      + "GotPermission. Pasang need_permission dari event lain ke sini.")
+  public void GetPermission(final String permission) {
+    final String p = Shared.clean(permission);
+    if (p.length() == 0) {
+      Shared.err(this, "Permission", 0, "izin kosong");
+      fireOnUi(new Runnable() {
+        public void run() {
+          GotPermission(false, "", "izin kosong");
+        }
+      });
       return;
     }
-    for (int i = 0; i < fs.length; i = i + 1) {
-      File g = fs[i];
-      if (g.isDirectory()) {
-        if (recursive) {
-          walkFiles(g, ext, true, out);
-        }
-      } else if (matchExt(g.getName(), ext)) {
-        out.add(g.getAbsolutePath());
-      }
-    }
-  }
-
-  private static String normExt(String filter) {
-    String f = filter == null ? "" : filter.trim().toLowerCase();
-    if (f.equals("*")) {
-      return "";
-    }
-    if (f.startsWith(".")) {
-      f = f.substring(1);
-    }
-    return f;
-  }
-
-  private static boolean matchExt(String name, String ext) {
-    if (ext.length() == 0) {
-      return true;
-    }
-    return name.toLowerCase().endsWith("." + ext);
-  }
-
-  // ================= INSTAN: path =================
-
-  @SimpleFunction(description = "Path absolut dari scope+path. URL/base64/Asset = "
-      + "string kosong + error.")
-  public String GetFullPath(FileScope scope, String path) {
     try {
-      String p = Shared.clean(path);
-      if (p.length() == 0) {
-        Shared.err(this, "File", 0, "path kosong");
-        return "";
-      }
-      File f = Shared.resolve(context, scope, path);
-      if (f == null) {
-        Shared.err(this, "File", 0, "Asset tidak punya path file");
-        return "";
-      }
-      return f.getAbsolutePath();
-    } catch (Exception e) {
-      String m = e.getMessage();
-      Shared.err(this, "File", 0, m == null ? "path gagal di-resolve" : m);
-      return "";
-    }
-  }
-
-  @SimpleFunction(description = "Nama file dari sebuah path (buang foldernya).")
-  public String GetFileName(String path) {
-    return Shared.fileNameOf(path);
-  }
-
-  @SimpleFunction(description = "Ekstensi tanpa titik (huruf kecil). Cth: foto.JPG -> jpg.")
-  public String GetExtension(String path) {
-    return Shared.extensionOf(path);
-  }
-
-  @SimpleFunction(description = "Folder induk dari sebuah path. Cth: /a/b/c.jpg -> /a/b.")
-  public String GetParentFolder(String path) {
-    return Shared.parentOf(path);
-  }
-
-  // ================= BACA TEKS =================
-
-  @SimpleFunction(description = "Baca file teks (UTF-8) di background. Hasil lewat GotText. "
-      + "Satu bacaan per saat; sibuk = false + error.")
-  public boolean ReadText(FileScope scope, String path) {
-    if (!Shared.claimSlot("read")) {
-      Shared.err(this, "Read", 0, "masih ada bacaan berjalan");
-      return false;
-    }
-    final FileScope fS = scope;
-    final String fP = path == null ? "" : path;
-    ReadStarted(fS == null ? "" : fS.name(), fP);
-    AsynchUtil.runAsynchronously(new Runnable() {
-      public void run() {
-        InputStream in = null;
-        boolean ok = false;
-        String text = "";
-        String err = "";
-        String sc = "";
-        try {
-          sc = fS == null ? "" : fS.name();
-          String p = Shared.clean(fP);
-          if (fS == FileScope.Asset || Shared.isAssetPath(p)) {
-            in = context.getAssets().open(Shared.assetName(p));
-          } else {
-            File f = Shared.resolve(context, fS, fP);
-            if (f == null || !f.exists() || f.isDirectory()) {
-              err = "file tidak ada";
-            } else {
-              in = new FileInputStream(f);
-            }
-          }
-          if (in != null) {
-            java.io.BufferedReader r = new java.io.BufferedReader(
-                new java.io.InputStreamReader(in, "UTF-8"));
-            StringBuilder sb = new StringBuilder();
-            char[] buf = new char[8192];
-            int n;
-            while ((n = r.read(buf)) > 0) {
-              sb.append(buf, 0, n);
-            }
-            text = sb.toString();
-            ok = true;
-          }
-        } catch (Exception e) {
-          String m = e.getMessage();
-          err = m == null ? "baca gagal" : m;
-        } finally {
-          if (in != null) {
-            try {
-              in.close();
-            } catch (Exception e) {
-              // abaikan
-            }
-          }
-          Shared.releaseSlot("read");
-        }
-        final boolean fOk = ok;
-        final String fText = text;
-        final String fErr = err;
-        final String fSc = sc;
-        try {
-          form.runOnUiThread(new Runnable() {
+      form.askForPermission(p, new PermissionResultHandler() {
+        public void HandlePermissionResponse(String perm, boolean granted) {
+          final boolean g = granted;
+          fireOnUi(new Runnable() {
             public void run() {
-              GotText(fOk, fSc, fP, Shared.fileNameOf(fP), fText);
-            }
-          });
-        } catch (Exception e) {
-          GotText(fOk, fSc, fP, Shared.fileNameOf(fP), fText);
-        }
-        if (!fOk) {
-          Shared.err(Tools_File.this, "Read", 0, fErr);
-        }
-      }
-    });
-    return true;
-  }
-
-  // ================= SALIN / PINDAH =================
-
-  @SimpleFunction(description = "Salin file (Started/ProgressChanged/Finished). Asset hanya bisa "
-      + "jadi sumber. Satu salinan per saat; sibuk = false + error. Kembali: true = mulai.")
-  public boolean CopyFile(FileScope fromScope, String fromPath, FileScope toScope,
-      String toPath) {
-    if (!Shared.claimSlot("copy")) {
-      Shared.err(this, "Copy", 0, "masih ada salinan berjalan");
-      return false;
-    }
-    if (toScope == FileScope.Asset
-        || (toPath != null && Shared.isAssetPath(Shared.clean(toPath)))) {
-      Shared.releaseSlot("copy");
-      Shared.err(this, "Copy", 0, "tidak bisa salin ke Asset");
-      return false;
-    }
-    copyCancel = false;
-    final FileScope fS = fromScope;
-    final String fP = fromPath;
-    final FileScope tS = toScope;
-    final String tP = toPath;
-    AsynchUtil.runAsynchronously(new Runnable() {
-      public void run() {
-        runCopyMove(false, fS, fP, tS, tP);
-      }
-    });
-    return true;
-  }
-
-  @SimpleFunction(description = "Pindah file (Started/ProgressChanged/Finished). Asset hanya bisa "
-      + "jadi sumber (jadi salinan). Satu pindahan per saat. Kembali: true = mulai.")
-  public boolean MoveFile(FileScope fromScope, String fromPath, FileScope toScope,
-      String toPath) {
-    if (!Shared.claimSlot("move")) {
-      Shared.err(this, "Move", 0, "masih ada pindahan berjalan");
-      return false;
-    }
-    if (toScope == FileScope.Asset
-        || (toPath != null && Shared.isAssetPath(Shared.clean(toPath)))) {
-      Shared.releaseSlot("move");
-      Shared.err(this, "Move", 0, "tidak bisa pindah ke Asset");
-      return false;
-    }
-    moveCancel = false;
-    final FileScope fS = fromScope;
-    final String fP = fromPath;
-    final FileScope tS = toScope;
-    final String tP = toPath;
-    AsynchUtil.runAsynchronously(new Runnable() {
-      public void run() {
-        runCopyMove(true, fS, fP, tS, tP);
-      }
-    });
-    return true;
-  }
-
-  private void runCopyMove(boolean move, FileScope fS, String fP, FileScope tS, String tP) {
-    String kind = move ? "move" : "copy";
-    String scName = tS == null ? "" : tS.name();
-    String comp = move ? "Move" : "Copy";
-    InputStream in = null;
-    boolean fromAsset = false;
-    String aName = "";
-    File src = Shared.resolve(context, fS, fP);
-    long total = 0;
-    try {
-      if (src == null) {
-        String p = Shared.clean(fP);
-        if (fS == FileScope.Asset || Shared.isAssetPath(p)) {
-          fromAsset = true;
-          aName = Shared.assetName(p);
-        } else {
-          finishCopyMove(move, scName, false, "", "path sumber tidak valid");
-          return;
-        }
-      } else if (src.isDirectory()) {
-        finishCopyMove(move, scName, false, "", "sumber adalah folder");
-        return;
-      } else if (!src.exists()) {
-        finishCopyMove(move, scName, false, "", "file sumber tidak ada");
-        return;
-      }
-      File dst = Shared.resolve(context, tS, tP);
-      if (dst == null) {
-        finishCopyMove(move, scName, false, "", "tujuan tidak valid");
-        return;
-      }
-      if (dst.exists() && dst.isDirectory()) {
-        finishCopyMove(move, scName, false, "", "tujuan adalah folder");
-        return;
-      }
-      if (dst.getParentFile() != null) {
-        dst.getParentFile().mkdirs();
-      }
-      String dispName = Shared.fileNameOf(dst.getName());
-      fireStarted(move, dispName, dst.getAbsolutePath());
-      if (fromAsset) {
-        try {
-          total = context.getAssets().openFd(aName).getLength();
-        } catch (Exception e) {
-          total = -1;
-        }
-        in = context.getAssets().open(aName);
-      } else {
-        if (move && src.renameTo(dst)) {
-          fireProgress(move, 100, 1, 1);
-          finishCopyMove(move, scName, true, dst.getAbsolutePath(), "OK");
-          return;
-        }
-        total = src.length();
-        in = new FileInputStream(src);
-      }
-      FileOutputStream out = new FileOutputStream(dst);
-      try {
-        byte[] buf = new byte[32768];
-        long done = 0;
-        int lastPct = -1;
-        long lastFire = 0;
-        int n;
-        while ((n = in.read(buf)) > 0) {
-          if ((move && moveCancel) || (!move && copyCancel)) {
-            finishCopyMove(move, scName, false, "", "Dibatalkan");
-            try {
-              dst.delete();
-            } catch (Exception e) {
-              // abaikan
-            }
-            return;
-          }
-          out.write(buf, 0, n);
-          done = done + n;
-          int pct = total > 0 ? (int) (done * 100L / total) : 0;
-          long now = System.currentTimeMillis();
-          if (pct != lastPct && (now - lastFire >= PROGRESS_MIN_MS || pct == 100)) {
-            lastPct = pct;
-            lastFire = now;
-            fireProgress(move, pct, done, total);
-          }
-        }
-        out.flush();
-        if (move && !fromAsset) {
-          try {
-            src.delete();
-          } catch (Exception e) {
-            // abaikan, salinan sudah jadi
-          }
-        }
-        finishCopyMove(move, scName, true, dst.getAbsolutePath(), "OK");
-      } finally {
-        try {
-          out.close();
-        } catch (Exception e) {
-          // abaikan
-        }
-      }
-    } catch (Exception e) {
-      String m = e.getMessage();
-      finishCopyMove(move, scName, false, "", m == null ? "salin gagal" : m);
-    } finally {
-      if (in != null) {
-        try {
-          in.close();
-        } catch (Exception e) {
-          // abaikan
-        }
-      }
-      Shared.releaseSlot(kind);
-    }
-  }
-
-  private void fireStarted(final boolean move, final String fileName, final String destPath) {
-    try {
-      form.runOnUiThread(new Runnable() {
-        public void run() {
-          if (move) {
-            MoveStarted(fileName, destPath);
-          } else {
-            CopyStarted(fileName, destPath);
-          }
-        }
-      });
-    } catch (Exception e) {
-      // abaikan
-    }
-  }
-
-  private void fireProgress(final boolean move, final int pct, final long done, final long total) {
-    try {
-      form.runOnUiThread(new Runnable() {
-        public void run() {
-          if (move) {
-            MoveProgressChanged(pct, done, total);
-          } else {
-            CopyProgressChanged(pct, done, total);
-          }
-        }
-      });
-    } catch (Exception e) {
-      // abaikan
-    }
-  }
-
-  private void finishCopyMove(final boolean move, final String sc,
-      final boolean success, final String destPath, final String msg) {
-    final String fn = Shared.fileNameOf(destPath);
-    try {
-      form.runOnUiThread(new Runnable() {
-        public void run() {
-          if (move) {
-            MoveFinished(success, sc, destPath, fn, msg);
-          } else {
-            CopyFinished(success, sc, destPath, fn, msg);
-          }
-        }
-      });
-    } catch (Exception e) {
-      if (move) {
-        MoveFinished(success, sc, destPath, fn, msg);
-      } else {
-        CopyFinished(success, sc, destPath, fn, msg);
-      }
-    }
-    if (!success && !"Dibatalkan".equals(msg)) {
-      Shared.err(this, move ? "Move" : "Copy", 0, msg);
-    }
-  }
-
-  @SimpleFunction(description = "Batalkan salinan berjalan. File sebagian dihapus.")
-  public void CancelCopy() {
-    if (!Shared.slotBusy("copy")) {
-      Shared.err(this, "Copy", 0, "tidak ada salinan berjalan");
-      return;
-    }
-    copyCancel = true;
-  }
-
-  @SimpleFunction(description = "Batalkan pindahan berjalan. File sebagian dihapus.")
-  public void CancelMove() {
-    if (!Shared.slotBusy("move")) {
-      Shared.err(this, "Move", 0, "tidak ada pindahan berjalan");
-      return;
-    }
-    moveCancel = true;
-  }
-
-  @SimpleFunction(description = "True bila ada salinan berjalan.")
-  public boolean IsCopyBusy() {
-    return Shared.slotBusy("copy");
-  }
-
-  @SimpleFunction(description = "True bila ada pindahan berjalan.")
-  public boolean IsMoveBusy() {
-    return Shared.slotBusy("move");
-  }
-
-  // ================= BATCH: list =================
-
-  @SimpleFunction(description = "Salin BANYAK file sekaligus ke satu folder (tanpa loop manual). "
-      + "fromPaths = list path sumber. Kembali: true = mulai. "
-      + "Pantau via CopyBatchStarted/ProgressChanged/Finished.")
-  public boolean CopyList(FileScope fromScope, Object fromPaths, FileScope toScope,
-      String toFolder) {
-    if (!Shared.claimSlot("copy")) {
-      Shared.err(this, "Copy", 0, "masih ada salinan berjalan");
-      return false;
-    }
-    if (toScope == FileScope.Asset
-        || (toFolder != null && Shared.isAssetPath(Shared.clean(toFolder)))) {
-      Shared.releaseSlot("copy");
-      Shared.err(this, "Copy", 0, "tidak bisa salin ke Asset");
-      return false;
-    }
-    final FileScope fS = fromScope;
-    final List<String> paths = toStringList(fromPaths);
-    final FileScope tS = toScope;
-    final String tF = toFolder == null ? "" : toFolder;
-    if (paths.isEmpty()) {
-      Shared.releaseSlot("copy");
-      Shared.err(this, "Copy", 0, "list kosong");
-      return false;
-    }
-    batchCancel = false;
-    copyCancel = false;
-    AsynchUtil.runAsynchronously(new Runnable() {
-      public void run() {
-        runBatch(false, fS, paths, tS, tF);
-      }
-    });
-    return true;
-  }
-
-  @SimpleFunction(description = "Pindah BANYAK file sekaligus ke satu folder. "
-      + "Pantau via MoveBatchStarted/ProgressChanged/Finished.")
-  public boolean MoveList(FileScope fromScope, Object fromPaths, FileScope toScope,
-      String toFolder) {
-    if (!Shared.claimSlot("move")) {
-      Shared.err(this, "Move", 0, "masih ada pindahan berjalan");
-      return false;
-    }
-    if (toScope == FileScope.Asset
-        || (toFolder != null && Shared.isAssetPath(Shared.clean(toFolder)))) {
-      Shared.releaseSlot("move");
-      Shared.err(this, "Move", 0, "tidak bisa pindah ke Asset");
-      return false;
-    }
-    final FileScope fS = fromScope;
-    final List<String> paths = toStringList(fromPaths);
-    final FileScope tS = toScope;
-    final String tF = toFolder == null ? "" : toFolder;
-    if (paths.isEmpty()) {
-      Shared.releaseSlot("move");
-      Shared.err(this, "Move", 0, "list kosong");
-      return false;
-    }
-    batchCancel = false;
-    moveCancel = false;
-    AsynchUtil.runAsynchronously(new Runnable() {
-      public void run() {
-        runBatch(true, fS, paths, tS, tF);
-      }
-    });
-    return true;
-  }
-
-  private void runBatch(final boolean move, FileScope fS, List<String> paths, FileScope tS,
-      String folder) {
-    String kind = move ? "move" : "copy";
-    String bSc = tS == null ? "" : tS.name();
-    String comp = move ? "Move" : "Copy";
-    int total = paths.size();
-    int done = 0;
-    int fail = 0;
-    try {
-      File dir = Shared.resolve(context, tS, folder);
-      if (dir == null) {
-        batchFinished(move, false, bSc, "", 0, total, "folder tujuan tidak valid");
-        return;
-      }
-      if (!dir.exists()) {
-        dir.mkdirs();
-      }
-      final int fTotal = total;
-      final String fFolder = dir.getAbsolutePath();
-      try {
-        form.runOnUiThread(new Runnable() {
-          public void run() {
-            if (move) {
-              MoveBatchStarted(fTotal, fFolder);
-            } else {
-              CopyBatchStarted(fTotal, fFolder);
-            }
-          }
-        });
-      } catch (Exception e) {
-        // abaikan
-      }
-      for (int i = 0; i < paths.size(); i = i + 1) {
-        if (batchCancel || (move && moveCancel) || (!move && copyCancel)) {
-          batchFinished(move, false, bSc, fFolder, done, total - done,
-              "Dibatalkan");
-          return;
-        }
-        String srcP = paths.get(i);
-        String name = Shared.fileNameOf(Shared.clean(srcP));
-        if (name.length() == 0) {
-          name = "file_" + i;
-        }
-        final int idx = i + 1;
-        final int fT = total;
-        final String fName = name;
-        final int lastPct = 0;
-        try {
-          form.runOnUiThread(new Runnable() {
-            public void run() {
-              if (move) {
-                MoveBatchProgressChanged(idx, fT, fName, lastPct);
-              } else {
-                CopyBatchProgressChanged(idx, fT, fName, lastPct);
+              if (!g) {
+                Shared.err(Tools_File.this, "Permission", 0,
+                    "izin ditolak: " + p);
               }
+              GotPermission(g, p, g ? "" : "izin ditolak: " + p);
             }
           });
-        } catch (Exception e) {
-          // abaikan
-        }
-        if (copyOneFile(move, fS, srcP, tS, folder + "/" + name)) {
-          done = done + 1;
-        } else {
-          fail = fail + 1;
-        }
-        final int dIdx = i + 1;
-        try {
-          form.runOnUiThread(new Runnable() {
-            public void run() {
-              if (move) {
-                MoveBatchProgressChanged(dIdx, fT, fName, 100);
-              } else {
-                CopyBatchProgressChanged(dIdx, fT, fName, 100);
-              }
-            }
-          });
-        } catch (Exception e) {
-          // abaikan
-        }
-      }
-      batchFinished(move, fail == 0, bSc, fFolder, done, fail, "OK");
-    } catch (Exception e) {
-      String m = e.getMessage();
-      batchFinished(move, false, bSc, "", done, total - done,
-          m == null ? "batch gagal" : m);
-    } finally {
-      Shared.releaseSlot(kind);
-    }
-  }
-
-  private boolean copyOneFile(boolean move, FileScope fS, String fP, FileScope tS,
-      String tP) {
-    InputStream in = null;
-    try {
-      File src = Shared.resolve(context, fS, fP);
-      File dst = Shared.resolve(context, tS, tP);
-      if (dst == null) {
-        return false;
-      }
-      if (dst.getParentFile() != null) {
-        dst.getParentFile().mkdirs();
-      }
-      if (src == null) {
-        String p = Shared.clean(fP);
-        if (fS == FileScope.Asset || Shared.isAssetPath(p)) {
-          in = context.getAssets().open(Shared.assetName(p));
-        } else {
-          return false;
-        }
-      } else if (src.isDirectory() || !src.exists()) {
-        return false;
-      } else {
-        if (move && src.renameTo(dst)) {
-          return true;
-        }
-        in = new FileInputStream(src);
-      }
-      FileOutputStream out = new FileOutputStream(dst);
-      try {
-        byte[] buf = new byte[32768];
-        int n;
-        while ((n = in.read(buf)) > 0) {
-          if (batchCancel || (move && moveCancel) || (!move && copyCancel)) {
-            return false;
-          }
-          out.write(buf, 0, n);
-        }
-        out.flush();
-      } finally {
-        try {
-          out.close();
-        } catch (Exception e) {
-          // abaikan
-        }
-      }
-      if (move && src != null && !Shared.isAssetPath(Shared.clean(fP))
-          && fS != FileScope.Asset) {
-        try {
-          src.delete();
-        } catch (Exception e) {
-          // abaikan
-        }
-      }
-      return true;
-    } catch (Exception e) {
-      return false;
-    } finally {
-      if (in != null) {
-        try {
-          in.close();
-        } catch (Exception e) {
-          // abaikan
-        }
-      }
-    }
-  }
-
-  private void batchFinished(final boolean move, final boolean success, final String sc,
-      final String folder, final int doneCount, final int failCount, final String msg) {
-    try {
-      form.runOnUiThread(new Runnable() {
-        public void run() {
-          if (move) {
-            MoveBatchFinished(success, sc, folder, doneCount, failCount, msg);
-          } else {
-            CopyBatchFinished(success, sc, folder, doneCount, failCount, msg);
-          }
         }
       });
     } catch (Exception e) {
-      if (move) {
-        MoveBatchFinished(success, sc, folder, doneCount, failCount, msg);
-      } else {
-        CopyBatchFinished(success, sc, folder, doneCount, failCount, msg);
+      String m = e.getMessage();
+      if (m == null) {
+        m = "minta izin gagal";
       }
-    }
-    if (!success && !"Dibatalkan".equals(msg)) {
-      Shared.err(this, move ? "Move" : "Copy", 0, msg);
+      final String msg = m;
+      Shared.err(this, "Permission", 0, msg);
+      fireOnUi(new Runnable() {
+        public void run() {
+          GotPermission(false, p, msg);
+        }
+      });
     }
   }
 
-  @SuppressWarnings("unchecked")
-  private List<String> toStringList(Object paths) {
-    ArrayList<String> out = new ArrayList<String>();
-    try {
-      if (paths == null) {
-        return out;
-      }
-      if (paths instanceof List) {
-        List<Object> l = (List<Object>) paths;
-        for (int i = 0; i < l.size(); i = i + 1) {
-          Object o = l.get(i);
-          if (o != null) {
-            String s = o.toString();
-            if (s.length() > 0) {
-              out.add(s);
-            }
-          }
-        }
-      } else {
-        String s = paths.toString();
-        if (s.length() > 0) {
-          out.add(s);
-        }
-      }
-    } catch (Exception e) {
-      // abaikan
-    }
-    return out;
-  }
+  // ================= PICKER & BUKA =================
 
-  // ================= FILE PICKER =================
-
-  @SimpleFunction(description = "Buka pemilih file. mimeType contoh: image/* (kosong = semua). "
-      + "Hasil lewat AfterFilePicked (uri + path + nama file). Satu picker per saat.")
+  @SimpleFunction(description = "Buka pemilih file. mimeType contoh: image/* "
+      + "(kosong = semua). Hasil lewat AfterFilePicked (uri + path + nama "
+      + "file). Satu picker per saat.")
   public void OpenFilePicker(String mimeType) {
     if (!Shared.claimSlot("pick")) {
       Shared.err(this, "Pick", 0, "picker sudah dibuka");
@@ -1455,11 +1765,13 @@ public class Tools_File extends AndroidNonvisibleComponent
     }
     Shared.releaseSlot("pick");
     try {
-      if (resultCode == Activity.RESULT_OK && data != null && data.getData() != null) {
+      if (resultCode == Activity.RESULT_OK && data != null
+          && data.getData() != null) {
         final Uri uri = data.getData();
         final String uriStr = uri.toString();
         final String path = resolveUriToPath(uri);
-        AfterFilePicked(true, "Cache", uriStr, path, Shared.fileNameOf(path));
+        AfterFilePicked(true, "Cache", uriStr, path,
+            Shared.fileNameOf(path));
       } else {
         AfterFilePicked(false, "", "", "", "");
       }
@@ -1536,16 +1848,15 @@ public class Tools_File extends AndroidNonvisibleComponent
     }
   }
 
-  // ================= OPEN FILE =================
-
-  @SimpleFunction(description = "Buka file dengan aplikasi lain (musik, gambar, PDF, ...). "
-      + "Hasil lewat AfterOpenFile. Asset disalin ke cache dulu.")
-  public void OpenFile(FileScope scope, String path) {
+  @SimpleFunction(description = "Buka file dengan aplikasi lain (musik, "
+      + "gambar, PDF, ...). scoop seperti IsFileExists. Hasil lewat "
+      + "AfterOpenFile. Asset disalin ke cache dulu.")
+  public void OpenFile(String path, String scoop) {
     try {
       String p = Shared.clean(path);
-      File f = Shared.resolve(context, scope, path);
+      File f = scoopFile(scoop, path);
       if (f == null) {
-        if (scope == FileScope.Asset || Shared.isAssetPath(p)) {
+        if (wantAsset(scoop, p)) {
           File cache = context.getCacheDir();
           if (!cache.exists()) {
             cache.mkdirs();
@@ -1600,188 +1911,222 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   // ================= EVENTS =================
 
-  @SimpleEvent(description = "Bacaan dimulai: persiapan (tampilkan loading).")
+  @SimpleEvent(description = "Hasil CallSetHiddenDirectory: path + success + "
+      + "message + needPermission (isi = izin yang harus diminta bila "
+      + "gagal karena izin).")
+  public void DirectoryHidden(String path, boolean success, String message,
+      String needPermission) {
+    EventDispatcher.dispatchEvent(this, "DirectoryHidden", path,
+        Boolean.valueOf(success), message, needPermission);
+  }
+
+  @SimpleEvent(description = "Hasil CallMakeNomediaFile: path + success + "
+      + "message + needPermission.")
+  public void NomediaFileCreated(String path, boolean success, String message,
+      String needPermission) {
+    EventDispatcher.dispatchEvent(this, "NomediaFileCreated", path,
+        Boolean.valueOf(success), message, needPermission);
+  }
+
+  @SimpleEvent(description = "Hasil CallDeleteNomediaFile: path + success + "
+      + "message + needPermission.")
+  public void NomediaFileDeleted(String path, boolean success, String message,
+      String needPermission) {
+    EventDispatcher.dispatchEvent(this, "NomediaFileDeleted", path,
+        Boolean.valueOf(success), message, needPermission);
+  }
+
+  @SimpleEvent(description = "Hasil CallMakeDirectory: path + success + "
+      + "message + needPermission.")
+  public void DirectoryCreated(String path, boolean success, String message,
+      String needPermission) {
+    EventDispatcher.dispatchEvent(this, "DirectoryCreated", path,
+        Boolean.valueOf(success), message, needPermission);
+  }
+
+  @SimpleEvent(description = "Hasil CallDeleteFile: path + success + "
+      + "message + needPermission.")
+  public void FileDeleted(String path, boolean success, String message,
+      String needPermission) {
+    EventDispatcher.dispatchEvent(this, "FileDeleted", path,
+        Boolean.valueOf(success), message, needPermission);
+  }
+
+  @SimpleEvent(description = "Hasil CallDeleteList: success + total + "
+      + "terhapus + message + needPermission.")
+  public void FileListDeleted(boolean success, int total, int deleted,
+      String message, String needPermission) {
+    EventDispatcher.dispatchEvent(this, "FileListDeleted",
+        Boolean.valueOf(success), Integer.valueOf(total),
+        Integer.valueOf(deleted), message, needPermission);
+  }
+
+  @SimpleEvent(description = "Hasil CallRenameFile: path (nama baru) + "
+      + "success + message + needPermission.")
+  public void FileRenamed(String path, boolean success, String message,
+      String needPermission) {
+    EventDispatcher.dispatchEvent(this, "FileRenamed", path,
+        Boolean.valueOf(success), message, needPermission);
+  }
+
+  @SimpleEvent(description = "Hasil CallRenameFolder: path (nama baru) + "
+      + "success + message + needPermission.")
+  public void FolderRenamed(String path, boolean success, String message,
+      String needPermission) {
+    EventDispatcher.dispatchEvent(this, "FolderRenamed", path,
+        Boolean.valueOf(success), message, needPermission);
+  }
+
+  @SimpleEvent(description = "Hasil CallCreateEmptyFile: path + success + "
+      + "message + needPermission.")
+  public void EmptyFileCreated(String path, boolean success, String message,
+      String needPermission) {
+    EventDispatcher.dispatchEvent(this, "EmptyFileCreated", path,
+        Boolean.valueOf(success), message, needPermission);
+  }
+
+  @SimpleEvent(description = "Hasil CallSaveFile: path + success + "
+      + "message + needPermission.")
+  public void FileSaved(String path, boolean success, String message,
+      String needPermission) {
+    EventDispatcher.dispatchEvent(this, "FileSaved", path,
+        Boolean.valueOf(success), message, needPermission);
+  }
+
+  @SimpleEvent(description = "Hasil CallSaveBase64ToFile: path + success + "
+      + "message + needPermission.")
+  public void Base64FileSaved(String path, boolean success, String message,
+      String needPermission) {
+    EventDispatcher.dispatchEvent(this, "Base64FileSaved", path,
+        Boolean.valueOf(success), message, needPermission);
+  }
+
+  @SimpleEvent(description = "Bacaan dimulai (CallReadText): persiapan "
+      + "(tampilkan loading).")
   public void ReadStarted(String scope, String path) {
     EventDispatcher.dispatchEvent(this, "ReadStarted", scope, path);
   }
 
-  @SimpleEvent(description = "Hasil ReadText: success pertama, scope menemani path, "
-      + "fileName paling belakang, content = isi file.")
-  public void GotText(boolean success, String scope, String path, String fileName,
-      String content) {
-    EventDispatcher.dispatchEvent(this, "GotText", Boolean.valueOf(success), scope,
-        path, fileName, content);
+  @SimpleEvent(description = "Hasil CallReadText: success pertama, scoop "
+      + "menemani path, fileName paling belakang, content = isi file.")
+  public void GotText(boolean success, String scope, String path,
+      String fileName, String content) {
+    EventDispatcher.dispatchEvent(this, "GotText", Boolean.valueOf(success),
+        scope, path, fileName, content);
   }
 
-  @SimpleEvent(description = "Simpan base64 ke file dimulai: siapkan loading.")
-  public void Base64FileStarted() {
-    EventDispatcher.dispatchEvent(this, "Base64FileStarted");
+  @SimpleEvent(description = "Salin/pindah dimulai: path sumber + tujuan + "
+      + "nama file + isMoved.")
+  public void CopyOrMoveStarted(String fromPath, String toPath,
+      String fileName, boolean isMoved) {
+    EventDispatcher.dispatchEvent(this, "CopyOrMoveStarted", fromPath,
+        toPath, fileName, Boolean.valueOf(isMoved));
   }
 
-  @SimpleEvent(description = "Hasil SaveBase64ToFile: success pertama, scope menemani path, "
-      + "fileName paling belakang.")
-  public void AfterBase64FileReady(boolean success, String scope, String path,
-      String fileName, String message) {
-    EventDispatcher.dispatchEvent(this, "AfterBase64FileReady",
-        Boolean.valueOf(success), scope, path, fileName, message);
+  @SimpleEvent(description = "Progres salin/pindah: persen 0-100 + byte "
+      + "total & berjalan.")
+  public void CopyOrMoveProgressChanged(int progress, long byteTotal,
+      long byteProgress) {
+    EventDispatcher.dispatchEvent(this, "CopyOrMoveProgressChanged",
+        Integer.valueOf(progress), Long.valueOf(byteTotal),
+        Long.valueOf(byteProgress));
   }
 
-  @SimpleEvent(description = "Salinan dimulai: siapkan tampilan progres.")
-  public void CopyStarted(String fileName, String destPath) {
-    EventDispatcher.dispatchEvent(this, "CopyStarted", fileName, destPath);
+  @SimpleEvent(description = "Salin/pindah selesai: success + path + nama "
+      + "file + isDuplicated (true = tujuan sudah ada, tidak ditimpa, "
+      + "rename manual).")
+  public void CopyOrMoveFinished(boolean success, String path,
+      String fileName, boolean isDuplicated) {
+    EventDispatcher.dispatchEvent(this, "CopyOrMoveFinished",
+        Boolean.valueOf(success), path, fileName,
+        Boolean.valueOf(isDuplicated));
   }
 
-  @SimpleEvent(description = "Progres salinan berubah: persen 0-100 + byte.")
-  public void CopyProgressChanged(int percent, long copiedBytes, long totalBytes) {
-    EventDispatcher.dispatchEvent(this, "CopyProgressChanged",
-        Integer.valueOf(percent), Long.valueOf(copiedBytes), Long.valueOf(totalBytes));
-  }
-
-  @SimpleEvent(description = "Salinan selesai: success pertama, scope menemani destPath, "
-      + "fileName paling belakang.")
-  public void CopyFinished(boolean success, String scope, String destPath, String fileName,
+  @SimpleEvent(description = "Hasil GetPermission: success + izin + pesan. "
+      + "Pasang need_permission dari event lain ke GetPermission.")
+  public void GotPermission(boolean success, String permission,
       String message) {
-    EventDispatcher.dispatchEvent(this, "CopyFinished", Boolean.valueOf(success), scope,
-        destPath, fileName, message);
+    EventDispatcher.dispatchEvent(this, "GotPermission",
+        Boolean.valueOf(success), permission, message);
   }
 
-  @SimpleEvent(description = "Pindahan dimulai: siapkan tampilan progres.")
-  public void MoveStarted(String fileName, String destPath) {
-    EventDispatcher.dispatchEvent(this, "MoveStarted", fileName, destPath);
-  }
-
-  @SimpleEvent(description = "Progres pindahan berubah: persen 0-100 + byte.")
-  public void MoveProgressChanged(int percent, long movedBytes, long totalBytes) {
-    EventDispatcher.dispatchEvent(this, "MoveProgressChanged",
-        Integer.valueOf(percent), Long.valueOf(movedBytes), Long.valueOf(totalBytes));
-  }
-
-  @SimpleEvent(description = "Pindahan selesai: success pertama, scope menemani destPath, "
-      + "fileName paling belakang.")
-  public void MoveFinished(boolean success, String scope, String destPath, String fileName,
-      String message) {
-    EventDispatcher.dispatchEvent(this, "MoveFinished", Boolean.valueOf(success), scope,
-        destPath, fileName, message);
-  }
-
-  @SimpleEvent(description = "Batch salinan dimulai: total file + folder tujuan.")
-  public void CopyBatchStarted(int total, String destFolder) {
-    EventDispatcher.dispatchEvent(this, "CopyBatchStarted",
-        Integer.valueOf(total), destFolder);
-  }
-
-  @SimpleEvent(description = "Progres batch salinan berubah: index/total + nama file + "
-      + "persen file itu.")
-  public void CopyBatchProgressChanged(int index, int total, String fileName,
-      int filePercent) {
-    EventDispatcher.dispatchEvent(this, "CopyBatchProgressChanged",
-        Integer.valueOf(index), Integer.valueOf(total), fileName,
-        Integer.valueOf(filePercent));
-  }
-
-  @SimpleEvent(description = "Batch salinan selesai: success + scope + folder + "
-      + "jumlah ok/gagal.")
-  public void CopyBatchFinished(boolean success, String scope, String destFolder,
-      int doneCount, int failCount, String message) {
-    EventDispatcher.dispatchEvent(this, "CopyBatchFinished", Boolean.valueOf(success),
-        scope, destFolder, Integer.valueOf(doneCount), Integer.valueOf(failCount),
-        message);
-  }
-
-  @SimpleEvent(description = "Batch pindahan dimulai: total file + folder tujuan.")
-  public void MoveBatchStarted(int total, String destFolder) {
-    EventDispatcher.dispatchEvent(this, "MoveBatchStarted",
-        Integer.valueOf(total), destFolder);
-  }
-
-  @SimpleEvent(description = "Progres batch pindahan berubah: index/total + nama file + "
-      + "persen file itu.")
-  public void MoveBatchProgressChanged(int index, int total, String fileName,
-      int filePercent) {
-    EventDispatcher.dispatchEvent(this, "MoveBatchProgressChanged",
-        Integer.valueOf(index), Integer.valueOf(total), fileName,
-        Integer.valueOf(filePercent));
-  }
-
-  @SimpleEvent(description = "Batch pindahan selesai: success + scope + folder + "
-      + "jumlah ok/gagal.")
-  public void MoveBatchFinished(boolean success, String scope, String destFolder,
-      int doneCount, int failCount, String message) {
-    EventDispatcher.dispatchEvent(this, "MoveBatchFinished", Boolean.valueOf(success),
-        scope, destFolder, Integer.valueOf(doneCount), Integer.valueOf(failCount),
-        message);
-  }
-
-  @SimpleEvent(description = "Hasil OpenFilePicker: success pertama, scope menemani path, "
-      + "fileName paling belakang. success=false = dibatalkan user.")
-  public void AfterFilePicked(boolean success, String scope, String uri, String path,
-      String fileName) {
-    EventDispatcher.dispatchEvent(this, "AfterFilePicked", Boolean.valueOf(success),
-        scope, uri, path, fileName);
+  @SimpleEvent(description = "Hasil OpenFilePicker: success pertama, scope "
+      + "menemani path, fileName paling belakang. success=false = dibatalkan "
+      + "user.")
+  public void AfterFilePicked(boolean success, String scope, String uri,
+      String path, String fileName) {
+    EventDispatcher.dispatchEvent(this, "AfterFilePicked",
+        Boolean.valueOf(success), scope, uri, path, fileName);
   }
 
   @SimpleEvent(description = "Hasil OpenFile: success + pesan.")
   public void AfterOpenFile(boolean success, String message) {
-    EventDispatcher.dispatchEvent(this, "AfterOpenFile", Boolean.valueOf(success),
-        message);
+    EventDispatcher.dispatchEvent(this, "AfterOpenFile",
+        Boolean.valueOf(success), message);
   }
 
-  @SimpleEvent(description = "SATU-SATUNYA error Tools_File. component = nama operasi "
-      + "(bandingkan dengan blok Op...). id selalu 0 (tanpa id).")
+  @SimpleEvent(description = "SATU-SATUNYA error Tools_File. component = nama "
+      + "operasi (bandingkan dengan blok Op...). id selalu 0 (tanpa id).")
   public void ErrorOccurred(String component, int id, String message) {
-    EventDispatcher.dispatchEvent(this, "ErrorOccurred",
-        component, Integer.valueOf(id), message);
+    EventDispatcher.dispatchEvent(this, "ErrorOccurred", component,
+        Integer.valueOf(id), message);
   }
 
   @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred: "
-      + "pesan error terakhir operasi ini (Copy/Move/Read/File/Pick/Open/dll, "
-      + "kosong bila belum ada).")
+      + "pesan error terakhir operasi ini (Directory/File/Read/Base64/"
+      + "CopyOrMove/Pick/Open/Permission, kosong bila belum ada).")
   public String LastError(String operation) {
     return Shared.lastError(operation);
   }
 
   // ================= OP =================
 
-  @SimpleProperty(description = "Nama operasi Copy (untuk if di ErrorOccurred).",
-      category = PropertyCategory.BEHAVIOR)
-  public String OpCopy() {
-    return "Copy";
+  @SimpleProperty(description = "Nama operasi direktori (untuk if di "
+      + "ErrorOccurred).", category = PropertyCategory.BEHAVIOR)
+  public String OpDirectory() {
+    return "Directory";
   }
 
-  @SimpleProperty(description = "Nama operasi Move (untuk if di ErrorOccurred).",
-      category = PropertyCategory.BEHAVIOR)
-  public String OpMove() {
-    return "Move";
-  }
-
-  @SimpleProperty(description = "Nama operasi Read (untuk if di ErrorOccurred).",
-      category = PropertyCategory.BEHAVIOR)
-  public String OpRead() {
-    return "Read";
-  }
-
-  @SimpleProperty(description = "Nama operasi File umum/instan (untuk if di ErrorOccurred).",
-      category = PropertyCategory.BEHAVIOR)
+  @SimpleProperty(description = "Nama operasi File umum (untuk if di "
+      + "ErrorOccurred).", category = PropertyCategory.BEHAVIOR)
   public String OpFile() {
     return "File";
   }
 
-  @SimpleProperty(description = "Nama operasi Pick (untuk if di ErrorOccurred).",
-      category = PropertyCategory.BEHAVIOR)
+  @SimpleProperty(description = "Nama operasi Read (untuk if di "
+      + "ErrorOccurred).", category = PropertyCategory.BEHAVIOR)
+  public String OpRead() {
+    return "Read";
+  }
+
+  @SimpleProperty(description = "Nama operasi Base64 (untuk if di "
+      + "ErrorOccurred).", category = PropertyCategory.BEHAVIOR)
+  public String OpBase64() {
+    return "Base64";
+  }
+
+  @SimpleProperty(description = "Nama operasi salin/pindah (untuk if di "
+      + "ErrorOccurred).", category = PropertyCategory.BEHAVIOR)
+  public String OpCopyOrMove() {
+    return "CopyOrMove";
+  }
+
+  @SimpleProperty(description = "Nama operasi Pick (untuk if di "
+      + "ErrorOccurred).", category = PropertyCategory.BEHAVIOR)
   public String OpPick() {
     return "Pick";
   }
 
-  @SimpleProperty(description = "Nama operasi Open (untuk if di ErrorOccurred).",
-      category = PropertyCategory.BEHAVIOR)
+  @SimpleProperty(description = "Nama operasi Open (untuk if di "
+      + "ErrorOccurred).", category = PropertyCategory.BEHAVIOR)
   public String OpOpen() {
     return "Open";
   }
 
-  @SimpleProperty(description = "Nama operasi Base64 (untuk if di ErrorOccurred).",
-      category = PropertyCategory.BEHAVIOR)
-  public String OpBase64() {
-    return "Base64";
+  @SimpleProperty(description = "Nama operasi Permission (untuk if di "
+      + "ErrorOccurred).", category = PropertyCategory.BEHAVIOR)
+  public String OpPermission() {
+    return "Permission";
   }
 
   // ================= destroy =================
@@ -1792,11 +2137,8 @@ public class Tools_File extends AndroidNonvisibleComponent
     } catch (Exception e) {
       // abaikan
     }
-    copyCancel = true;
-    moveCancel = true;
-    batchCancel = true;
-    Shared.releaseSlot("copy");
-    Shared.releaseSlot("move");
+    copyMoveCancel = true;
+    Shared.releaseSlot("copyormove");
     Shared.releaseSlot("read");
     Shared.releaseSlot("pick");
     Shared.releaseSlot("b64file");

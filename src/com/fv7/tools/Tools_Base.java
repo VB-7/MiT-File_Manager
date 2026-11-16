@@ -10,6 +10,7 @@ import com.google.appinventor.components.annotations.SimpleFunction;
 import com.google.appinventor.components.annotations.SimpleObject;
 import com.google.appinventor.components.annotations.SimpleProperty;
 import com.google.appinventor.components.common.ComponentCategory;
+import com.google.appinventor.components.common.FileScope;
 import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
 import com.google.appinventor.components.runtime.ComponentContainer;
 import com.google.appinventor.components.runtime.EventDispatcher;
@@ -423,6 +424,35 @@ public class Tools_Base extends AndroidNonvisibleComponent {
     Tools_Image.clearSliderStatic(id);
   }
 
+  // ================= SCOPE (Helper) =================
+
+  @SimpleFunction(description = "Atur scope bawaan (Helper) untuk SEMUA operasi "
+      + "file Tools_* (ShowImage, Download, SaveFile, dst). Bisa absolut "
+      + "(\"berlaku apa adanya\") atau relatif (ikut scope ini). "
+      + "Default App. Pilihan tetap juga ada di Designer (properti "
+      + "DefaultScope tiap komponen file). Copy/Move tidak ikut (punya "
+      + "scope sendiri).")
+  public void SetScope(FileScope scope) {
+    Shared.setDefaultScope(scope);
+  }
+
+  @SimpleFunction(description = "Baca scope bawaan saat ini (nama: App, "
+      + "Private, Cache, Shared, Legacy, Asset).")
+  public String GetScope() {
+    FileScope s = Shared.getDefaultScope();
+    return s == null ? "App" : s.name();
+  }
+
+  @SimpleFunction(description = "Tempel scope ke SATU path saja (tidak "
+      + "mempengaruhi path lain). Cth: Scope(App, \"gambar/a.jpg\") jadi "
+      + "\"App:gambar/a.jpg\" — colok hasilnya ke path blok file mana pun. "
+      + "Di dalam fungsi file, prefix ini MENANG atas scope bawaan.")
+  public String Scope(FileScope scope, String path) {
+    FileScope s = scope == null ? Shared.getDefaultScope() : scope;
+    String p = Shared.normalizePath(path == null ? "" : path);
+    return s.name() + ":" + p;
+  }
+
   // ================= ID: Task =================
 
   @SimpleFunction(description = "Semua id tugas/alarm Tools_Task (URUT PEMBUATAN, "
@@ -615,7 +645,7 @@ public class Tools_Base extends AndroidNonvisibleComponent {
 
   @SimpleFunction(description = "Versi paket Tools (sama untuk semua Tools_* dalam satu .aix).")
   public int ToolsVersion() {
-    return 9;
+    return 11;
   }
 
   // ================= OP + ERROR =================
