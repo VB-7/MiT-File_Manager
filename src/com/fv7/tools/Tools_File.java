@@ -813,7 +813,7 @@ public class Tools_File extends AndroidNonvisibleComponent
     }
   }
 
-  private void fireStarted(boolean move, final String fileName, final String destPath) {
+  private void fireStarted(final boolean move, final String fileName, final String destPath) {
     try {
       form.runOnUiThread(new Runnable() {
         public void run() {
@@ -829,7 +829,7 @@ public class Tools_File extends AndroidNonvisibleComponent
     }
   }
 
-  private void fireProgress(boolean move, final int pct, final long done, final long total) {
+  private void fireProgress(final boolean move, final int pct, final long done, final long total) {
     try {
       form.runOnUiThread(new Runnable() {
         public void run() {
@@ -967,7 +967,7 @@ public class Tools_File extends AndroidNonvisibleComponent
     return true;
   }
 
-  private void runBatch(boolean move, FileScope fS, List<String> paths, FileScope tS,
+  private void runBatch(final boolean move, FileScope fS, List<String> paths, FileScope tS,
       String folder) {
     String kind = move ? "move" : "copy";
     String bSc = tS == null ? "" : tS.name();
