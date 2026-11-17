@@ -137,21 +137,21 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
   public void CallZipFiles(Object paths, String destZip) {
     if (!Shared.claimSlot("zip")) {
       Shared.err(this, "Zip", 0, "masih ada proses arsip berjalan");
-      ZipFinished(false, "", "", "", 0, 0, "masih ada proses arsip berjalan");
+      ZipFinished(false, "", "", 0, 0, "masih ada proses arsip berjalan");
       return;
     }
     List<String> list = toStrList(paths);
     if (list.isEmpty()) {
       Shared.releaseSlot("zip");
       Shared.err(this, "Zip", 0, "list kosong");
-      ZipFinished(false, "", "", "", 0, 0, "list kosong");
+      ZipFinished(false, "", "", 0, 0, "list kosong");
       return;
     }
     File dst = Shared.resolveRooted(destZip);
     if (dst == null) {
       Shared.releaseSlot("zip");
       Shared.err(this, "Zip", 0, "tujuan ZIP tidak valid (Asset?)");
-      ZipFinished(false, "", "", "", 0, 0, "tujuan ZIP tidak valid");
+      ZipFinished(false, "", "", 0, 0, "tujuan ZIP tidak valid");
       return;
     }
     if (dst.getParentFile() != null) {
@@ -352,7 +352,7 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
   public void CallUnzip(String zipPath, String destFolder) {
     if (!Shared.claimSlot("zip")) {
       Shared.err(this, "Zip", 0, "masih ada proses arsip berjalan");
-      UnzipFinished(false, "", "", 0, 0, "masih ada proses arsip berjalan");
+      UnzipFinished(false, "", 0, 0, "masih ada proses arsip berjalan");
       return;
     }
     File zf = Shared.resolveRooted(zipPath);
@@ -364,20 +364,20 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
     if (zf == null || !zf.exists()) {
       Shared.releaseSlot("zip");
       Shared.err(this, "Zip", 0, "file ZIP tidak ada");
-      UnzipFinished(false, "", "", 0, 0, "file ZIP tidak ada");
+      UnzipFinished(false, "", 0, 0, "file ZIP tidak ada");
       return;
     }
     if (destFolder == null || Shared.clean(destFolder).length() == 0) {
       Shared.releaseSlot("zip");
       Shared.err(this, "Zip", 0, "folder tujuan kosong");
-      UnzipFinished(false, "", "", 0, 0, "folder tujuan kosong");
+      UnzipFinished(false, "", 0, 0, "folder tujuan kosong");
       return;
     }
     File dir = Shared.resolveRooted(destFolder);
     if (dir == null) {
       Shared.releaseSlot("zip");
       Shared.err(this, "Zip", 0, "folder tujuan tidak valid (Asset?)");
-      UnzipFinished(false, "", "", 0, 0, "folder tujuan tidak valid");
+      UnzipFinished(false, "", 0, 0, "folder tujuan tidak valid");
       return;
     }
     if (!dir.exists()) {
