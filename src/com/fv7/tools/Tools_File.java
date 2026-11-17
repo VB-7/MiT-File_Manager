@@ -171,28 +171,16 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   // ================= IS (boolean, colok ke if) =================
 
-  @SimpleFunction(description = "Apakah file ada di jalur "
+  @SimpleFunction(description = "Apakah file ATAU folder ada di jalur "
       + "(otomatis di-root /storage/emulated/0; absolut apa adanya). "
       + "Aset (//...) bisa dicek.")
-  public boolean IsFileExists(String fileName) {
+  public boolean IsFileOrDirectoryExists(String path) {
     try {
-      String p = Shared.clean(fileName);
+      String p = Shared.clean(path);
       if (wantAsset(p)) {
-        return existsInAssets(p);
-      }
-      File f = rootedFile(p);
-      return f != null && f.isFile();
-    } catch (Exception e) {
-      return false;
-    }
-  }
-
-  @SimpleFunction(description = "Apakah directory/folder ada di jalur. "
-      + "path seperti IsFileExists.")
-  public boolean IsDirectoryExists(String directory) {
-    try {
-      String p = Shared.clean(directory);
-      if (wantAsset(p)) {
+        if (existsInAssets(p)) {
+          return true;
+        }
         try {
           String[] l = context.getAssets().list(Shared.assetName(p));
           return l != null && l.length > 0;
@@ -200,15 +188,15 @@ public class Tools_File extends AndroidNonvisibleComponent
           return false;
         }
       }
-      File d = rootedFile(p);
-      return d != null && d.isDirectory();
+      File f = rootedFile(p);
+      return f != null && f.exists();
     } catch (Exception e) {
       return false;
     }
   }
 
   @SimpleFunction(description = "Apakah file .nomedia ada di dalam folder. "
-      + "path seperti IsFileExists.")
+      + "path seperti IsFileOrDirectoryExists.")
   public boolean IsNomediaExists(String folder) {
     try {
       String p = Shared.clean(folder);
@@ -239,7 +227,7 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "Apakah directory ada di jalur DAN hidden "
       + "(nama diawali titik). Boleh tulis dengan/tanpa titik. "
-      + "path seperti IsFileExists.")
+      + "path seperti IsFileOrDirectoryExists.")
   public boolean IsHiddenDirectory(String directory) {
     try {
       String p = Shared.clean(directory);
@@ -1380,7 +1368,7 @@ public class Tools_File extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Ukuran file dalam byte. Folder = total isi "
-      + "rekursif. path seperti IsFileExists.")
+      + "rekursif. path seperti IsFileOrDirectoryExists.")
   public long FileSize(String path) {
     try {
       if (wantAsset(path)) {
@@ -1419,14 +1407,49 @@ public class Tools_File extends AndroidNonvisibleComponent
     return "";
   }
 
-  @SimpleFunction(description = "Root kartu SD (/storage/emulated/0) — awal "
+  @SimpleFunction(description = "Root kartu SD utama (/storage/emulated/0) — awal "
       + "semua path strategi baru.")
-  public String GetAndroidStorage() {
+  public String GetAndroidStorageDirectory() {
     try {
       return Shared.rootPath();
     } catch (Exception e) {
       return "/storage/emulated/0";
     }
+  }
+
+  @SimpleFunction(description = "Root kartu SD LEPASAN (removable, mis. "
+      + "/storage/XXXX-XXXX). Kosong bila tidak ada / tidak terbaca. Path SD "
+      + "dipakai apa adanya (tidak di-root ulang).")
+  public String GetAndroidSdCardDirectory() {
+    try {
+      return Shared.removableRoot(context);
+    } catch (Exception e) {
+      return "";
+    }
+  }
+
+  @SimpleFunction(description = "True bila kartu SD LEPASAN (removable) "
+      + "terpasang dan terbaca.")
+  public boolean IsSdCardExists() {
+    try {
+      return Shared.removableRoot(context).length() > 0;
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
+  @SimpleFunction(description = "Path folder cache aplikasi (untuk file "
+      + "sementara). Tanpa izin tambahan.")
+  public String GetCacheDir() {
+    try {
+      File c = context.getCacheDir();
+      if (c != null) {
+        return c.getAbsolutePath();
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    return "";
   }
 
   @SimpleFunction(description = "Sisa ruang kosong (byte) di kartu SD "
@@ -1459,7 +1482,7 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "Daftar file (path lengkap). filter = "
       + "ekstensi tanpa titik (boleh koma: jpg,png; kosong = semua). "
-      + "recursive = sertakan isi subfolder. path seperti IsFileExists.")
+      + "recursive = sertakan isi subfolder. path seperti IsFileOrDirectoryExists.")
   public List<String> ListFiles(String path, String filter, boolean recursive) {
     ArrayList<String> out = new ArrayList<String>();
     try {
@@ -1525,7 +1548,7 @@ public class Tools_File extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Daftar subfolder (path lengkap, tanpa "
-      + "rekursif). path seperti IsFileExists.")
+      + "rekursif). path seperti IsFileOrDirectoryExists.")
   public List<String> ListFolders(String folder) {
     ArrayList<String> out = new ArrayList<String>();
     try {
@@ -1566,7 +1589,7 @@ public class Tools_File extends AndroidNonvisibleComponent
       + "cocok. type = image/audio/video/text/archive/document/apk (boleh "
       + "alias: gambar/musik/vidio/teks/arsip/dokumen) atau salah satu blok "
       + "TypeImage/dll. recursive = sertakan isi subfolder. "
-      + "path seperti IsFileExists.")
+      + "path seperti IsFileOrDirectoryExists.")
   public List<String> ListFilesByType(String folder, String type,
       boolean recursive) {
     ArrayList<String> out = new ArrayList<String>();
@@ -1851,7 +1874,7 @@ public class Tools_File extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Buka file dengan aplikasi lain (musik, "
-      + "gambar, PDF, ...). path seperti IsFileExists. Hasil lewat "
+      + "gambar, PDF, ...). path seperti IsFileOrDirectoryExists. Hasil lewat "
       + "AfterOpenFile. Asset disalin ke cache dulu.")
   public void OpenFile(String path) {
     try {

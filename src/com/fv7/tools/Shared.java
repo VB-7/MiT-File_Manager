@@ -163,6 +163,56 @@ public final class Shared {
     }
   }
 
+  /** Root kartu SD LEPASAN (removable, mis. "/storage/XXXX-XXXX").
+   *  Kosong bila tidak ada / tidak terbaca. */
+  public static String removableRoot(Context context) {
+    try {
+      File[] dirs = context.getExternalFilesDirs(null);
+      String prim = "";
+      try {
+        File p = android.os.Environment.getExternalStorageDirectory();
+        if (p != null) {
+          prim = p.getAbsolutePath();
+        }
+      } catch (Exception e) {
+        // abaikan
+      }
+      if (dirs != null) {
+        for (int i = 0; i < dirs.length; i = i + 1) {
+          if (dirs[i] == null) {
+            continue;
+          }
+          String a = dirs[i].getAbsolutePath();
+          int cut = a.indexOf("/Android/data/");
+          String root = cut > 0 ? a.substring(0, cut) : a;
+          if (root.length() > 0 && !root.equals(prim)) {
+            return root;
+          }
+        }
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    try {
+      File st = new File("/storage");
+      File[] kids = st.listFiles();
+      if (kids != null) {
+        for (int i = 0; i < kids.length; i = i + 1) {
+          String n = kids[i].getName();
+          if (n.equals("emulated") || n.equals("self") || n.startsWith(".")) {
+            continue;
+          }
+          if (kids[i].isDirectory()) {
+            return kids[i].getAbsolutePath();
+          }
+        }
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    return "";
+  }
+
   /** Resolve SEMUA path ke root kartu SD (STRATEGI TANPA SCOPE):
    *  - "" = root; "/Download/" -> "/storage/emulated/0/Download";
    *  - "/storage/emulated/0/Download/" dipakai apa adanya (anti ganda);

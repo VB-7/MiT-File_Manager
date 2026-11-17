@@ -40,7 +40,8 @@ import java.util.HashMap;
 @SimpleObject(external = true)
 @UsesPermissions({"android.permission.INTERNET",
     "android.permission.READ_EXTERNAL_STORAGE",
-    "android.permission.WRITE_EXTERNAL_STORAGE"})
+    "android.permission.WRITE_EXTERNAL_STORAGE",
+    "android.permission.POST_NOTIFICATIONS"})
 public class Tools_Downloader extends AndroidNonvisibleComponent
     implements OnDestroyListener {
 
@@ -222,6 +223,7 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
       } catch (Exception e) {
         // abaikan
       }
+      updateNotifFor(fId);
       DlInfo si = infoOf(fId);
       si.status = "jalan";
       si.fileName = fName;
@@ -284,6 +286,7 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
               } catch (Exception e) {
                 // abaikan
               }
+              updateNotifFor(fId);
               DlInfo pi = infoOf(fId);
               pi.percent = pPct;
               pi.received = pDone;
@@ -348,6 +351,7 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     } catch (Exception e) {
       DownloadFinished(op.id, success, path, name, msg);
     }
+    updateNotifFor(op.id);
     if (!success && !"Dibatalkan".equals(msg)) {
       Shared.err(this, "Download", op.id, msg);
     }
@@ -592,6 +596,153 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     Ids.unregister(Ids.DOWNLOAD, id);
     synchronized (lock) {
       infos.remove(Integer.valueOf(id));
+      notifOn.remove(Integer.valueOf(id));
+    }
+    cancelNotif(id);
+  }
+
+  // ================= NOTIFIKASI =================
+
+  private static final Map<Integer, Boolean> notifOn = new HashMap<Integer, Boolean>();
+
+  private static boolean notifEnabled(int id) {
+    synchronized (lock) {
+      Boolean b = notifOn.get(Integer.valueOf(id));
+      return b != null && b.booleanValue();
+    }
+  }
+
+  @SimpleFunction(description = "SET: tampilkan progres unduhan di bar notifikasi "
+      + "Android (per id, otomatis: nama file + persen). show=true = tampil + update "
+      + "tiap Started/Progress/Finished; show=false = matikan + hapus notif id itu. "
+      + "Pasang sesudah CallDownload, atau di dalam event DownloadStarted/"
+      + "ProgressChanged (id sudah terdaftar; di Finished kurang relevan). "
+      + "Tiap id hasil CallDownloadList bisa dipasang satu-satu, agar sistem bisa "
+      + "bedakan Download vs DownloadList. Android 13+ butuh izin "
+      + "POST_NOTIFICATIONS (minta via blok GetPermission Tools_File). "
+      + "Tanpa feedback.")
+  public void SetDownloadNotification(int id, boolean show) {
+    synchronized (lock) {
+      if (show) {
+        notifOn.put(Integer.valueOf(id), Boolean.valueOf(true));
+      } else {
+        notifOn.remove(Integer.valueOf(id));
+      }
+    }
+    if (!show) {
+      cancelNotif(id);
+      return;
+    }
+    updateNotifFor(id);
+  }
+
+  private void updateNotifFor(int id) {
+    if (!notifEnabled(id)) {
+      return;
+    }
+    String status;
+    int pct;
+    long recv;
+    long tot;
+    String fn;
+    String msg;
+    synchronized (lock) {
+      DlInfo i = infos.get(Integer.valueOf(id));
+      if (i == null) {
+        return;
+      }
+      status = i.status;
+      pct = i.percent;
+      recv = i.received;
+      tot = i.total;
+      fn = i.fileName;
+      msg = i.message;
+    }
+    String title = (fn == null || fn.length() == 0) ? "Mengunduh..." : fn;
+    if ("jalan".equals(status)) {
+      String txt = pct + "%";
+      if (tot > 0) {
+        txt = txt + " - " + fmtBytes(recv) + "/" + fmtBytes(tot);
+      }
+      postNotif(id, title, txt, pct, false);
+    } else if ("jeda".equals(status)) {
+      postNotif(id, title, "Dijeda - " + pct + "%", pct, false);
+    } else if ("selesai".equals(status)) {
+      postNotif(id, title, "Unduhan selesai", 100, true);
+    } else if ("batal".equals(status)) {
+      postNotif(id, title, "Dibatalkan", pct, true);
+    } else if ("gagal".equals(status)) {
+      postNotif(id, title, "Gagal: " + (msg == null ? "" : msg), pct, true);
+    }
+  }
+
+  private static String fmtBytes(long n) {
+    if (n < 1024L) {
+      return n + " B";
+    }
+    if (n < 1048576L) {
+      return String.format("%.1f KB", Double.valueOf(n / 1024.0));
+    }
+    if (n < 1073741824L) {
+      return String.format("%.1f MB", Double.valueOf(n / 1048576.0));
+    }
+    return String.format("%.2f GB", Double.valueOf(n / 1073741824.0));
+  }
+
+  private void postNotif(int id, String title, String text, int pct, boolean done) {
+    try {
+      android.app.NotificationManager nm = (android.app.NotificationManager)
+          context.getSystemService(Context.NOTIFICATION_SERVICE);
+      if (nm == null) {
+        return;
+      }
+      String ch = "fv7_download";
+      if (android.os.Build.VERSION.SDK_INT >= 26) {
+        try {
+          android.app.NotificationChannel c = new android.app.NotificationChannel(
+              ch, "Unduhan", android.app.NotificationManager.IMPORTANCE_LOW);
+          nm.createNotificationChannel(c);
+        } catch (Exception e) {
+          // abaikan
+        }
+      }
+      android.app.Notification.Builder b;
+      if (android.os.Build.VERSION.SDK_INT >= 26) {
+        b = new android.app.Notification.Builder(context, ch);
+      } else {
+        b = new android.app.Notification.Builder(context);
+      }
+      b.setContentTitle(title).setContentText(text).setOngoing(!done)
+          .setAutoCancel(done).setOnlyAlertOnce(true);
+      try {
+        b.setSmallIcon(done ? android.R.drawable.stat_sys_download_done
+            : android.R.drawable.stat_sys_download);
+      } catch (Exception e) {
+        // abaikan
+      }
+      if (!done) {
+        try {
+          int p = pct < 0 ? 0 : (pct > 100 ? 100 : pct);
+          b.setProgress(100, p, pct <= 0);
+        } catch (Exception e) {
+          // abaikan
+        }
+      }
+      nm.notify(id, b.build());
+    } catch (Exception e) {
+      // abaikan (mis. izin notifikasi belum diberikan)
+    }
+  }
+
+  private void cancelNotif(int id) {
+    try {
+      android.app.NotificationManager nm = (android.app.NotificationManager)
+          context.getSystemService(Context.NOTIFICATION_SERVICE);
+      if (nm != null) {
+        nm.cancel(id);
+      }
+    } catch (Exception e) {
+      // abaikan
     }
   }
 
