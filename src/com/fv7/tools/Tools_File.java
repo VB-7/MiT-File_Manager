@@ -1404,6 +1404,31 @@ public class Tools_File extends AndroidNonvisibleComponent
     }
   }
 
+  @SimpleFunction(description = "Folder khusus aplikasi (tanpa izin tambahan, "
+      + "aman Android 11+). Cth: /storage/emulated/0/Android/data/<paket>/"
+      + "files. Hasilnya bisa langsung dipakai sebagai path blok lain.")
+  public String GetAndroidSpecificDirectory() {
+    try {
+      File f = context.getExternalFilesDir(null);
+      if (f != null) {
+        return f.getAbsolutePath();
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    return "";
+  }
+
+  @SimpleFunction(description = "Root kartu SD (/storage/emulated/0) — awal "
+      + "semua path strategi baru.")
+  public String GetAndroidStorage() {
+    try {
+      return Shared.rootPath();
+    } catch (Exception e) {
+      return "/storage/emulated/0";
+    }
+  }
+
   @SimpleFunction(description = "Sisa ruang kosong (byte) di kartu SD "
       + "(/storage/emulated/0).")
   public long FreeSpace() {
