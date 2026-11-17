@@ -35,13 +35,16 @@ import java.util.List;
 import java.util.Map;
 
 @DesignerComponent(
-    version = 1,
+    version = 17,
     description = "Tools_File (sistem draft): awalan Is = boolean (colok ke if), "
         + "awalan Call = async + hasil lewat event, awalan Set = tanpa feedback. "
         + "Semua path otomatis di-root ke /storage/emulated/0 "
         + "(\"/Download/a.jpg\" jadi \"/storage/emulated/0/Download/a.jpg\"; "
         + "absolut apa adanya). Salin/pindah digabung satu blok "
-        + "CallCopyOrMoveFile (isMove) + info duplikat.",
+        + "CallCopyOrMoveFile (isMove) + info duplikat. "
+        + "(v17 2026-11-17: penomoran versi. v16: gate izin otomatis 16 "
+        + "operasi + blok pintar CallEnsure*/Is* + 10 Helper Permission + "
+        + "all-files access Android 11+.)",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,

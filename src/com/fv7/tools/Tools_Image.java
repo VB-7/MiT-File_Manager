@@ -45,11 +45,12 @@ import java.util.List;
 import java.util.Map;
 
 @DesignerComponent(
-    version = 1,
+    version = 17,
     description = "Tools_Image: tampilkan BANYAK gambar ber-id ke layout (path/URL/base64 mandiri) + "
         + "gambar dari base64 + info ukuran. Id dikelola CreateImageId / Tools_Base. "
         + "Sukses tampil tanpa event (langsung kelihatan); gagal via ErrorOccurred. "
-        + "List id URUT PEMBUATAN.",
+        + "List id URUT PEMBUATAN. "
+        + "(v17 2026-11-17: tanpa perubahan fungsi; penomoran versi.)",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,

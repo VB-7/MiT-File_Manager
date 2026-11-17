@@ -30,7 +30,7 @@ import java.util.Map;
 import java.util.Set;
 
 @DesignerComponent(
-    version = 1,
+    version = 17,
     description = "Tools_Core: mesin komponen dinamis generik ber-id. Bikin komponen "
         + "MIT apa pun saat aplikasi jalan (Button, Label, TextBox, Image, CheckBox, "
         + "Switch, Slider, Spinner, ListView, DatePicker, TimePicker, "
@@ -38,7 +38,8 @@ import java.util.Set;
         + "dalam layout, lengkap dengan event Click/LongClick/ComponentCreated ber-id, "
         + "plus SetProperty/GetProperty/Invoke generik. Id dikelola CreateDynamicId. "
         + "List id URUT PEMBUATAN. Catatan: event klik komponen dinamis dilayani "
-        + "Tools_Core (blok Any generik MIT tidak ikut terpicu untuknya).",
+        + "Tools_Core (blok Any generik MIT tidak ikut terpicu untuknya). "
+        + "(v17 2026-11-17: tanpa perubahan fungsi; penomoran versi.)",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,

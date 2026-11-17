@@ -39,14 +39,15 @@ import java.util.Map;
 import java.util.Set;
 
 @DesignerComponent(
-    version = 1,
+    version = 17,
     description = "Tools_Sheet: bottom-sheet dialog ber-id (pakai Arrangement "
         + "sebagai konten), toast, dan notifikasi bar status Android. Sheet: "
         + "RegisterSheet -> ShowSheet/DismissSheet + event SheetHidden, animasi "
         + "geser otomatis. Notifikasi: channel otomatis, butuh izin "
         + "POST_NOTIFICATIONS di Android 13+ (pakai RequestNotificationPermission "
         + "atau izinkan manual). Id dikelola CreateSheetId. List id URUT "
-        + "PEMBUATAN.",
+        + "PEMBUATAN. "
+        + "(v17 2026-11-17: tanpa perubahan fungsi; penomoran versi.)",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,

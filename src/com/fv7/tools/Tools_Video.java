@@ -34,11 +34,12 @@ import java.util.List;
 import java.util.Map;
 
 @DesignerComponent(
-    version = 1,
+    version = 17,
     description = "Tools_Video: putar BANYAK video ber-id di dalam layout (Arrangement MIT / dinamis), "
         + "kontrol ala VLC (pause/resume/seek/maju/mundur/double-tap), loop, volume. "
         + "Satu id = satu video, bisa jalan bareng. Id dikelola CreateVideoId / Tools_Base. "
-        + "List id URUT PEMBUATAN.",
+        + "List id URUT PEMBUATAN. "
+        + "(v17 2026-11-17: tanpa perubahan fungsi; penomoran versi.)",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,

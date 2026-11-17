@@ -20,12 +20,14 @@ import java.net.URLEncoder;
 import java.util.List;
 
 @DesignerComponent(
-    version = 1,
+    version = 17,
     description = "Fondasi Tools: id pool lintas extension + helper Tag untuk id "
         + "komponen LUAR (auto-konversi teks angka) + util dasar "
         + "(JSON, URI, waktu, byte, mime). Id unik global via CreateUniqueId, "
         + "atau per tipe via CreateDownloadId/CreateImageId/CreateAudioId/CreateVideoId. "
-        + "Semua list id URUT PEMBUATAN (index 1 = pertama dibuat).",
+        + "Semua list id URUT PEMBUATAN (index 1 = pertama dibuat). "
+        + "(v17 2026-11-17: ToolsVersion 17; blok baru GetWhatsNew = catatan "
+        + "update yang bisa dibaca lewat blok.)",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,
@@ -617,7 +619,20 @@ public class Tools_Base extends AndroidNonvisibleComponent {
 
   @SimpleFunction(description = "Versi paket Tools (sama untuk semua Tools_* dalam satu .aix).")
   public int ToolsVersion() {
-    return 16;
+    return 17;
+  }
+
+  @SimpleFunction(description = "Catatan update paket Tools (dibaca lewat blok, "
+      + "karena panel info extension tidak bisa diubah manual).")
+  public String GetWhatsNew() {
+    return "v17 2026-11-17: CallDownload 4 pintu (http/data:/content:/file:); "
+        + "CallGuessFileName + FileNameGuessed; versi anotasi 17 + catatan "
+        + "update per komponen. v16: gate izin otomatis 16 operasi storage; "
+        + "IsAllFilesAccessGranted/OpenAllFilesAccessSettings; "
+        + "Is/CallEnsure*Permission + 10 Helper Permission; "
+        + "MANAGE_EXTERNAL_STORAGE. v15: aturan Is/Call/Set final. "
+        + "v14: direktori Android + notifikasi download. v13: hapus scope, "
+        + "root /storage/emulated/0.";
   }
 
   // ================= OP + ERROR =================

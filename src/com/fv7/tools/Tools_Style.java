@@ -32,14 +32,15 @@ import java.io.InputStream;
 import java.util.ArrayList;
 
 @DesignerComponent(
-    version = 1,
+    version = 17,
     description = "Tools_Style: percantik komponen/wadah yang kelihatan "
         + "(Button, Label, Arrangement, gambar Tools_Image, komponen dinamis, "
         + "dsb). Radius, border, gradien, elevation, padding, margin, opacity, "
         + "background warna/gambar, plus animasi fade/slide/zoom. Tanpa id "
         + "(stateless, langsung ke komponen). Semua prosedur void; gagal via "
         + "ErrorOccurred. Catatan: background bawaan komponen (mis. Button) "
-        + "diganti drawable baru.",
+        + "diganti drawable baru. "
+        + "(v17 2026-11-17: tanpa perubahan fungsi; penomoran versi.)",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,

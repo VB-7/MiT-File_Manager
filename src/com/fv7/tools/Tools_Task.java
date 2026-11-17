@@ -35,7 +35,7 @@ import java.util.Map;
 import java.util.Set;
 
 @DesignerComponent(
-    version = 1,
+    version = 17,
     description = "Tools_Task: penjadwal full-stack ber-id. Tugas dalam-aplikasi "
         + "(sekali/berulang/terjadwal) + alarm sistem via AlarmManager (buka "
         + "aplikasi saat bunyi) + notifikasi ongoing + wake-lock + variabel/extra "
@@ -43,7 +43,8 @@ import java.util.Set;
         + "CreateTaskId / Tools_Base. Tanpa Service/receiver khusus (aman "
         + "manifest, lolos Play). Setiap event ada fallback polling "
         + "(GetTaskStatus/Result/Progress, GetAlarmInfo, CheckStartupAlarm). "
-        + "List id URUT PEMBUATAN.",
+        + "List id URUT PEMBUATAN. "
+        + "(v17 2026-11-17: tanpa perubahan fungsi; penomoran versi.)",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,

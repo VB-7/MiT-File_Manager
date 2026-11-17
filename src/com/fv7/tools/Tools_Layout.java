@@ -27,11 +27,12 @@ import java.util.List;
 import java.util.Map;
 
 @DesignerComponent(
-    version = 1,
+    version = 17,
     description = "Tools_Layout: bikin layout dinamis ber-id (Vertical, "
         + "Horizontal, VerticalScroll, HorizontalScroll) di dalam layout yang "
         + "sudah ada atau buatan Tools_Core/Tools_Layout. Id dikelola "
-        + "CreateLayoutId. List id URUT PEMBUATAN.",
+        + "CreateLayoutId. List id URUT PEMBUATAN. "
+        + "(v17 2026-11-17: tanpa perubahan fungsi; penomoran versi.)",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,

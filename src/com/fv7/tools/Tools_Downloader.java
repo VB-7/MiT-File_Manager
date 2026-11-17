@@ -17,7 +17,12 @@ import com.google.appinventor.components.runtime.EventDispatcher;
 import com.google.appinventor.components.runtime.OnDestroyListener;
 import com.google.appinventor.components.runtime.util.AsynchUtil;
 
+import android.database.Cursor;
+import android.net.Uri;
+import android.provider.OpenableColumns;
+
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
@@ -29,10 +34,13 @@ import java.util.Map;
 import java.util.HashMap;
 
 @DesignerComponent(
-    version = 1,
+    version = 17,
     description = "Tools_Downloader: unduh paralel ber-id (pause/resume/cancel per id, "
         + "Started/ProgressChanged/Finished) + unduh batch list URL. Id dikelola "
-        + "Tools_Base (CreateUniqueId) atau CreateDownloadId. List id URUT PEMBUATAN.",
+        + "Tools_Base (CreateUniqueId) atau CreateDownloadId. List id URUT PEMBUATAN. "
+        + "(v17 2026-11-17: CallDownload 4 pintu http/data:/content:/file:; "
+        + "blok mandiri CallGuessFileName + event FileNameGuessed; "
+        + "v16: gate izin otomatis + SetDownloadNotification.)",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,
@@ -100,9 +108,14 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     this.activity = container.$context();
   }
 
-  @SimpleFunction(description = "CALL: unduh URL ke folder (otomatis di-root "
-      + "/storage/emulated/0; absolut apa adanya). fileName kosong = "
-      + "nama otomatis. id = angka bebas yang belum dipakai (minta ke Tools_Base "
+  @SimpleFunction(description = "CALL: unduh ke folder (otomatis di-root "
+      + "/storage/emulated/0; absolut apa adanya). url = http(s) ATAU data:URL "
+      + "(base64/url-encoded, mis. data:image/png;base64,...) ATAU content: URI "
+      + "Android (dari file picker) ATAU file: URL / path lokal (disalin). "
+      + "blob: TIDAK didukung (itu objek browser; "
+      + "ubah dulu jadi base64 via JavaScript, lalu kirim sebagai data:URL "
+      + "atau ke CallSaveBase64ToFile). fileName kosong = nama otomatis. "
+      + "id = angka bebas yang belum dipakai (minta ke Tools_Base "
       + "CreateUniqueId atau CreateDownloadId). Hasil lewat DownloadStarted/"
       + "ProgressChanged/Finished (bawa id).")
   public void CallDownload(String url, String fileName, String folder, int id) {
@@ -173,7 +186,16 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
           failDownloadStart(op.id, permMsg);
           return;
         }
-        runDownload(op);
+        File srcLocal = localSourceFile(op.url);
+        if (isDataUrl(op.url)) {
+          runDataDownload(op);
+        } else if (isContentUri(op.url)) {
+          runContentDownload(op);
+        } else if (srcLocal != null && srcLocal.isFile()) {
+          runFileCopyDownload(op, srcLocal);
+        } else {
+          runDownload(op);
+        }
       }
     });
   }
@@ -188,6 +210,453 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
       });
     } catch (Exception e) {
       // abaikan
+    }
+  }
+
+  /** True bila url adalah data: URL (base64 / teks url-encoded). */
+  private static boolean isDataUrl(String u) {
+    return u != null && u.regionMatches(true, 0, "data:", 0, 5);
+  }
+
+  /** True bila url adalah content: URI Android (mis. dari file picker). */
+  private static boolean isContentUri(String u) {
+    return u != null && u.regionMatches(true, 0, "content:", 0, 8);
+  }
+
+  /** Sumber file lokal untuk CallDownload: dukung file: URL dan path lokal
+   *  (relatif di-root /storage/emulated/0, absolut apa adanya).
+   *  Kembali null bila bukan pola lokal (lanjut ke unduh http). */
+  private static File localSourceFile(String u) {
+    if (u == null) {
+      return null;
+    }
+    if (u.regionMatches(true, 0, "file:", 0, 5)) {
+      String p = u.substring(5);
+      while (p.startsWith("//")) {
+        p = p.substring(2);
+      }
+      if (p.regionMatches(true, 0, "localhost/", 0, 10)) {
+        p = p.substring(10);
+      }
+      if (p.length() == 0) {
+        return null;
+      }
+      try {
+        if (p.indexOf('%') >= 0) {
+          p = URLDecoder.decode(p, "UTF-8");
+        }
+      } catch (Exception e) {
+        // pakai mentah
+      }
+      return new File(p);
+    }
+    if (u.indexOf("://") < 0) {
+      try {
+        return Shared.resolveRooted(u);
+      } catch (Exception e) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  /** Salin file lokal (file: URL / path) ke folder tujuan.
+   *  Alur event/notif sama seperti unduh http (Started -> Finished). */
+  private void runFileCopyDownload(DlOp op, File src) {
+    File outFile = null;
+    InputStream in = null;
+    try {
+      String name = op.fileName;
+      if (name.length() == 0) {
+        name = src.getName();
+      } else {
+        name = Shared.sanitize(name);
+      }
+      if (op.cancel) {
+        finishDownload(op, false, "", "", "Dibatalkan");
+        return;
+      }
+      op.fileName = name;
+      outFile = Shared.uniqueFile(op.dest, name);
+      final long total = src.length();
+      final int fId = op.id;
+      final String fName = name;
+      final String fPath = outFile.getAbsolutePath();
+      try {
+        form.runOnUiThread(new Runnable() {
+          public void run() {
+            DownloadStarted(fId, fName, fPath);
+          }
+        });
+      } catch (Exception e) {
+        // abaikan
+      }
+      updateNotifFor(fId);
+      DlInfo si = infoOf(fId);
+      si.status = "jalan";
+      si.fileName = fName;
+      si.savePath = fPath;
+      in = new FileInputStream(src);
+      FileOutputStream out = new FileOutputStream(outFile);
+      try {
+        byte[] buf = new byte[32768];
+        long done = 0;
+        int lastPct = -1;
+        long lastFire = 0;
+        int n;
+        while ((n = in.read(buf)) > 0) {
+          if (op.cancel) {
+            finishDownload(op, false, "", "", "Dibatalkan");
+            try {
+              outFile.delete();
+            } catch (Exception e) {
+              // abaikan
+            }
+            return;
+          }
+          if (op.paused) {
+            synchronized (op.pauseLock) {
+              while (op.paused && !op.cancel) {
+                try {
+                  op.pauseLock.wait();
+                } catch (InterruptedException e) {
+                  // lanjut cek flag
+                }
+              }
+            }
+            if (op.cancel) {
+              finishDownload(op, false, "", "", "Dibatalkan");
+              try {
+                outFile.delete();
+              } catch (Exception e) {
+                // abaikan
+              }
+              return;
+            }
+          }
+          out.write(buf, 0, n);
+          done = done + n;
+          int pct = total > 0 ? (int) (done * 100L / total) : 0;
+          long now = System.currentTimeMillis();
+          if (pct != lastPct && (now - lastFire >= PROGRESS_MIN_MS || pct == 100)) {
+            lastPct = pct;
+            lastFire = now;
+            final int pPct = pct;
+            final long pDone = done;
+            try {
+              form.runOnUiThread(new Runnable() {
+                public void run() {
+                  DownloadProgressChanged(fId, pPct, pDone, total);
+                }
+              });
+            } catch (Exception e) {
+              // abaikan
+            }
+            updateNotifFor(fId);
+            DlInfo pi = infoOf(fId);
+            pi.percent = pPct;
+            pi.received = pDone;
+            pi.total = total;
+          }
+        }
+        out.flush();
+      } finally {
+        try {
+          in.close();
+        } catch (Exception e) {
+          // abaikan
+        }
+        try {
+          out.close();
+        } catch (Exception e) {
+          // abaikan
+        }
+      }
+      finishDownload(op, true, fPath, fName, "OK");
+    } catch (Exception e) {
+      String m = e.getMessage();
+      finishDownload(op, false, "", "", m == null ? "salin file gagal" : m);
+      if (outFile != null) {
+        try {
+          outFile.delete();
+        } catch (Exception e2) {
+          // abaikan
+        }
+      }
+    }
+  }
+
+  /** Simpan data: URL (mis. data:image/png;base64,...) ke folder tujuan.
+   *  Alur event/notif sama seperti unduh http (Started -> Finished). */
+  private void runDataDownload(DlOp op) {
+    File outFile = null;
+    try {
+      String u = op.url;
+      int comma = u.indexOf(',');
+      if (comma < 0) {
+        finishDownload(op, false, "", "", "data URL tidak valid");
+        return;
+      }
+      String meta = u.substring(5, comma);
+      String payload = u.substring(comma + 1);
+      boolean isBase64 = meta.toLowerCase().indexOf(";base64") >= 0;
+      String mime = meta;
+      int sc = meta.indexOf(';');
+      if (sc >= 0) {
+        mime = meta.substring(0, sc);
+      }
+      mime = mime.trim().toLowerCase();
+      byte[] data;
+      if (isBase64) {
+        String b = payload.replaceAll("\\s", "");
+        if (b.length() == 0) {
+          finishDownload(op, false, "", "", "data base64 kosong");
+          return;
+        }
+        try {
+          data = android.util.Base64.decode(b, android.util.Base64.DEFAULT);
+        } catch (Exception e) {
+          finishDownload(op, false, "", "", "base64 tidak valid");
+          return;
+        }
+      } else {
+        try {
+          String dec = URLDecoder.decode(payload, "UTF-8");
+          data = dec.getBytes("UTF-8");
+        } catch (Exception e) {
+          finishDownload(op, false, "", "", "data URL tidak valid");
+          return;
+        }
+      }
+      if (op.cancel) {
+        finishDownload(op, false, "", "", "Dibatalkan");
+        return;
+      }
+      String name = op.fileName;
+      if (name.length() == 0) {
+        String ext = Shared.extForMime(mime);
+        name = ext.length() == 0 ? "datafile" : "datafile." + ext;
+      } else {
+        name = Shared.sanitize(name);
+      }
+      op.fileName = name;
+      outFile = Shared.uniqueFile(op.dest, name);
+      final int fId = op.id;
+      final String fName = name;
+      final String fPath = outFile.getAbsolutePath();
+      final byte[] fData = data;
+      try {
+        form.runOnUiThread(new Runnable() {
+          public void run() {
+            DownloadStarted(fId, fName, fPath);
+          }
+        });
+      } catch (Exception e) {
+        // abaikan
+      }
+      updateNotifFor(fId);
+      DlInfo si = infoOf(fId);
+      si.status = "jalan";
+      si.fileName = fName;
+      si.savePath = fPath;
+      FileOutputStream out = new FileOutputStream(outFile);
+      try {
+        out.write(fData);
+        out.flush();
+      } finally {
+        try {
+          out.close();
+        } catch (Exception e) {
+          // abaikan
+        }
+      }
+      DlInfo pi = infoOf(fId);
+      pi.percent = 100;
+      pi.received = fData.length;
+      pi.total = fData.length;
+      try {
+        form.runOnUiThread(new Runnable() {
+          public void run() {
+            DownloadProgressChanged(fId, 100, fData.length, fData.length);
+          }
+        });
+      } catch (Exception e) {
+        // abaikan
+      }
+      updateNotifFor(fId);
+      finishDownload(op, true, fPath, fName, "OK");
+    } catch (Exception e) {
+      String m = e.getMessage();
+      finishDownload(op, false, "", "", m == null ? "simpan data gagal" : m);
+      if (outFile != null) {
+        try {
+          outFile.delete();
+        } catch (Exception e2) {
+          // abaikan
+        }
+      }
+    }
+  }
+
+  /** Salin content: URI (mis. dari file picker/galeri) ke folder tujuan.
+   *  Alur event/notif sama seperti unduh http (Started -> Finished). */
+  private void runContentDownload(DlOp op) {
+    File outFile = null;
+    InputStream in = null;
+    try {
+      Uri uri = Uri.parse(op.url);
+      String name = op.fileName;
+      if (name.length() == 0) {
+        String display = null;
+        try {
+          Cursor cu = context.getContentResolver().query(uri, null, null,
+              null, null);
+          if (cu != null) {
+            try {
+              int idx = cu.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+              if (idx >= 0 && cu.moveToFirst()) {
+                display = cu.getString(idx);
+              }
+            } finally {
+              cu.close();
+            }
+          }
+        } catch (Exception e) {
+          // abaikan, pakai tebakan
+        }
+        if (display != null && display.length() > 0) {
+          name = Shared.sanitize(display);
+        } else {
+          String mime = null;
+          try {
+            mime = context.getContentResolver().getType(uri);
+          } catch (Exception e) {
+            mime = null;
+          }
+          String ext = Shared.extForMime(mime);
+          name = ext.length() == 0 ? "contentfile" : "contentfile." + ext;
+        }
+      } else {
+        name = Shared.sanitize(name);
+      }
+      if (op.cancel) {
+        finishDownload(op, false, "", "", "Dibatalkan");
+        return;
+      }
+      op.fileName = name;
+      outFile = Shared.uniqueFile(op.dest, name);
+      final int fId = op.id;
+      final String fName = name;
+      final String fPath = outFile.getAbsolutePath();
+      try {
+        form.runOnUiThread(new Runnable() {
+          public void run() {
+            DownloadStarted(fId, fName, fPath);
+          }
+        });
+      } catch (Exception e) {
+        // abaikan
+      }
+      updateNotifFor(fId);
+      DlInfo si = infoOf(fId);
+      si.status = "jalan";
+      si.fileName = fName;
+      si.savePath = fPath;
+      try {
+        in = context.getContentResolver().openInputStream(uri);
+      } catch (Exception e) {
+        in = null;
+      }
+      if (in == null) {
+        finishDownload(op, false, "", "", "tidak bisa buka content URI");
+        try {
+          outFile.delete();
+        } catch (Exception e) {
+          // abaikan
+        }
+        return;
+      }
+      FileOutputStream out = new FileOutputStream(outFile);
+      try {
+        byte[] buf = new byte[32768];
+        long done = 0;
+        int lastPct = -1;
+        long lastFire = 0;
+        int n;
+        while ((n = in.read(buf)) > 0) {
+          if (op.cancel) {
+            finishDownload(op, false, "", "", "Dibatalkan");
+            try {
+              outFile.delete();
+            } catch (Exception e) {
+              // abaikan
+            }
+            return;
+          }
+          if (op.paused) {
+            synchronized (op.pauseLock) {
+              while (op.paused && !op.cancel) {
+                try {
+                  op.pauseLock.wait();
+                } catch (InterruptedException e) {
+                  // lanjut cek flag
+                }
+              }
+            }
+            if (op.cancel) {
+              finishDownload(op, false, "", "", "Dibatalkan");
+              try {
+                outFile.delete();
+              } catch (Exception e) {
+                // abaikan
+              }
+              return;
+            }
+          }
+          out.write(buf, 0, n);
+          done = done + n;
+          long now = System.currentTimeMillis();
+          if (now - lastFire >= PROGRESS_MIN_MS) {
+            lastFire = now;
+            final long pDone = done;
+            try {
+              form.runOnUiThread(new Runnable() {
+                public void run() {
+                  DownloadProgressChanged(fId, 0, pDone, -1);
+                }
+              });
+            } catch (Exception e) {
+              // abaikan
+            }
+            updateNotifFor(fId);
+            DlInfo pi = infoOf(fId);
+            pi.received = pDone;
+          }
+        }
+        out.flush();
+      } finally {
+        try {
+          in.close();
+        } catch (Exception e) {
+          // abaikan
+        }
+        try {
+          out.close();
+        } catch (Exception e) {
+          // abaikan
+        }
+      }
+      finishDownload(op, true, fPath, fName, "OK");
+    } catch (Exception e) {
+      String m = e.getMessage();
+      finishDownload(op, false, "", "", m == null ? "salin content gagal" : m);
+      if (outFile != null) {
+        try {
+          outFile.delete();
+        } catch (Exception e2) {
+          // abaikan
+        }
+      }
     }
   }
 
@@ -818,6 +1287,143 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
       + "pesan error terakhir operasi ini (kosong bila belum ada).")
   public String LastError(String operation) {
     return Shared.lastError(operation);
+  }
+
+  @SimpleFunction(description = "CALL: tebak nama file dari URL saja (1 input, "
+      + "mandiri — bisa disandingkan komponen lain, mis. Web bawaan MIT untuk "
+      + "rename). http(s) = ambil header asli server (ikuti redirect); "
+      + "data:/content:/file:/path = tebak lokal tanpa internet. Hasil lewat "
+      + "FileNameGuessed (url + fileName + mimeType).")
+  public void CallGuessFileName(final String url) {
+    final String u = Shared.clean(url);
+    if (u.length() == 0) {
+      Shared.err(this, "Download", 0, "URL kosong");
+      fireGuess(u, "", "");
+      return;
+    }
+    AsynchUtil.runAsynchronously(new Runnable() {
+      public void run() {
+        if (isDataUrl(u)) {
+          int comma = u.indexOf(',');
+          String meta = comma >= 0 ? u.substring(5, comma) : "";
+          String mime = meta;
+          int sc = meta.indexOf(';');
+          if (sc >= 0) {
+            mime = meta.substring(0, sc);
+          }
+          mime = mime.trim().toLowerCase();
+          String ext = Shared.extForMime(mime);
+          String name = ext.length() == 0 ? "datafile" : "datafile." + ext;
+          fireGuess(u, name, mime);
+          return;
+        }
+        if (isContentUri(u)) {
+          String display = null;
+          try {
+            Cursor cu = context.getContentResolver().query(Uri.parse(u),
+                null, null, null, null);
+            if (cu != null) {
+              try {
+                int idx = cu.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                if (idx >= 0 && cu.moveToFirst()) {
+                  display = cu.getString(idx);
+                }
+              } finally {
+                cu.close();
+              }
+            }
+          } catch (Exception e) {
+            // abaikan
+          }
+          String mime = null;
+          try {
+            mime = context.getContentResolver().getType(Uri.parse(u));
+          } catch (Exception e) {
+            mime = null;
+          }
+          if (mime == null) {
+            mime = "";
+          }
+          String name;
+          if (display != null && display.length() > 0) {
+            name = Shared.sanitize(display);
+          } else {
+            String ext = Shared.extForMime(mime);
+            name = ext.length() == 0 ? "contentfile" : "contentfile." + ext;
+          }
+          fireGuess(u, name, mime);
+          return;
+        }
+        File lf = localSourceFile(u);
+        if (lf != null && lf.isFile()) {
+          fireGuess(u, lf.getName(), Shared.mimeFor(lf.getName()));
+          return;
+        }
+        HttpURLConnection c = null;
+        try {
+          c = (HttpURLConnection) new URL(u).openConnection();
+          c.setConnectTimeout(15000);
+          c.setReadTimeout(15000);
+          c.setInstanceFollowRedirects(true);
+          c.setRequestProperty("Accept-Encoding", "identity");
+          c.setRequestProperty("User-Agent", "Mozilla/5.0");
+          c.connect();
+          String mime = c.getContentType();
+          if (mime == null) {
+            mime = "";
+          }
+          String disp = c.getHeaderField("Content-Disposition");
+          if (disp == null) {
+            disp = "";
+          }
+          String finalUrl = u;
+          try {
+            URL fu = c.getURL();
+            if (fu != null) {
+              finalUrl = fu.toString();
+            }
+          } catch (Exception e) {
+            // pakai url asal
+          }
+          fireGuess(u, GetFileName(finalUrl, mime, disp), mime);
+        } catch (Exception e) {
+          String m = e.getMessage();
+          if (m == null) {
+            m = "tebak nama gagal";
+          }
+          Shared.err(Tools_Downloader.this, "Download", 0, m);
+          fireGuess(u, GetFileName(u, "", ""), "");
+        } finally {
+          if (c != null) {
+            try {
+              c.disconnect();
+            } catch (Exception e) {
+              // abaikan
+            }
+          }
+        }
+      }
+    });
+  }
+
+  private void fireGuess(final String url, final String fileName,
+      final String mime) {
+    try {
+      form.runOnUiThread(new Runnable() {
+        public void run() {
+          FileNameGuessed(url, fileName, mime);
+        }
+      });
+    } catch (Exception e) {
+      FileNameGuessed(url, fileName, mime);
+    }
+  }
+
+  @SimpleEvent(description = "Hasil CallGuessFileName: url asal + fileName "
+      + "tebakan + mimeType (kosong bila tak diketahui).")
+  public void FileNameGuessed(String url, String fileName, String mimeType) {
+    EventDispatcher.dispatchEvent(this, "FileNameGuessed", url, fileName,
+        mimeType);
   }
 
   @SimpleFunction(description = "GET: nama file dari URL, mime, dan content-disposition "

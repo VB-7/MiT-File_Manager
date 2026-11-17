@@ -31,10 +31,11 @@ import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 @DesignerComponent(
-    version = 1,
+    version = 17,
     description = "Tools_Compress: bikin ZIP, ekstrak ZIP, intip isi ZIP, dan deteksi "
         + "jenis arsip (zip/rar/7z/tar/gz/...) dari magic-bytes. RAR/7z terdeteksi "
-        + "namun belum bisa dibuka (butuh library luar) — ZIP penuh bisa.",
+        + "namun belum bisa dibuka (butuh library luar) — ZIP penuh bisa. "
+        + "(v16: gate izin otomatis. v17 2026-11-17: penomoran versi.)",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,

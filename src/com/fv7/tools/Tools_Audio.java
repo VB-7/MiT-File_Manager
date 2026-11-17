@@ -24,10 +24,11 @@ import java.util.List;
 import java.util.Map;
 
 @DesignerComponent(
-    version = 1,
+    version = 17,
     description = "Tools_Audio: putar BANYAK audio ber-id (background, tanpa tampilan), kontrol "
         + "pause/resume/seek/maju/mundur, loop, volume. Satu id = satu audio, bisa jalan bareng. "
-        + "Id dikelola CreateAudioId / Tools_Base. List id URUT PEMBUATAN.",
+        + "Id dikelola CreateAudioId / Tools_Base. List id URUT PEMBUATAN. "
+        + "(v17 2026-11-17: tanpa perubahan fungsi; penomoran versi.)",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,
