@@ -41,6 +41,7 @@ import java.util.HashMap;
 @UsesPermissions({"android.permission.INTERNET",
     "android.permission.READ_EXTERNAL_STORAGE",
     "android.permission.WRITE_EXTERNAL_STORAGE",
+    "android.permission.MANAGE_EXTERNAL_STORAGE",
     "android.permission.POST_NOTIFICATIONS"})
 public class Tools_Downloader extends AndroidNonvisibleComponent
     implements OnDestroyListener {
@@ -166,6 +167,12 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     ni.message = "";
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
+        if (!Shared.ensurePermission(form, activity, Shared.PERM_WRITE_STORAGE)) {
+          final String permMsg = "izin belum granted (Android 11+: aktifkan 'Akses semua file')";
+          Shared.err(Tools_Downloader.this, "Download", op.id, permMsg);
+          failDownloadStart(op.id, permMsg);
+          return;
+        }
         runDownload(op);
       }
     });

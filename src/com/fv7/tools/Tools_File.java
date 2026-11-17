@@ -48,7 +48,16 @@ import java.util.Map;
     iconName = "aiwebres/tools_file.jpg")
 @SimpleObject(external = true)
 @UsesPermissions({"android.permission.READ_EXTERNAL_STORAGE",
-    "android.permission.WRITE_EXTERNAL_STORAGE"})
+    "android.permission.WRITE_EXTERNAL_STORAGE",
+    "android.permission.MANAGE_EXTERNAL_STORAGE",
+    "android.permission.CAMERA",
+    "android.permission.RECORD_AUDIO",
+    "android.permission.POST_NOTIFICATIONS",
+    "android.permission.READ_MEDIA_IMAGES",
+    "android.permission.READ_MEDIA_VIDEO",
+    "android.permission.READ_MEDIA_AUDIO",
+    "android.permission.ACCESS_FINE_LOCATION",
+    "android.permission.ACCESS_COARSE_LOCATION"})
 public class Tools_File extends AndroidNonvisibleComponent
     implements ActivityResultListener, OnDestroyListener {
 
@@ -257,6 +266,16 @@ public class Tools_File extends AndroidNonvisibleComponent
   public void CallSetHiddenDirectory(final String directory) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
+        if (!Shared.ensurePermission(form, activity, Shared.PERM_WRITE_STORAGE)) {
+          final String permMsg = "izin belum granted (Android 11+: aktifkan 'Akses semua file')";
+          Shared.err(Tools_File.this, "Directory", 0, permMsg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              DirectoryHidden(Shared.clean(directory), false, permMsg, WRITE_PERM);
+            }
+          });
+          return;
+        }
         String need = "";
         try {
           File d = findDir(directory);
@@ -331,6 +350,16 @@ public class Tools_File extends AndroidNonvisibleComponent
   public void CallMakeNomediaFile(final String folder) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
+        if (!Shared.ensurePermission(form, activity, Shared.PERM_WRITE_STORAGE)) {
+          final String permMsg = "izin belum granted (Android 11+: aktifkan 'Akses semua file')";
+          Shared.err(Tools_File.this, "Directory", 0, permMsg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              NomediaFileCreated(Shared.clean(folder), false, permMsg, WRITE_PERM);
+            }
+          });
+          return;
+        }
         try {
           if (wantAsset(folder)) {
             final String msg = "tidak bisa tulis ke Asset";
@@ -401,6 +430,16 @@ public class Tools_File extends AndroidNonvisibleComponent
   public void CallDeleteNomediaFile(final String folder) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
+        if (!Shared.ensurePermission(form, activity, Shared.PERM_WRITE_STORAGE)) {
+          final String permMsg = "izin belum granted (Android 11+: aktifkan 'Akses semua file')";
+          Shared.err(Tools_File.this, "Directory", 0, permMsg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              NomediaFileDeleted(Shared.clean(folder), false, permMsg, WRITE_PERM);
+            }
+          });
+          return;
+        }
         try {
           if (wantAsset(folder)) {
             final String msg = "tidak bisa tulis ke Asset";
@@ -464,6 +503,16 @@ public class Tools_File extends AndroidNonvisibleComponent
   public void CallMakeDirectory(final String folder) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
+        if (!Shared.ensurePermission(form, activity, Shared.PERM_WRITE_STORAGE)) {
+          final String permMsg = "izin belum granted (Android 11+: aktifkan 'Akses semua file')";
+          Shared.err(Tools_File.this, "Directory", 0, permMsg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              DirectoryCreated(Shared.clean(folder), false, permMsg, WRITE_PERM);
+            }
+          });
+          return;
+        }
         try {
           if (wantAsset(folder)) {
             final String msg = "tidak bisa tulis ke Asset";
@@ -529,6 +578,16 @@ public class Tools_File extends AndroidNonvisibleComponent
   public void CallDeleteFile(final String path) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
+        if (!Shared.ensurePermission(form, activity, Shared.PERM_WRITE_STORAGE)) {
+          final String permMsg = "izin belum granted (Android 11+: aktifkan 'Akses semua file')";
+          Shared.err(Tools_File.this, "File", 0, permMsg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              FileDeleted(Shared.clean(path), false, permMsg, WRITE_PERM);
+            }
+          });
+          return;
+        }
         try {
           if (wantAsset(path)) {
             final String msg = "tidak bisa hapus dari Asset";
@@ -591,6 +650,16 @@ public class Tools_File extends AndroidNonvisibleComponent
   public void CallDeleteList(final Object paths) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
+        if (!Shared.ensurePermission(form, activity, Shared.PERM_WRITE_STORAGE)) {
+          final String permMsg = "izin belum granted (Android 11+: aktifkan 'Akses semua file')";
+          Shared.err(Tools_File.this, "File", 0, permMsg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              FileListDeleted(false, 0, 0, permMsg, WRITE_PERM);
+            }
+          });
+          return;
+        }
         try {
           List<String> l = toStringList(paths);
           final int total = l.size();
@@ -649,6 +718,16 @@ public class Tools_File extends AndroidNonvisibleComponent
   public void CallRenameFile(final String path, final String newName) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
+        if (!Shared.ensurePermission(form, activity, Shared.PERM_WRITE_STORAGE)) {
+          final String permMsg = "izin belum granted (Android 11+: aktifkan 'Akses semua file')";
+          Shared.err(Tools_File.this, "File", 0, permMsg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              FileRenamed(Shared.clean(path), false, permMsg, WRITE_PERM);
+            }
+          });
+          return;
+        }
         try {
           if (wantAsset(path)) {
             final String msg = "tidak bisa rename di Asset";
@@ -722,6 +801,16 @@ public class Tools_File extends AndroidNonvisibleComponent
   public void CallRenameFolder(final String path, final String newName) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
+        if (!Shared.ensurePermission(form, activity, Shared.PERM_WRITE_STORAGE)) {
+          final String permMsg = "izin belum granted (Android 11+: aktifkan 'Akses semua file')";
+          Shared.err(Tools_File.this, "File", 0, permMsg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              FolderRenamed(Shared.clean(path), false, permMsg, WRITE_PERM);
+            }
+          });
+          return;
+        }
         try {
           if (wantAsset(path)) {
             final String msg = "tidak bisa rename di Asset";
@@ -797,6 +886,16 @@ public class Tools_File extends AndroidNonvisibleComponent
   public void CallCreateEmptyFile(final String path) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
+        if (!Shared.ensurePermission(form, activity, Shared.PERM_WRITE_STORAGE)) {
+          final String permMsg = "izin belum granted (Android 11+: aktifkan 'Akses semua file')";
+          Shared.err(Tools_File.this, "File", 0, permMsg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              EmptyFileCreated(Shared.clean(path), false, permMsg, WRITE_PERM);
+            }
+          });
+          return;
+        }
         try {
           if (wantAsset(path)) {
             final String msg = "tidak bisa tulis ke Asset";
@@ -869,6 +968,16 @@ public class Tools_File extends AndroidNonvisibleComponent
       final boolean append) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
+        if (!Shared.ensurePermission(form, activity, Shared.PERM_WRITE_STORAGE)) {
+          final String permMsg = "izin belum granted (Android 11+: aktifkan 'Akses semua file')";
+          Shared.err(Tools_File.this, "File", 0, permMsg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              FileSaved(Shared.clean(path), false, permMsg, WRITE_PERM);
+            }
+          });
+          return;
+        }
         try {
           if (wantAsset(path)) {
             final String msg = "tidak bisa tulis ke Asset";
@@ -940,6 +1049,17 @@ public class Tools_File extends AndroidNonvisibleComponent
   public void CallSaveBase64ToFile(final String base64, final String path) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
+        if (!Shared.ensurePermission(form, activity, Shared.PERM_WRITE_STORAGE)) {
+          final String permMsg = "izin belum granted (Android 11+: aktifkan 'Akses semua file')";
+          lastBase64Path = "";
+          Shared.err(Tools_File.this, "Base64", 0, permMsg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              Base64FileSaved(Shared.clean(path), false, permMsg, WRITE_PERM);
+            }
+          });
+          return;
+        }
         try {
           if (wantAsset(path)) {
             lastBase64Path = "";
@@ -1040,6 +1160,16 @@ public class Tools_File extends AndroidNonvisibleComponent
   public void CallReadText(final String path) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
+        if (!Shared.ensurePermission(form, activity, Shared.PERM_READ_STORAGE)) {
+          final String permMsg = "izin belum granted (Android 11+: aktifkan 'Akses semua file')";
+          Shared.err(Tools_File.this, "Read", 0, permMsg);
+          fireOnUi(new Runnable() {
+            public void run() {
+              GotText(false, Shared.clean(path), "", "");
+            }
+          });
+          return;
+        }
         final String p = Shared.clean(path);
         fireOnUi(new Runnable() {
           public void run() {
@@ -1155,6 +1285,12 @@ public class Tools_File extends AndroidNonvisibleComponent
     copyMoveCancel = false;
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
+        if (!Shared.ensurePermission(form, activity, Shared.PERM_WRITE_STORAGE)) {
+          final String permMsg = "izin belum granted (Android 11+: aktifkan 'Akses semua file')";
+          finishCopyOrMove(isMove, false, "", Shared.fileNameOf(toFileName), false, permMsg);
+          Shared.releaseSlot("copyormove");
+          return;
+        }
         runCopyOrMove(isMove, fromFileName, toFileName);
       }
     });
@@ -1710,7 +1846,9 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "Minta izin Android (cth: "
       + "android.permission.READ_EXTERNAL_STORAGE). Hasil lewat "
-      + "GotPermission. Pasang need_permission dari event lain ke sini.")
+      + "GotPermission. Pasang need_permission dari event lain ke sini. "
+      + "Android 11+: izin storage dialihkan ke 'Akses semua file' "
+      + "(pakai OpenAllFilesAccessSettings; cek IsAllFilesAccessGranted).")
   public void GetPermission(final String permission) {
     final String p = Shared.clean(permission);
     if (p.length() == 0) {
@@ -1718,6 +1856,26 @@ public class Tools_File extends AndroidNonvisibleComponent
       fireOnUi(new Runnable() {
         public void run() {
           GotPermission(false, "", "izin kosong");
+        }
+      });
+      return;
+    }
+    if (Shared.isStoragePerm(p) && android.os.Build.VERSION.SDK_INT >= 30) {
+      boolean mgr = false;
+      try {
+        mgr = android.os.Environment.isExternalStorageManager();
+      } catch (Exception e) {
+        mgr = false;
+      }
+      final boolean g = mgr;
+      if (!g) {
+        Shared.err(this, "Permission", 0, "Android 11+: butuh "
+            + "'Akses semua file' — pakai OpenAllFilesAccessSettings");
+      }
+      fireOnUi(new Runnable() {
+        public void run() {
+          GotPermission(g, p, g ? "" : "Android 11+: aktifkan "
+              + "'Akses semua file' via OpenAllFilesAccessSettings");
         }
       });
       return;
@@ -1750,6 +1908,202 @@ public class Tools_File extends AndroidNonvisibleComponent
         }
       });
     }
+  }
+
+  @SimpleFunction(description = "True bila aplikasi boleh tulis SEMUA file "
+      + "bersama. Android 11+ = 'Akses semua file' aktif; Android 10 ke "
+      + "bawah selalu true (izin tulis biasa cukup via GetPermission).")
+  public boolean IsAllFilesAccessGranted() {
+    try {
+      if (android.os.Build.VERSION.SDK_INT >= 30) {
+        return android.os.Environment.isExternalStorageManager();
+      }
+    } catch (Exception e) {
+      return false;
+    }
+    return true;
+  }
+
+  @SimpleFunction(description = "Buka layar Settings 'Akses semua file' "
+      + "untuk aplikasi ini (Android 11+). WAJIB agar tulis ke "
+      + "/storage/emulated/0 & SD card jalan. Setelah kembali, cek lewat "
+      + "IsAllFilesAccessGranted. Tanpa feedback.")
+  public void OpenAllFilesAccessSettings() {
+    try {
+      Shared.openAllFilesSettings(activity);
+    } catch (Exception e) {
+      Shared.err(this, "Permission", 0, "gagal buka settings");
+    }
+  }
+
+  @SimpleFunction(description = "True bila izin ini sudah granted. Untuk "
+      + "izin storage di Android 11+ = cek 'Akses semua file'. "
+      + "Android 6 ke bawah selalu true (izin sejak install). Colok blok "
+      + "Permission... ATAU teks string izinnya.")
+  public boolean IsPermissionGranted(String permission) {
+    String p = Shared.clean(permission);
+    if (p.length() == 0) {
+      return false;
+    }
+    try {
+      int sdk = android.os.Build.VERSION.SDK_INT;
+      String eff = Shared.effectivePermission(p, sdk);
+      if (eff == null) {
+        return true;
+      }
+      if (Shared.isStoragePerm(eff) && sdk >= 30) {
+        return android.os.Environment.isExternalStorageManager();
+      }
+      if (sdk >= 23) {
+        return activity.checkSelfPermission(eff)
+            == android.content.pm.PackageManager.PERMISSION_GRANTED;
+      }
+    } catch (Exception e) {
+      return false;
+    }
+    return true;
+  }
+
+  @SimpleFunction(description = "True bila izin tulis storage sudah beres "
+      + "(tanpa input apa pun). Android 11+ = 'Akses semua file' aktif; "
+      + "Android 10 ke bawah = izin tulis granted.")
+  public boolean IsStoragePermissionGranted() {
+    return IsPermissionGranted(WRITE_PERM);
+  }
+
+  @SimpleFunction(description = "CALL: pastikan 1 izin beres TANPA rakit "
+      + "manual — blok ini yang nentuin caranya (cek OS dulu): sudah "
+      + "granted = langsung GotPermission(true); storage Android 11+ "
+      + "belum = OTOMATIS buka Settings + GotPermission(false + pesan); "
+      + "lainnya = dialog izin + GotPermission. Tanpa return. Colok blok "
+      + "Permission... ATAU teks string izinnya.")
+  public void CallEnsurePermission(final String permission) {
+    final String p = Shared.clean(permission);
+    if (p.length() == 0) {
+      Shared.err(this, "Permission", 0, "izin kosong");
+      fireOnUi(new Runnable() {
+        public void run() {
+          GotPermission(false, "", "izin kosong");
+        }
+      });
+      return;
+    }
+    boolean granted = false;
+    try {
+      granted = IsPermissionGranted(p);
+    } catch (Exception e) {
+      granted = false;
+    }
+    if (granted) {
+      fireOnUi(new Runnable() {
+        public void run() {
+          GotPermission(true, p, "");
+        }
+      });
+      return;
+    }
+    int sdk = android.os.Build.VERSION.SDK_INT;
+    String eff = Shared.effectivePermission(p, sdk);
+    if (eff == null) {
+      fireOnUi(new Runnable() {
+        public void run() {
+          GotPermission(true, p, "tak perlu diminta di OS ini");
+        }
+      });
+      return;
+    }
+    if (Shared.isStoragePerm(eff) && sdk >= 30) {
+      Shared.err(this, "Permission", 0, "Android 11+: butuh "
+          + "'Akses semua file' — membuka Settings");
+      OpenAllFilesAccessSettings();
+      fireOnUi(new Runnable() {
+        public void run() {
+          GotPermission(false, p, "Android 11+: aktifkan "
+              + "'Akses semua file' di Settings yang dibuka");
+        }
+      });
+      return;
+    }
+    GetPermission(eff);
+  }
+
+  @SimpleFunction(description = "CALL: pastikan izin tulis storage beres "
+      + "(tanpa input apa pun) — hasil lewat GotPermission. Storage "
+      + "Android 11+ belum granted = otomatis buka Settings.")
+  public void CallEnsureStoragePermission() {
+    CallEnsurePermission(WRITE_PERM);
+  }
+
+  // ================= HELPER IZIN =================
+
+  @SimpleProperty(description = "Helper read-only: izin kamera. Colok ke "
+      + "IsPermissionGranted / CallEnsurePermission (tanpa ketik string).",
+      category = PropertyCategory.BEHAVIOR)
+  public String PermissionCamera() {
+    return "android.permission.CAMERA";
+  }
+
+  @SimpleProperty(description = "Helper read-only: izin mikrofon (rekam "
+      + "suara). Colok ke IsPermissionGranted / CallEnsurePermission.",
+      category = PropertyCategory.BEHAVIOR)
+  public String PermissionMicrophone() {
+    return "android.permission.RECORD_AUDIO";
+  }
+
+  @SimpleProperty(description = "Helper read-only: izin baca storage. "
+      + "Colok ke IsPermissionGranted / CallEnsurePermission.",
+      category = PropertyCategory.BEHAVIOR)
+  public String PermissionReadStorage() {
+    return READ_PERM;
+  }
+
+  @SimpleProperty(description = "Helper read-only: izin tulis storage. "
+      + "Colok ke IsPermissionGranted / CallEnsurePermission.",
+      category = PropertyCategory.BEHAVIOR)
+  public String PermissionWriteStorage() {
+    return WRITE_PERM;
+  }
+
+  @SimpleProperty(description = "Helper read-only: izin notifikasi "
+      + "(Android 13+). Colok ke IsPermissionGranted / CallEnsurePermission.",
+      category = PropertyCategory.BEHAVIOR)
+  public String PermissionNotifications() {
+    return "android.permission.POST_NOTIFICATIONS";
+  }
+
+  @SimpleProperty(description = "Helper read-only: izin baca gambar "
+      + "(Android 13+). Colok ke IsPermissionGranted / CallEnsurePermission.",
+      category = PropertyCategory.BEHAVIOR)
+  public String PermissionReadImages() {
+    return "android.permission.READ_MEDIA_IMAGES";
+  }
+
+  @SimpleProperty(description = "Helper read-only: izin baca video "
+      + "(Android 13+). Colok ke IsPermissionGranted / CallEnsurePermission.",
+      category = PropertyCategory.BEHAVIOR)
+  public String PermissionReadVideo() {
+    return "android.permission.READ_MEDIA_VIDEO";
+  }
+
+  @SimpleProperty(description = "Helper read-only: izin baca audio "
+      + "(Android 13+). Colok ke IsPermissionGranted / CallEnsurePermission.",
+      category = PropertyCategory.BEHAVIOR)
+  public String PermissionReadAudio() {
+    return "android.permission.READ_MEDIA_AUDIO";
+  }
+
+  @SimpleProperty(description = "Helper read-only: izin lokasi akurat. "
+      + "Colok ke IsPermissionGranted / CallEnsurePermission.",
+      category = PropertyCategory.BEHAVIOR)
+  public String PermissionLocationFine() {
+    return "android.permission.ACCESS_FINE_LOCATION";
+  }
+
+  @SimpleProperty(description = "Helper read-only: izin lokasi kasar. "
+      + "Colok ke IsPermissionGranted / CallEnsurePermission.",
+      category = PropertyCategory.BEHAVIOR)
+  public String PermissionLocationCoarse() {
+    return "android.permission.ACCESS_COARSE_LOCATION";
   }
 
   // ================= PICKER & BUKA =================

@@ -617,7 +617,7 @@ public class Tools_Base extends AndroidNonvisibleComponent {
 
   @SimpleFunction(description = "Versi paket Tools (sama untuk semua Tools_* dalam satu .aix).")
   public int ToolsVersion() {
-    return 15;
+    return 16;
   }
 
   // ================= OP + ERROR =================

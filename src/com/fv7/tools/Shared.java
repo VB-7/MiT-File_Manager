@@ -1,10 +1,13 @@
 package com.fv7.tools;
 
+import android.app.Activity;
 import android.content.Context;
 import android.os.Environment;
 
 import com.google.appinventor.components.runtime.Component;
 import com.google.appinventor.components.runtime.EventDispatcher;
+import com.google.appinventor.components.runtime.Form;
+import com.google.appinventor.components.runtime.PermissionResultHandler;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -77,6 +80,218 @@ public final class Shared {
       }
     } catch (Exception e) {
       return "";
+    }
+  }
+
+  // ================= izin sadar-OS =================
+
+  /** Izin tulis storage (dipakai gate otomatis + blok manual). */
+  public static final String PERM_WRITE_STORAGE =
+      "android.permission.WRITE_EXTERNAL_STORAGE";
+  /** Izin baca storage (dipakai gate operasi baca murni). */
+  public static final String PERM_READ_STORAGE =
+      "android.permission.READ_EXTERNAL_STORAGE";
+
+  /** Petakan izin ke bentuk EFEKTIF di OS ini. null = tak perlu diminta
+   *  (install-time / belum ada di OS ini) -> anggap granted. Berantai
+   *  (mis. visual-selected -> media-images -> storage) sampai stabil. */
+  public static String effectivePermission(String permission, int sdk) {
+    String p = permission == null ? "" : permission.trim();
+    if (p.length() == 0) {
+      return null;
+    }
+    for (int i = 0; i < 4 && p != null; i++) {
+      String q = effectiveOnce(p, sdk);
+      if (q == null || q.equals(p)) {
+        return q;
+      }
+      p = q;
+    }
+    return p;
+  }
+
+  private static String effectiveOnce(String p, int sdk) {
+    if (p.equals("android.permission.POST_NOTIFICATIONS")) {
+      return sdk >= 33 ? p : null;
+    }
+    if (p.equals("android.permission.READ_MEDIA_IMAGES")
+        || p.equals("android.permission.READ_MEDIA_VIDEO")
+        || p.equals("android.permission.READ_MEDIA_AUDIO")) {
+      return sdk >= 33 ? p : PERM_READ_STORAGE;
+    }
+    if (p.equals("android.permission.READ_MEDIA_VISUAL_USER_SELECTED")) {
+      return sdk >= 34 ? p : "android.permission.READ_MEDIA_IMAGES";
+    }
+    if (p.equals("android.permission.NEARBY_WIFI_DEVICES")) {
+      return sdk >= 33 ? p : "android.permission.ACCESS_FINE_LOCATION";
+    }
+    if (p.equals("android.permission.BLUETOOTH_SCAN")
+        || p.equals("android.permission.BLUETOOTH_CONNECT")
+        || p.equals("android.permission.BLUETOOTH_ADVERTISE")) {
+      return sdk >= 31 ? p : null;
+    }
+    return p;
+  }
+
+  /** True bila izin ini keluarga storage (cara ask-nya khusus per OS). */
+  public static boolean isStoragePerm(String p) {
+    return PERM_WRITE_STORAGE.equals(p) || PERM_READ_STORAGE.equals(p)
+        || "android.permission.MANAGE_EXTERNAL_STORAGE".equals(p);
+  }
+
+  private static final Object ASK_LOCK = new Object();
+  private static java.util.concurrent.CountDownLatch askLatch = null;
+  private static boolean askResult = false;
+  private static long lastSettingsOpen = 0;
+
+  /** Buka layar Settings 'Akses semua file' (throttle 10 dtk agar batch
+   *  tidak membuka berkali-kali). Aman di semua API. */
+  public static void openAllFilesSettings(final Activity activity) {
+    if (activity == null) {
+      return;
+    }
+    synchronized (ASK_LOCK) {
+      long now = System.currentTimeMillis();
+      if (now - lastSettingsOpen < 10000) {
+        return;
+      }
+      lastSettingsOpen = now;
+    }
+    try {
+      if (android.os.Build.VERSION.SDK_INT >= 30) {
+        try {
+          android.content.Intent it = new android.content.Intent(
+              "android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION");
+          it.setData(android.net.Uri.parse("package:"
+              + activity.getPackageName()));
+          it.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+          activity.startActivity(it);
+          return;
+        } catch (Exception e) {
+          // fallback di bawah
+        }
+        try {
+          android.content.Intent it2 = new android.content.Intent(
+              "android.settings.MANAGE_ALL_FILES_ACCESS_PERMISSION");
+          it2.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+          activity.startActivity(it2);
+          return;
+        } catch (Exception e) {
+          // abaikan
+        }
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    try {
+      android.content.Intent it3 = new android.content.Intent(
+          "android.settings.APPLICATION_DETAILS_SETTINGS");
+      it3.setData(android.net.Uri.parse("package:"
+          + activity.getPackageName()));
+      it3.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+      activity.startActivity(it3);
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  /** Gate otomatis: pastikan izin beres SEBELUM operasi storage jalan.
+   *  WAJIB dipanggil dari background thread (memblokir sampai user
+   *  menjawab dialog). Di UI thread: hanya cek status, tanpa aksi.
+   *  Kembali true = lanjut; false = operasi akan gagal downstream lewat
+   *  event gagalnya masing-masing (pesan + needPermission seperti biasa).
+   *  Sudah granted = cuma 1x cek, tanpa dialog/settings. */
+  public static boolean ensurePermission(final Form form,
+      final Activity activity, String permission) {
+    try {
+      int sdk = android.os.Build.VERSION.SDK_INT;
+      final String p = effectivePermission(permission, sdk);
+      if (p == null) {
+        return true;
+      }
+      boolean ui = android.os.Looper.myLooper()
+          == android.os.Looper.getMainLooper();
+      if (isStoragePerm(p) && sdk >= 30) {
+        boolean mgr = false;
+        try {
+          mgr = android.os.Environment.isExternalStorageManager();
+        } catch (Exception e) {
+          mgr = false;
+        }
+        if (mgr) {
+          return true;
+        }
+        if (!ui) {
+          openAllFilesSettings(activity);
+        }
+        return false;
+      }
+      if (sdk < 23) {
+        return true;
+      }
+      if (activity != null) {
+        try {
+          if (activity.checkSelfPermission(p)
+              == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            return true;
+          }
+        } catch (Exception e) {
+          // lanjut ke dialog
+        }
+      }
+      if (ui || form == null || activity == null) {
+        return false;
+      }
+      // single-flight: 1 dialog untuk semua op paralel (mis. batch).
+      java.util.concurrent.CountDownLatch latch;
+      synchronized (ASK_LOCK) {
+        if (askLatch == null) {
+          askLatch = new java.util.concurrent.CountDownLatch(1);
+          askResult = false;
+          final java.util.concurrent.CountDownLatch mine = askLatch;
+          try {
+            activity.runOnUiThread(new Runnable() {
+              public void run() {
+                try {
+                  form.askPermission(p, new PermissionResultHandler() {
+                    public void HandlePermissionResponse(String perm,
+                        boolean granted) {
+                      synchronized (ASK_LOCK) {
+                        askResult = granted;
+                        askLatch = null;
+                        mine.countDown();
+                      }
+                    }
+                  });
+                } catch (Exception e) {
+                  synchronized (ASK_LOCK) {
+                    askLatch = null;
+                    mine.countDown();
+                  }
+                }
+              }
+            });
+          } catch (Exception e) {
+            synchronized (ASK_LOCK) {
+              askLatch = null;
+              mine.countDown();
+            }
+          }
+        }
+        latch = askLatch;
+      }
+      if (latch != null) {
+        try {
+          latch.await(60, java.util.concurrent.TimeUnit.SECONDS);
+        } catch (Exception e) {
+          // abaikan
+        }
+      }
+      synchronized (ASK_LOCK) {
+        return askResult;
+      }
+    } catch (Exception e) {
+      return false;
     }
   }
 

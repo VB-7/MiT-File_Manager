@@ -41,7 +41,8 @@ import java.util.zip.ZipOutputStream;
     iconName = "aiwebres/tools_compress.jpg")
 @SimpleObject(external = true)
 @UsesPermissions({"android.permission.READ_EXTERNAL_STORAGE",
-    "android.permission.WRITE_EXTERNAL_STORAGE"})
+    "android.permission.WRITE_EXTERNAL_STORAGE",
+    "android.permission.MANAGE_EXTERNAL_STORAGE"})
 public class Tools_Compress extends AndroidNonvisibleComponent {
 
   private final Context context;
@@ -162,6 +163,12 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
     zipCancel = false;
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
+        if (!Shared.ensurePermission(form, activity, Shared.PERM_WRITE_STORAGE)) {
+          final String permMsg = "izin belum granted (Android 11+: aktifkan 'Akses semua file')";
+          Shared.releaseSlot("zip");
+          zipFinished(false, "", "", 0, 0, permMsg);
+          return;
+        }
         runZip(fPaths, fDst);
       }
     });
@@ -389,6 +396,19 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
     zipCancel = false;
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
+        if (!Shared.ensurePermission(form, activity, Shared.PERM_WRITE_STORAGE)) {
+          final String permMsg = "izin belum granted (Android 11+: aktifkan 'Akses semua file')";
+          Shared.releaseSlot("zip");
+          try {
+            if (fTmp != null) {
+              fTmp.delete();
+            }
+          } catch (Exception ex0) {
+            // abaikan
+          }
+          unzipFinished(false, "", 0, 0, permMsg);
+          return;
+        }
         try {
           runUnzip(fZf, fDir);
         } finally {
