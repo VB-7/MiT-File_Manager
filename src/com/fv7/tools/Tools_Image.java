@@ -1098,7 +1098,6 @@ public class Tools_Image extends AndroidNonvisibleComponent
       final Object paths) {
     final List<String> list = toStrList(paths);
     if (list.isEmpty()) {
-      Shared.err(this, "Slider", sliderId, "list gambar kosong");
       return;
     }
     Slider s;
@@ -1106,7 +1105,6 @@ public class Tools_Image extends AndroidNonvisibleComponent
       s = sliders.get(Integer.valueOf(sliderId));
     }
     if (s == null) {
-      Shared.err(this, "Slider", sliderId, "slider tidak ada");
       return;
     }
     final List<String> use = list.size() > 20 ? list.subList(0, 20) : list;
@@ -1203,7 +1201,6 @@ public class Tools_Image extends AndroidNonvisibleComponent
       s = sliders.get(Integer.valueOf(id));
     }
     if (s == null) {
-      Shared.err(this, "Slider", id, "slider tidak ada");
       return;
     }
     final Slider fS = s;
@@ -1247,7 +1244,6 @@ public class Tools_Image extends AndroidNonvisibleComponent
       s = sliders.get(Integer.valueOf(id));
     }
     if (s == null) {
-      Shared.err(this, "Slider", id, "slider tidak ada");
       return;
     }
     final Slider fS = s;

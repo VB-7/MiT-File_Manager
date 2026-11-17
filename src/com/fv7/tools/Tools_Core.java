@@ -311,7 +311,6 @@ public class Tools_Core extends AndroidNonvisibleComponent
   public void SetDynamicProperty(int id, String name, Object value) {
     String e = applyProperty(id, name, value);
     if (e != null) {
-      Shared.err(this, "Core", id, e);
     }
   }
 
@@ -357,7 +356,6 @@ public class Tools_Core extends AndroidNonvisibleComponent
     for (int i = 0; i < names.length && i < values.length; i = i + 1) {
       String e = applyProperty(id, names[i], values[i]);
       if (e != null) {
-        Shared.err(this, "Core", id, e);
       }
     }
   }

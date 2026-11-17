@@ -474,11 +474,9 @@ public class Tools_Video extends AndroidNonvisibleComponent
         Ids.setActive(Ids.VIDEO, id, false);
         updateTickState();
       } else {
-        Shared.err(this, "Video", id, "tidak ada video main ID " + id);
       }
     } catch (Exception e) {
       String m = e.getMessage();
-      Shared.err(this, "Video", id, m == null ? "pause gagal" : m);
     }
   }
 
@@ -491,11 +489,9 @@ public class Tools_Video extends AndroidNonvisibleComponent
         Ids.setActive(Ids.VIDEO, id, true);
         updateTickState();
       } else {
-        Shared.err(this, "Video", id, "tidak ada video jeda ID " + id);
       }
     } catch (Exception e) {
       String m = e.getMessage();
-      Shared.err(this, "Video", id, m == null ? "resume gagal" : m);
     }
   }
 
@@ -522,11 +518,9 @@ public class Tools_Video extends AndroidNonvisibleComponent
         Ids.setActive(Ids.VIDEO, id, false);
         updateTickState();
       } else {
-        Shared.err(this, "Video", id, "tidak ada video ID " + id);
       }
     } catch (Exception e) {
       String m = e.getMessage();
-      Shared.err(this, "Video", id, m == null ? "stop gagal" : m);
     }
   }
 
@@ -537,11 +531,9 @@ public class Tools_Video extends AndroidNonvisibleComponent
       if (vv != null && readyOf(id)) {
         vv.seekTo(position < 0 ? 0 : position);
       } else {
-        Shared.err(this, "Video", id, "tidak ada video main ID " + id);
       }
     } catch (Exception e) {
       String m = e.getMessage();
-      Shared.err(this, "Video", id, m == null ? "seek gagal" : m);
     }
   }
 
@@ -564,11 +556,9 @@ public class Tools_Video extends AndroidNonvisibleComponent
           vv.seekTo(pos + skip);
         }
       } else {
-        Shared.err(this, "Video", id, "tidak ada video main ID " + id);
       }
     } catch (Exception e) {
       String m = e.getMessage();
-      Shared.err(this, "Video", id, m == null ? "maju gagal" : m);
     }
   }
 
@@ -580,11 +570,9 @@ public class Tools_Video extends AndroidNonvisibleComponent
         int pos = vv.getCurrentPosition();
         vv.seekTo(Math.max(0, pos - skipSeconds * 1000));
       } else {
-        Shared.err(this, "Video", id, "tidak ada video main ID " + id);
       }
     } catch (Exception e) {
       String m = e.getMessage();
-      Shared.err(this, "Video", id, m == null ? "mundur gagal" : m);
     }
   }
 

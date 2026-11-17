@@ -615,7 +615,6 @@ public class Tools_Sheet extends AndroidNonvisibleComponent
       }
     } catch (Exception e) {
       String m = e.getMessage();
-      Shared.err(this, "Notification", 0, m == null ? "izin gagal" : m);
     }
   }
 

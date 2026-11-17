@@ -374,11 +374,9 @@ public class Tools_Audio extends AndroidNonvisibleComponent
         Ids.setActive(Ids.AUDIO, id, false);
         updateTickState();
       } else {
-        Shared.err(this, "Audio", id, "tidak ada audio bunyi ID " + id);
       }
     } catch (Exception e) {
       String m = e.getMessage();
-      Shared.err(this, "Audio", id, m == null ? "pause gagal" : m);
     }
   }
 
@@ -397,11 +395,9 @@ public class Tools_Audio extends AndroidNonvisibleComponent
         Ids.setActive(Ids.AUDIO, id, true);
         updateTickState();
       } else {
-        Shared.err(this, "Audio", id, "tidak ada audio jeda ID " + id);
       }
     } catch (Exception e) {
       String m = e.getMessage();
-      Shared.err(this, "Audio", id, m == null ? "resume gagal" : m);
     }
   }
 
@@ -416,11 +412,9 @@ public class Tools_Audio extends AndroidNonvisibleComponent
         stopInternal(id);
         updateTickState();
       } else {
-        Shared.err(this, "Audio", id, "tidak ada audio ID " + id);
       }
     } catch (Exception e) {
       String m = e.getMessage();
-      Shared.err(this, "Audio", id, m == null ? "stop gagal" : m);
     }
   }
 
@@ -437,11 +431,9 @@ public class Tools_Audio extends AndroidNonvisibleComponent
       if (mp != null && ready) {
         mp.seekTo(position < 0 ? 0 : position);
       } else {
-        Shared.err(this, "Audio", id, "tidak ada audio bunyi ID " + id);
       }
     } catch (Exception e) {
       String m = e.getMessage();
-      Shared.err(this, "Audio", id, m == null ? "seek gagal" : m);
     }
   }
 
@@ -470,11 +462,9 @@ public class Tools_Audio extends AndroidNonvisibleComponent
           mp.seekTo(pos + skip);
         }
       } else {
-        Shared.err(this, "Audio", id, "tidak ada audio bunyi ID " + id);
       }
     } catch (Exception e) {
       String m = e.getMessage();
-      Shared.err(this, "Audio", id, m == null ? "maju gagal" : m);
     }
   }
 
@@ -492,11 +482,9 @@ public class Tools_Audio extends AndroidNonvisibleComponent
         int pos = mp.getCurrentPosition();
         mp.seekTo(Math.max(0, pos - skipSeconds * 1000));
       } else {
-        Shared.err(this, "Audio", id, "tidak ada audio bunyi ID " + id);
       }
     } catch (Exception e) {
       String m = e.getMessage();
-      Shared.err(this, "Audio", id, m == null ? "mundur gagal" : m);
     }
   }
 

@@ -107,7 +107,6 @@ public class Tools_Style extends AndroidNonvisibleComponent {
       g.setCornerRadius(dp(Math.max(0, radiusDp)));
       v.setBackgroundDrawable(g);
     } catch (Exception e) {
-      Shared.err(this, "Style", 0, "radius gagal");
     }
   }
 
@@ -123,7 +122,6 @@ public class Tools_Style extends AndroidNonvisibleComponent {
       g.setStroke(dp(Math.max(0, widthDp)), color);
       v.setBackgroundDrawable(g);
     } catch (Exception e) {
-      Shared.err(this, "Style", 0, "border gagal");
     }
   }
 
@@ -138,7 +136,6 @@ public class Tools_Style extends AndroidNonvisibleComponent {
       return;
     }
     if (orientation < 0 || orientation > 7) {
-      Shared.err(this, "Style", 0, "arah harus 0-7");
       return;
     }
     ArrayList<Integer> list = new ArrayList<Integer>();
@@ -162,7 +159,6 @@ public class Tools_Style extends AndroidNonvisibleComponent {
       // abaikan
     }
     if (list.size() < 2) {
-      Shared.err(this, "Style", 0, "butuh minimal 2 warna");
       return;
     }
     try {
@@ -185,7 +181,6 @@ public class Tools_Style extends AndroidNonvisibleComponent {
       g.setOrientation(all[orientation]);
       v.setBackgroundDrawable(g);
     } catch (Exception e) {
-      Shared.err(this, "Style", 0, "gradien gagal");
     }
   }
 
@@ -204,7 +199,6 @@ public class Tools_Style extends AndroidNonvisibleComponent {
       g.setGradientRadius(dp(Math.max(0, radiusDp)));
       v.setBackgroundDrawable(g);
     } catch (Exception e) {
-      Shared.err(this, "Style", 0, "gradien radial gagal");
     }
   }
 
@@ -216,7 +210,6 @@ public class Tools_Style extends AndroidNonvisibleComponent {
       return;
     }
     if (shape < 0 || shape > 3) {
-      Shared.err(this, "Style", 0, "shape harus 0-3");
       return;
     }
     try {
@@ -224,7 +217,6 @@ public class Tools_Style extends AndroidNonvisibleComponent {
       g.setShape(shape);
       v.setBackgroundDrawable(g);
     } catch (Exception e) {
-      Shared.err(this, "Style", 0, "shape gagal");
     }
   }
 
@@ -262,7 +254,6 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     try {
       v.setVisibility(visibility);
     } catch (Exception e) {
-      Shared.err(this, "Style", 0, "visibility gagal");
     }
   }
 
@@ -293,7 +284,6 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     try {
       v.setRotation(degrees);
     } catch (Exception e) {
-      Shared.err(this, "Style", 0, "rotation gagal");
     }
   }
 
@@ -317,7 +307,6 @@ public class Tools_Style extends AndroidNonvisibleComponent {
         // abaikan
       }
     } catch (Exception e) {
-      Shared.err(this, "Style", 0, "ripple gagal");
     }
   }
 
@@ -339,7 +328,6 @@ public class Tools_Style extends AndroidNonvisibleComponent {
       }
       v.setBackgroundDrawable(g);
     } catch (Exception e) {
-      Shared.err(this, "Style", 0, "stroke gagal");
     }
   }
 
@@ -353,7 +341,6 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
     try {
       if (!(v instanceof android.widget.TextView)) {
-        Shared.err(this, "Style", 0, "bukan komponen teks");
         return;
       }
       android.widget.TextView tv = (android.widget.TextView) v;
@@ -364,7 +351,6 @@ public class Tools_Style extends AndroidNonvisibleComponent {
         // abaikan (API lama)
       }
     } catch (Exception e) {
-      Shared.err(this, "Style", 0, "textspace gagal");
     }
   }
 
@@ -380,7 +366,6 @@ public class Tools_Style extends AndroidNonvisibleComponent {
       g.setShape(GradientDrawable.OVAL);
       v.setBackgroundDrawable(g);
     } catch (Exception e) {
-      Shared.err(this, "Style", 0, "circular gagal");
     }
   }
 
@@ -398,7 +383,6 @@ public class Tools_Style extends AndroidNonvisibleComponent {
       g.setStroke(dp(Math.max(0, widthDp)), color);
       v.setBackgroundDrawable(g);
     } catch (Exception e) {
-      Shared.err(this, "Style", 0, "circular gagal");
     }
   }
 
@@ -418,7 +402,6 @@ public class Tools_Style extends AndroidNonvisibleComponent {
       v.setTranslationX(0.0f);
       v.setTranslationY(0.0f);
     } catch (Exception e) {
-      Shared.err(this, "Style", 0, "reset gagal");
     }
   }
 
@@ -434,7 +417,6 @@ public class Tools_Style extends AndroidNonvisibleComponent {
       g.setColor(color);
       v.setBackgroundDrawable(g);
     } catch (Exception e) {
-      Shared.err(this, "Style", 0, "background gagal");
     }
   }
 
@@ -448,7 +430,6 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
     final String p = Shared.clean(path == null ? "" : path);
     if (p.length() == 0) {
-      Shared.err(this, "Style", 0, "path kosong");
       return;
     }
     AsynchUtil.runAsynchronously(new Runnable() {
@@ -538,7 +519,6 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     try {
       v.setElevation(dp(Math.max(0, dp)));
     } catch (Exception e) {
-      Shared.err(this, "Style", 0, "elevation gagal");
     }
   }
 
@@ -553,7 +533,6 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     try {
       v.setPadding(dp(leftDp), dp(topDp), dp(rightDp), dp(bottomDp));
     } catch (Exception e) {
-      Shared.err(this, "Style", 0, "padding gagal");
     }
   }
 
@@ -572,10 +551,8 @@ public class Tools_Style extends AndroidNonvisibleComponent {
             dp(rightDp), dp(bottomDp));
         v.requestLayout();
       } else {
-        Shared.err(this, "Style", 0, "induk tidak mendukung margin");
       }
     } catch (Exception e) {
-      Shared.err(this, "Style", 0, "margin gagal");
     }
   }
 
@@ -589,7 +566,6 @@ public class Tools_Style extends AndroidNonvisibleComponent {
       int p = Math.max(0, Math.min(100, percent));
       v.setAlpha(p / 100.0f);
     } catch (Exception e) {
-      Shared.err(this, "Style", 0, "opacity gagal");
     }
   }
 

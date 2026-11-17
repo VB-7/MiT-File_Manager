@@ -718,7 +718,6 @@ public class Tools_Task extends AndroidNonvisibleComponent
     synchronized (lock) {
       Task t = tasks.get(Integer.valueOf(id));
       if (t == null || !"jalan".equals(t.status)) {
-        Shared.err(this, "Task", id, "tidak ada tugas jalan ID " + id);
         return;
       }
       try {
@@ -742,7 +741,6 @@ public class Tools_Task extends AndroidNonvisibleComponent
     synchronized (lock) {
       t = tasks.get(Integer.valueOf(id));
       if (t == null || !"jeda".equals(t.status)) {
-        Shared.err(this, "Task", id, "tidak ada tugas jeda ID " + id);
         return;
       }
       t.status = "jalan";
@@ -759,7 +757,6 @@ public class Tools_Task extends AndroidNonvisibleComponent
       Handler h = main();
       if (h == null || t.runner == null) {
         t.status = "gagal";
-        Shared.err(this, "Task", id, "penjadwal tidak tersedia");
         updateActive(id);
         return;
       }
@@ -974,12 +971,10 @@ public class Tools_Task extends AndroidNonvisibleComponent
     synchronized (lock) {
       Task t = tasks.get(Integer.valueOf(id));
       if (t == null) {
-        Shared.err(this, "Task", id, "tugas tidak ada ID " + id);
         return;
       }
       String k = key == null ? "" : key.trim();
       if (k.length() == 0) {
-        Shared.err(this, "Task", id, "kunci kosong");
         return;
       }
       t.extras.put(k, value == null ? "" : value);
@@ -1043,7 +1038,6 @@ public class Tools_Task extends AndroidNonvisibleComponent
   public void SetVar(String name, String value) {
     String n = name == null ? "" : name.trim();
     if (n.length() == 0) {
-      Shared.err(this, "Var", 0, "nama kosong");
       return;
     }
     synchronized (lock) {
@@ -1166,7 +1160,6 @@ public class Tools_Task extends AndroidNonvisibleComponent
       }
     } catch (Exception e) {
       String m = e.getMessage();
-      Shared.err(this, "Alarm", 0, m == null ? "izin gagal" : m);
     }
   }
 
@@ -1315,8 +1308,8 @@ public class Tools_Task extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "CALL: WAJIB dipanggil di Screen.Initialize (dan "
       + "timer bila perlu): cek apakah aplikasi dibuka oleh alarm Tools_Task. "
-      + "Kembali id alarm (atau -1). Bila baru, menembak AlarmFired.")
-  public int CallCheckStartupAlarm() {
+      + "Tanpa return: bila dibuka oleh alarm dan datanya baru, menembak AlarmFired.")
+  public void CallCheckStartupAlarm() {
     int found = -1;
     String pay = "";
     try {
@@ -1367,9 +1360,8 @@ public class Tools_Task extends AndroidNonvisibleComponent
       } catch (Exception e) {
         // abaikan
       }
-      return found;
+      return;
     }
-    return -1;
   }
 
   private void unpersistOneShot(int id) {
@@ -1383,13 +1375,12 @@ public class Tools_Task extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "CALL: Pasang ulang SEMUA alarm tersimpan (mis. "
-      + "habis reboot: panggil di Screen.Initialize). Kembali jumlah dipasang.")
-  public int CallRestoreAlarms() {
-    int count = 0;
+      + "habis reboot: panggil di Screen.Initialize). Tanpa return.")
+  public void CallRestoreAlarms() {
     try {
       SharedPreferences p = prefs(context);
       if (p == null) {
-        return 0;
+        return;
       }
       Set<String> ids = null;
       try {
@@ -1398,7 +1389,7 @@ public class Tools_Task extends AndroidNonvisibleComponent
         ids = new HashSet<String>();
       }
       if (ids == null) {
-        return 0;
+        return;
       }
       ArrayList<String> copy = new ArrayList<String>(ids);
       for (int i = 0; i < copy.size(); i = i + 1) {
@@ -1440,14 +1431,12 @@ public class Tools_Task extends AndroidNonvisibleComponent
           }
           persistAlarm(a);
           Ids.setActive(Ids.TASK, id, true);
-          count = count + 1;
         }
       }
     } catch (Exception e) {
       String m = e.getMessage();
       Shared.err(this, "Alarm", 0, m == null ? "restore gagal" : m);
     }
-    return count;
   }
 
   // ================= notifikasi + wake =================
@@ -1552,7 +1541,6 @@ public class Tools_Task extends AndroidNonvisibleComponent
           pm = null;
         }
         if (pm == null) {
-          Shared.err(this, "Task", 0, "power service tidak ada");
           return;
         }
         synchronized (lock) {
@@ -1578,7 +1566,6 @@ public class Tools_Task extends AndroidNonvisibleComponent
             }
           } catch (Exception e) {
             String m = e.getMessage();
-            Shared.err(this, "Task", 0, m == null ? "wake gagal" : m);
           }
         }
       } else {
@@ -1595,7 +1582,6 @@ public class Tools_Task extends AndroidNonvisibleComponent
       }
     } catch (Exception e) {
       String m = e.getMessage();
-      Shared.err(this, "Task", 0, m == null ? "wake gagal" : m);
     }
   }
 

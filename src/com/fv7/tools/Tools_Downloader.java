@@ -395,28 +395,28 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "CALL: unduh BANYAK URL sekaligus (tanpa loop manual). fileNames "
-      + "boleh kosong (= otomatis semua). folder seperti CallDownload. Kembali: list id "
-      + "URUT PEMBUATAN (pantau per id). Ringkasan lewat DownloadBatchFinished. "
-      + "Satu batch per saat.")
-  public List<Integer> CallDownloadList(Object urls, Object fileNames,
+      + "boleh kosong (= otomatis semua). folder seperti CallDownload. Tanpa return: "
+      + "pantau tiap id lewat DownloadStarted/DownloadProgressChanged/DownloadFinished. "
+      + "Ringkasan lewat DownloadBatchFinished. Satu batch per saat.")
+  public void CallDownloadList(Object urls, Object fileNames,
       String folder) {
-    ArrayList<Integer> out = new ArrayList<Integer>();
+    int started = 0;
     synchronized (lock) {
       if (dlBatchActive) {
         Shared.err(this, "Download", 0, "masih ada batch unduhan berjalan");
-        return out;
+        return;
       }
     }
     List<String> us = toStrList(urls);
     List<String> ns = toStrList(fileNames);
     if (us.isEmpty()) {
       Shared.err(this, "Download", 0, "list URL kosong");
-      return out;
+      return;
     }
     File dir = Shared.resolveRooted(folder);
     if (dir == null) {
       Shared.err(this, "Download", 0, "tidak bisa unduh ke Asset");
-      return out;
+      return;
     }
     synchronized (lock) {
       dlBatchActive = true;
@@ -449,16 +449,15 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
         continue;
       }
       Ids.unregister(Ids.DOWNLOAD, id);
-      out.add(Integer.valueOf(id));
+      started = started + 1;
       CallDownload(us.get(i), fn, folder, id);
     }
-    if (out.isEmpty()) {
+    if (started == 0) {
       synchronized (lock) {
         dlBatchActive = false;
       }
       Shared.err(this, "Download", 0, "tidak ada URL yang bisa mulai");
     }
-    return out;
   }
 
   private List<String> toStrList(Object o) {
@@ -513,7 +512,6 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
       op = downloads.get(Integer.valueOf(id));
     }
     if (op == null) {
-      Shared.err(this, "Download", id, "tidak ada unduhan ID " + id);
       return;
     }
     op.paused = true;
@@ -528,7 +526,6 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
       op = downloads.get(Integer.valueOf(id));
     }
     if (op == null) {
-      Shared.err(this, "Download", id, "tidak ada unduhan ID " + id);
       return;
     }
     synchronized (op.pauseLock) {

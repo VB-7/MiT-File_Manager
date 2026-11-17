@@ -539,7 +539,6 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
   @SimpleFunction(description = "SET: batalkan proses ZIP/Unzip berjalan. Tanpa feedback.")
   public void SetCancelZip() {
     if (!Shared.slotBusy("zip")) {
-      Shared.err(this, "Zip", 0, "tidak ada proses arsip berjalan");
       return;
     }
     zipCancel = true;
