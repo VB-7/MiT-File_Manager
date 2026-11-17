@@ -25,7 +25,6 @@ import com.google.appinventor.components.annotations.SimpleObject;
 import com.google.appinventor.components.annotations.SimpleProperty;
 import com.google.appinventor.components.annotations.UsesPermissions;
 import com.google.appinventor.components.common.ComponentCategory;
-import com.google.appinventor.components.common.FileScope;
 import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
 import com.google.appinventor.components.runtime.AndroidViewComponent;
 import com.google.appinventor.components.runtime.ComponentContainer;
@@ -163,14 +162,14 @@ public class Tools_Image extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "CALL: tampilkan gambar ber-id ke layout (Arrangement MIT / dinamis). "
-      + "Bisa jalan bareng (satu id = satu gambar). source kosong = pakai path + scope "
-      + "(helper Scope, teks, atau absolut). "
+      + "Bisa jalan bareng (satu id = satu gambar). source kosong = pakai path "
+      + "(otomatis di-root /storage/emulated/0). "
       + "source bisa: path file, file:/// absolut, http(s) URL (di-cache otomatis), "
       + "atau base64 (mentah / data:...). id = penanda (minta ke CreateImageId / "
       + "Tools_Base CreateUniqueId, reservasi otomatis diadopsi). Sukses menembak "
       + "ImageShown; gagal via ErrorOccurred.")
   public void CallShowImage(final AndroidViewComponent container, final String source,
-      final String path, final String scope, final int id) {
+      final String path, final int id) {
     if (id < 1) {
       Shared.err(this, "Image", id, "id harus >= 1 (pakai CreateImageId)");
       return;
@@ -189,7 +188,6 @@ public class Tools_Image extends AndroidNonvisibleComponent
     Ids.setActive(Ids.IMAGE, id, true);
     final String src = Shared.clean(source == null ? "" : source);
     final String fP = Shared.clean(path == null ? "" : path);
-    final FileScope fS = Shared.effScope(scope, src.length() > 0 ? src : fP);
     final AndroidViewComponent fContainer = container;
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
@@ -281,7 +279,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
             String p = Shared.clean(usePath);
             if (p.length() == 0) {
               err = "path kosong";
-            } else if (fS == FileScope.Asset || Shared.isAssetPath(p)) {
+            } else if (Shared.isAssetPath(p)) {
               InputStream in = context.getAssets().open(Shared.assetName(p));
               byte[] data;
               try {
@@ -300,7 +298,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
                 disp = usePath;
               }
             } else {
-              File f = Shared.resolve(context, fS, usePath);
+              File f = Shared.resolveRooted(usePath);
               if (f == null || !f.exists()) {
                 err = "file tidak ada";
               } else {
@@ -806,7 +804,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
 
   // ================= SLIDER =================
 
-  private Bitmap loadBitmap(String src, String scopeText, String fallbackPath) {
+  private Bitmap loadBitmap(String src, String fallbackPath) {
     try {
       String s = Shared.clean(src == null ? "" : src);
       String usePath = s.length() > 0 ? s : Shared.clean(fallbackPath);
@@ -857,7 +855,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
         return null;
       }
       byte[] data = null;
-      if (Shared.effScope(scopeText, p) == FileScope.Asset || Shared.isAssetPath(p)) {
+      if (Shared.isAssetPath(p)) {
         InputStream in = context.getAssets().open(Shared.assetName(p));
         try {
           data = Shared.readAll(in);
@@ -869,7 +867,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
           }
         }
       } else {
-        File f = Shared.resolve(context, Shared.effScope(scopeText, p), p);
+        File f = Shared.resolveRooted(p);
         if (f == null || !f.exists()) {
           return null;
         }
@@ -1094,10 +1092,10 @@ public class Tools_Image extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "SET: isi slider ber-id dengan daftar gambar "
       + "(list teks: path file/asset, URL http, atau base64 — sama fleksibelnya "
-      + "dengan ShowImage; scope+path dipakai bila item kosong). Maks 20 "
+      + "dengan ShowImage; path dipakai bila item kosong). Maks 20 "
       + "gambar. Gagal via ErrorOccurred.")
   public void SetSliderImages(final int sliderId,
-      final Object paths, final String scope) {
+      final Object paths) {
     final List<String> list = toStrList(paths);
     if (list.isEmpty()) {
       Shared.err(this, "Slider", sliderId, "list gambar kosong");
@@ -1117,7 +1115,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
         final ArrayList<Bitmap> bmps = new ArrayList<Bitmap>();
         int fail = 0;
         for (int i = 0; i < use.size(); i = i + 1) {
-          Bitmap b = loadBitmap(use.get(i), scope, "");
+          Bitmap b = loadBitmap(use.get(i), "");
           if (b == null) {
             fail = fail + 1;
           } else {
@@ -1474,7 +1472,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
   public void CallBase64ToPicture(final String base64) {
     if (!Shared.claimSlot("b64pic")) {
       Shared.err(this, "Base64", 0, "masih ada proses gambar berjalan");
-      AfterPictureBase64Ready(false, "", "", "", "masih ada proses gambar berjalan");
+      AfterPictureBase64Ready(false, "", "", "masih ada proses gambar berjalan");
       return;
     }
     final String b64 = base64 == null ? "" : base64;
@@ -1541,7 +1539,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
                   lastPicturePath = fPath;
                 }
               }
-              AfterPictureBase64Ready(fOk, "Cache", fPath, fName, fMsg);
+              AfterPictureBase64Ready(fOk, fPath, fName, fMsg);
             }
           });
         } catch (Exception e) {
@@ -1550,7 +1548,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
               lastPicturePath = fPath;
             }
           }
-          AfterPictureBase64Ready(fOk, "Cache", fPath, fName, fMsg);
+          AfterPictureBase64Ready(fOk, fPath, fName, fMsg);
         }
         if (!fOk) {
           Shared.err(Tools_Image.this, "Base64", 0, fMsg);
@@ -1561,14 +1559,14 @@ public class Tools_Image extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "Lebar dan tinggi gambar (pixel). Kembali: list [lebar, tinggi]. "
       + "[0, 0] bila bukan gambar / tidak ada.")
-  public List<Integer> GetImageSize(String path, String scope) {
+  public List<Integer> GetImageSize(String path) {
     ArrayList<Integer> out = new ArrayList<Integer>();
     out.add(Integer.valueOf(0));
     out.add(Integer.valueOf(0));
     try {
       String p = Shared.clean(path);
       byte[] data = null;
-      if (Shared.effScope(scope, p) == FileScope.Asset || Shared.isAssetPath(p)) {
+      if (Shared.isAssetPath(p)) {
         InputStream in = context.getAssets().open(Shared.assetName(p));
         try {
           data = Shared.readAll(in);
@@ -1580,7 +1578,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
           }
         }
       } else {
-        File f = Shared.resolve(context, Shared.effScope(scope, p), path);
+        File f = Shared.resolveRooted(path);
         if (f == null || !f.exists()) {
           Shared.err(this, "Image", 0, "file tidak ada");
           return out;
@@ -1660,12 +1658,11 @@ public class Tools_Image extends AndroidNonvisibleComponent
     EventDispatcher.dispatchEvent(this, "PictureStarted");
   }
 
-  @SimpleEvent(description = "Hasil CallBase64ToPicture: success pertama, scope menemani path "
-      + "(selalu Cache), fileName paling belakang. Path siap ke Image.Picture.")
-  public void AfterPictureBase64Ready(boolean success, String scope, String path,
+  @SimpleEvent(description = "Hasil CallBase64ToPicture: success pertama, path absolut "
+      + "(cache), fileName paling belakang. Path siap ke Image.Picture.")
+  public void AfterPictureBase64Ready(boolean success, String path,
       String fileName, String message) {
-    EventDispatcher.dispatchEvent(this, "AfterPictureBase64Ready",
-        Boolean.valueOf(success), scope, path, fileName, message);
+    EventDispatcher.dispatchEvent(this, "AfterPictureBase64Ready", Boolean.valueOf(success), path, fileName, message);
   }
 
   @SimpleEvent(description = "SATU-SATUNYA error Tools_Image. component = nama operasi "

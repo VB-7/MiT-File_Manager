@@ -19,7 +19,6 @@ import com.google.appinventor.components.annotations.SimpleFunction;
 import com.google.appinventor.components.annotations.SimpleObject;
 import com.google.appinventor.components.annotations.SimpleProperty;
 import com.google.appinventor.components.common.ComponentCategory;
-import com.google.appinventor.components.common.FileScope;
 import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
 import com.google.appinventor.components.runtime.AndroidViewComponent;
 import com.google.appinventor.components.runtime.ComponentContainer;
@@ -439,10 +438,10 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "SET: Atur gambar background (file/asset, scope+"
-      + "path). Cocok untuk wadah.")
+  @SimpleFunction(description = "SET: Atur gambar background (file/asset, "
+      + "path di-root /storage/emulated/0). Cocok untuk wadah.")
   public void SetBackgroundImage(AndroidViewComponent comp,
-      final String path, final String scope) {
+      final String path) {
     final View v = viewOf(comp, "BackgroundImage");
     if (v == null) {
       return;
@@ -452,13 +451,12 @@ public class Tools_Style extends AndroidNonvisibleComponent {
       Shared.err(this, "Style", 0, "path kosong");
       return;
     }
-    final FileScope fS = Shared.effScope(scope, p);
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         Bitmap bmp = null;
         try {
           byte[] data = null;
-          if (fS == FileScope.Asset || Shared.isAssetPath(p)) {
+          if (Shared.isAssetPath(p)) {
             InputStream in = context.getAssets().open(Shared.assetName(p));
             try {
               data = Shared.readAll(in);
@@ -470,7 +468,7 @@ public class Tools_Style extends AndroidNonvisibleComponent {
               }
             }
           } else {
-            File f = Shared.resolve(context, fS, p);
+            File f = Shared.resolveRooted(p);
             if (f == null || !f.exists()) {
               Shared.err(Tools_Style.this, "Style", 0, "file tidak ada");
               return;

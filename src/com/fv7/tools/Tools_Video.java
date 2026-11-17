@@ -19,7 +19,6 @@ import com.google.appinventor.components.annotations.SimpleFunction;
 import com.google.appinventor.components.annotations.SimpleObject;
 import com.google.appinventor.components.annotations.SimpleProperty;
 import com.google.appinventor.components.common.ComponentCategory;
-import com.google.appinventor.components.common.FileScope;
 import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
 import com.google.appinventor.components.runtime.AndroidViewComponent;
 import com.google.appinventor.components.runtime.ComponentContainer;
@@ -173,14 +172,14 @@ public class Tools_Video extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Putar video ber-id di dalam layout (Arrangement MIT / dinamis). "
-      + "Bisa jalan bareng (satu id = satu video). path bisa file scope, file:/// absolut, "
-      + "atau http(s) URL (streaming). id dari CreateVideoId / Tools_Base CreateUniqueId. "
+      + "Bisa jalan bareng (satu id = satu video). path file (/Download/..., absolut "
+      + "apa adanya), atau http(s) URL (streaming). id dari CreateVideoId / "
+      + "Tools_Base CreateUniqueId. "
       + "Atur tinggi arrangement (mis. 300px) agar video kelihatan. "
       + "Double-tap: kiri = mundur, kanan = maju, tengah = pause/resume. "
-      + "Sukses menembak VideoStarted; gagal via ErrorOccurred. scope: helper "
-      + "Scope, teks, atau absolut.")
+      + "Sukses menembak VideoStarted; gagal via ErrorOccurred.")
   public void CallPlayVideoIn(final AndroidViewComponent container,
-      final String path, final String scope, final int id) {
+      final String path, final int id) {
     if (id < 1) {
       Shared.err(this, "Video", id, "id harus >= 1 (pakai CreateVideoId)");
       return;
@@ -268,9 +267,14 @@ public class Tools_Video extends AndroidNonvisibleComponent
             if (sv.regionMatches(true, 0, "http", 0, 4)) {
               fVv.setVideoURI(Uri.parse(sv));
             } else if (sv.startsWith("file://")) {
-              fVv.setVideoPath(Shared.normalizePath(
-                  Shared.stripLeadingSlash(sv.substring(7))));
-            } else if (Shared.effScope(scope, sv) == FileScope.Asset || Shared.isAssetPath(sv)) {
+              File fv = Shared.resolveRooted(sv);
+              if (fv == null || !fv.exists()) {
+                Ids.unregister(Ids.VIDEO, id);
+                Shared.err(Tools_Video.this, "Video", id, "file tidak ada");
+                return;
+              }
+              fVv.setVideoPath(fv.getAbsolutePath());
+            } else if (Shared.isAssetPath(sv)) {
               File cache = context.getCacheDir();
               if (!cache.exists()) {
                 cache.mkdirs();
@@ -298,7 +302,7 @@ public class Tools_Video extends AndroidNonvisibleComponent
               }
               fVv.setVideoPath(dst.getAbsolutePath());
             } else {
-              File f = Shared.resolve(context, Shared.effScope(scope, sv), sv);
+              File f = Shared.resolveRooted(sv);
               if (f == null || !f.exists()) {
                 Ids.unregister(Ids.VIDEO, id);
                 Shared.err(Tools_Video.this, "Video", id, "file tidak ada");

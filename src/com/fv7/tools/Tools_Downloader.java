@@ -98,13 +98,12 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     this.activity = container.$context();
   }
 
-  @SimpleFunction(description = "CALL: unduh URL ke folder scope. scope: keluaran helper "
-      + "Scope (\"App:folder\"), teks (\"App\"/\"Shared\"/\"\"), atau absolut. fileName kosong = "
+  @SimpleFunction(description = "CALL: unduh URL ke folder (otomatis di-root "
+      + "/storage/emulated/0; absolut apa adanya). fileName kosong = "
       + "nama otomatis. id = angka bebas yang belum dipakai (minta ke Tools_Base "
       + "CreateUniqueId atau CreateDownloadId). Hasil lewat DownloadStarted/"
       + "ProgressChanged/Finished (bawa id).")
-  public void CallDownload(String url, String fileName, String folder,
-      String scope, int id) {
+  public void CallDownload(String url, String fileName, String folder, int id) {
     String u = Shared.clean(url);
     if (u.length() == 0) {
       Shared.err(this, "Download", id, "URL kosong");
@@ -129,7 +128,7 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
         return;
       }
     }
-    File dir = Shared.resolveScope(context, scope, folder);
+    File dir = Shared.resolveRooted(folder);
     if (dir == null) {
       Ids.unregister(Ids.DOWNLOAD, id);
       Shared.err(this, "Download", id, "tidak bisa unduh ke Asset");
@@ -392,11 +391,11 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "CALL: unduh BANYAK URL sekaligus (tanpa loop manual). fileNames "
-      + "boleh kosong (= otomatis semua). scope seperti CallDownload. Kembali: list id "
+      + "boleh kosong (= otomatis semua). folder seperti CallDownload. Kembali: list id "
       + "URUT PEMBUATAN (pantau per id). Ringkasan lewat DownloadBatchFinished. "
       + "Satu batch per saat.")
   public List<Integer> CallDownloadList(Object urls, Object fileNames,
-      String folder, String scope) {
+      String folder) {
     ArrayList<Integer> out = new ArrayList<Integer>();
     synchronized (lock) {
       if (dlBatchActive) {
@@ -410,7 +409,7 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
       Shared.err(this, "Download", 0, "list URL kosong");
       return out;
     }
-    File dir = Shared.resolveScope(context, scope, folder);
+    File dir = Shared.resolveRooted(folder);
     if (dir == null) {
       Shared.err(this, "Download", 0, "tidak bisa unduh ke Asset");
       return out;
@@ -447,7 +446,7 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
       }
       Ids.unregister(Ids.DOWNLOAD, id);
       out.add(Integer.valueOf(id));
-      CallDownload(us.get(i), fn, folder, scope, id);
+      CallDownload(us.get(i), fn, folder, id);
     }
     if (out.isEmpty()) {
       synchronized (lock) {

@@ -11,7 +11,6 @@ import com.google.appinventor.components.annotations.SimpleObject;
 import com.google.appinventor.components.annotations.SimpleProperty;
 import com.google.appinventor.components.annotations.UsesPermissions;
 import com.google.appinventor.components.common.ComponentCategory;
-import com.google.appinventor.components.common.FileScope;
 import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
 import com.google.appinventor.components.runtime.ComponentContainer;
 import com.google.appinventor.components.runtime.EventDispatcher;
@@ -58,12 +57,11 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
   @SimpleFunction(description = "Deteksi jenis file dari ISINYA (bukan ekstensi). Kembali: zip, "
       + "rar, 7z, gz, bz2, xz, tar, apk, pdf, png, jpg, gif, mp3, mp4, atau unknown. "
       + "Instan, tanpa id.")
-  public String DetectArchiveType(String path, String scope) {
+  public String DetectArchiveType(String path) {
     File tmpAsset = null;
     try {
-      File f = Shared.resolve(context, Shared.effScope(scope, path), path);
-      if (f == null && (Shared.effScope(scope, path) == FileScope.Asset
-          || Shared.isAssetPath(path))) {
+      File f = Shared.resolveRooted(path);
+      if (f == null && Shared.isAssetPath(path)) {
         tmpAsset = Shared.assetToCache(context, path);
         f = tmpAsset;
       }
@@ -92,14 +90,13 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "Daftar isi ZIP (nama entri). Instan. Kosong bila bukan ZIP.")
-  public List<String> ListZipContents(String zipPath, String scope) {
+  public List<String> ListZipContents(String zipPath) {
     ArrayList<String> out = new ArrayList<String>();
     ZipFile zf = null;
     File tmpAsset = null;
     try {
-      File f = Shared.resolve(context, Shared.effScope(scope, zipPath), zipPath);
-      if (f == null && (Shared.effScope(scope, zipPath) == FileScope.Asset
-          || Shared.isAssetPath(zipPath))) {
+      File f = Shared.resolveRooted(zipPath);
+      if (f == null && Shared.isAssetPath(zipPath)) {
         tmpAsset = Shared.assetToCache(context, zipPath);
         f = tmpAsset;
       }
@@ -137,42 +134,40 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
   @SimpleFunction(description = "CALL: bikin ZIP dari BANYAK file sekaligus (tanpa loop). paths = "
       + "list path sumber. destZip = path file zip tujuan. Mulai = menembak Started; gagal via ErrorOccurred. "
       + "Pantau via ZipStarted/ProgressChanged/Finished. Satu proses ZIP per saat.")
-  public void CallZipFiles(Object paths, String destZip, String scope) {
+  public void CallZipFiles(Object paths, String destZip) {
     if (!Shared.claimSlot("zip")) {
       Shared.err(this, "Zip", 0, "masih ada proses arsip berjalan");
-      ZipFinished(false, (scope == null ? "" : scope), "", "", 0, 0, "masih ada proses arsip berjalan");
+      ZipFinished(false, "", "", "", 0, 0, "masih ada proses arsip berjalan");
       return;
     }
     List<String> list = toStrList(paths);
     if (list.isEmpty()) {
       Shared.releaseSlot("zip");
       Shared.err(this, "Zip", 0, "list kosong");
-      ZipFinished(false, (scope == null ? "" : scope), "", "", 0, 0, "list kosong");
+      ZipFinished(false, "", "", "", 0, 0, "list kosong");
       return;
     }
-    File dst = Shared.resolve(context, Shared.scopeToScope(scope), destZip);
+    File dst = Shared.resolveRooted(destZip);
     if (dst == null) {
       Shared.releaseSlot("zip");
       Shared.err(this, "Zip", 0, "tujuan ZIP tidak valid (Asset?)");
-      ZipFinished(false, (scope == null ? "" : scope), "", "", 0, 0, "tujuan ZIP tidak valid");
+      ZipFinished(false, "", "", "", 0, 0, "tujuan ZIP tidak valid");
       return;
     }
     if (dst.getParentFile() != null) {
       dst.getParentFile().mkdirs();
     }
-    final FileScope fS = Shared.scopeToScope(scope);
     final List<String> fPaths = list;
     final File fDst = dst;
     zipCancel = false;
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
-        runZip(fS, fPaths, fDst);
+        runZip(fPaths, fDst);
       }
     });
   }
 
-  private void runZip(FileScope scope, List<String> paths, File dst) {
-    String zSc = scope == null ? "" : scope.name();
+  private void runZip(List<String> paths, File dst) {
     ZipOutputStream zos = null;
     int total = paths.size();
     int done = 0;
@@ -195,13 +190,12 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
       for (int i = 0; i < paths.size(); i = i + 1) {
         if (zipCancel) {
           deleteTemps(tmpAssets);
-          zipFinished(false, "", "", "", 0, 0, "Dibatalkan");
+          zipFinished(false, "", "", 0, 0, "Dibatalkan");
           return;
         }
         String srcP = paths.get(i);
-        File src = Shared.resolve(context, scope, srcP);
-        if (src == null && (Shared.effScope(scope == null ? "" : scope.name(), srcP)
-            == FileScope.Asset || Shared.isAssetPath(srcP))) {
+        File src = Shared.resolveRooted(srcP);
+        if (src == null && Shared.isAssetPath(srcP)) {
           File tmp = Shared.assetToCache(context, srcP);
           if (tmp != null) {
             tmpAssets.add(tmp);
@@ -235,7 +229,7 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
               while ((n = bin.read(buf)) > 0) {
                 if (zipCancel) {
                   deleteTemps(tmpAssets);
-                  zipFinished(false, "", "", "", 0, 0, "Dibatalkan");
+                  zipFinished(false, "", "", 0, 0, "Dibatalkan");
                   return;
                 }
                 zos.write(buf, 0, n);
@@ -277,11 +271,11 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
       } catch (Exception e) {
         // abaikan
       }
-      zipFinished(true, zSc, dst.getAbsolutePath(), Shared.fileNameOf(dst.getName()),
+      zipFinished(true, dst.getAbsolutePath(), Shared.fileNameOf(dst.getName()),
           done, total - done, "OK");
     } catch (Exception e) {
       String m = e.getMessage();
-      zipFinished(false, "", "", "", done, total - done,
+      zipFinished(false, "", "", done, total - done,
           m == null ? "bikin ZIP gagal" : m);
       try {
         dst.delete();
@@ -336,17 +330,17 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
     }
   }
 
-  private void zipFinished(final boolean success, final String scope, final String zipPath,
+  private void zipFinished(final boolean success, final String zipPath,
       final String fileName, final int doneCount, final int failCount,
       final String msg) {
     try {
       form.runOnUiThread(new Runnable() {
         public void run() {
-          ZipFinished(success, scope, zipPath, fileName, doneCount, failCount, msg);
+          ZipFinished(success, zipPath, fileName, doneCount, failCount, msg);
         }
       });
     } catch (Exception e) {
-      ZipFinished(success, scope, zipPath, fileName, doneCount, failCount, msg);
+      ZipFinished(success, zipPath, fileName, doneCount, failCount, msg);
     }
     if (!success && !"Dibatalkan".equals(msg)) {
       Shared.err(this, "Zip", 0, msg);
@@ -355,36 +349,35 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
 
   @SimpleFunction(description = "CALL: ekstrak ZIP ke folder. Struktur folder di dalam ZIP dijaga. "
       + "Batalkan via SetCancelZip. Pantau via UnzipStarted/ProgressChanged/Finished.")
-  public void CallUnzip(String zipPath, String destFolder, String scope) {
+  public void CallUnzip(String zipPath, String destFolder) {
     if (!Shared.claimSlot("zip")) {
       Shared.err(this, "Zip", 0, "masih ada proses arsip berjalan");
-      UnzipFinished(false, (scope == null ? "" : scope), "", 0, 0, "masih ada proses arsip berjalan");
+      UnzipFinished(false, "", "", 0, 0, "masih ada proses arsip berjalan");
       return;
     }
-    File zf = Shared.resolve(context, Shared.effScope(scope, zipPath), zipPath);
+    File zf = Shared.resolveRooted(zipPath);
     File tmpZip = null;
-    if (zf == null && (Shared.effScope(scope, zipPath) == FileScope.Asset
-        || Shared.isAssetPath(zipPath))) {
+    if (zf == null && Shared.isAssetPath(zipPath)) {
       tmpZip = Shared.assetToCache(context, zipPath);
       zf = tmpZip;
     }
     if (zf == null || !zf.exists()) {
       Shared.releaseSlot("zip");
       Shared.err(this, "Zip", 0, "file ZIP tidak ada");
-      UnzipFinished(false, (scope == null ? "" : scope), "", 0, 0, "file ZIP tidak ada");
+      UnzipFinished(false, "", "", 0, 0, "file ZIP tidak ada");
       return;
     }
     if (destFolder == null || Shared.clean(destFolder).length() == 0) {
       Shared.releaseSlot("zip");
       Shared.err(this, "Zip", 0, "folder tujuan kosong");
-      UnzipFinished(false, (scope == null ? "" : scope), "", 0, 0, "folder tujuan kosong");
+      UnzipFinished(false, "", "", 0, 0, "folder tujuan kosong");
       return;
     }
-    File dir = Shared.resolve(context, Shared.scopeToScope(scope), destFolder);
+    File dir = Shared.resolveRooted(destFolder);
     if (dir == null) {
       Shared.releaseSlot("zip");
       Shared.err(this, "Zip", 0, "folder tujuan tidak valid (Asset?)");
-      UnzipFinished(false, (scope == null ? "" : scope), "", 0, 0, "folder tujuan tidak valid");
+      UnzipFinished(false, "", "", 0, 0, "folder tujuan tidak valid");
       return;
     }
     if (!dir.exists()) {
@@ -393,13 +386,11 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
     final File fZf = zf;
     final File fDir = dir;
     final File fTmp = tmpZip;
-    final FileScope fSc = Shared.scopeToScope(scope);
-    final String fScope = fSc == null ? "" : fSc.name();
     zipCancel = false;
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         try {
-          runUnzip(fScope, fZf, fDir);
+          runUnzip(fZf, fDir);
         } finally {
           if (fTmp != null) {
             try {
@@ -413,7 +404,7 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
     });
   }
 
-  private void runUnzip(String scopeName, File zf, File dir) {
+  private void runUnzip(File zf, File dir) {
     ZipFile zip = null;
     int done = 0;
     int fail = 0;
@@ -438,7 +429,7 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
       byte[] buf = new byte[32768];
       while (en.hasMoreElements()) {
         if (zipCancel) {
-          unzipFinished(false, "", fDir, done, total - done, "Dibatalkan");
+          unzipFinished(false, fDir, done, total - done, "Dibatalkan");
           return;
         }
         ZipEntry e = en.nextElement();
@@ -476,7 +467,7 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
                 int n;
                 while ((n = in.read(buf)) > 0) {
                   if (zipCancel) {
-                    unzipFinished(false, "", fDir, done, total - done, "Dibatalkan");
+                    unzipFinished(false, fDir, done, total - done, "Dibatalkan");
                     return;
                   }
                   fout.write(buf, 0, n);
@@ -511,10 +502,10 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
           // abaikan
         }
       }
-      unzipFinished(true, scopeName, fDir, done, fail, "OK");
+      unzipFinished(true, fDir, done, fail, "OK");
     } catch (Exception e) {
       String m = e.getMessage();
-      unzipFinished(false, "", dir.getAbsolutePath(), done, 0,
+      unzipFinished(false, dir.getAbsolutePath(), done, 0,
           m == null ? "ekstrak gagal (bukan ZIP valid?)" : m);
     } finally {
       if (zip != null) {
@@ -528,17 +519,17 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
     }
   }
 
-  private void unzipFinished(final boolean success, final String scope,
+  private void unzipFinished(final boolean success,
       final String destFolder, final int doneCount, final int failCount,
       final String msg) {
     try {
       form.runOnUiThread(new Runnable() {
         public void run() {
-          UnzipFinished(success, scope, destFolder, doneCount, failCount, msg);
+          UnzipFinished(success, destFolder, doneCount, failCount, msg);
         }
       });
     } catch (Exception e) {
-      UnzipFinished(success, scope, destFolder, doneCount, failCount, msg);
+      UnzipFinished(success, destFolder, doneCount, failCount, msg);
     }
     if (!success && !"Dibatalkan".equals(msg)) {
       Shared.err(this, "Zip", 0, msg);
@@ -597,12 +588,11 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
         Integer.valueOf(filePercent));
   }
 
-  @SimpleEvent(description = "Bikin ZIP selesai: success + scope + path ZIP + fileName + "
+  @SimpleEvent(description = "Bikin ZIP selesai: success + path ZIP + fileName + "
       + "jumlah ok/gagal.")
-  public void ZipFinished(boolean success, String scope, String zipPath, String fileName,
+  public void ZipFinished(boolean success, String zipPath, String fileName,
       int doneCount, int failCount, String message) {
-    EventDispatcher.dispatchEvent(this, "ZipFinished", Boolean.valueOf(success),
-        scope, zipPath, fileName, Integer.valueOf(doneCount),
+    EventDispatcher.dispatchEvent(this, "ZipFinished", Boolean.valueOf(success), zipPath, fileName, Integer.valueOf(doneCount),
         Integer.valueOf(failCount), message);
   }
 
@@ -620,11 +610,10 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
         Integer.valueOf(entryPercent));
   }
 
-  @SimpleEvent(description = "Ekstrak selesai: success + scope + folder + jumlah ok/gagal.")
-  public void UnzipFinished(boolean success, String scope, String destFolder,
+  @SimpleEvent(description = "Ekstrak selesai: success + folder + jumlah ok/gagal.")
+  public void UnzipFinished(boolean success, String destFolder,
       int doneCount, int failCount, String message) {
-    EventDispatcher.dispatchEvent(this, "UnzipFinished", Boolean.valueOf(success),
-        scope, destFolder, Integer.valueOf(doneCount), Integer.valueOf(failCount),
+    EventDispatcher.dispatchEvent(this, "UnzipFinished", Boolean.valueOf(success), destFolder, Integer.valueOf(doneCount), Integer.valueOf(failCount),
         message);
   }
 

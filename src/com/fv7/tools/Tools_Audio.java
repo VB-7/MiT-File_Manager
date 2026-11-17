@@ -12,7 +12,6 @@ import com.google.appinventor.components.annotations.SimpleFunction;
 import com.google.appinventor.components.annotations.SimpleObject;
 import com.google.appinventor.components.annotations.SimpleProperty;
 import com.google.appinventor.components.common.ComponentCategory;
-import com.google.appinventor.components.common.FileScope;
 import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
 import com.google.appinventor.components.runtime.ComponentContainer;
 import com.google.appinventor.components.runtime.EventDispatcher;
@@ -205,12 +204,12 @@ public class Tools_Audio extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "CALL: Putar audio ber-id (background, tanpa tampilan). Bisa jalan bareng "
-      + "(satu id = satu audio). path bisa file scope, file:/// absolut, atau http(s) URL "
-      + "(streaming). id dari CreateAudioId / Tools_Base CreateUniqueId (reservasi diadopsi). "
+      + "(satu id = satu audio). path file (/Download/..., absolut apa adanya), "
+      + "file:/// absolut, atau http(s) URL (streaming). id dari CreateAudioId / "
+      + "Tools_Base CreateUniqueId (reservasi diadopsi). "
       + "Tampilan (Slider/Label) bikin sendiri dari AudioStarted/ProgressChanged/Finished. "
-      + "Sukses menembak AudioStarted; gagal via ErrorOccurred. scope: helper "
-      + "Scope, teks, atau absolut.")
-  public void CallPlayAudio(final String path, final String scope, final int id) {
+      + "Sukses menembak AudioStarted; gagal via ErrorOccurred.")
+  public void CallPlayAudio(final String path, final int id) {
     if (id < 1) {
       Shared.err(this, "Audio", id, "id harus >= 1 (pakai CreateAudioId)");
       return;
@@ -243,9 +242,14 @@ public class Tools_Audio extends AndroidNonvisibleComponent
             if (sa.regionMatches(true, 0, "http", 0, 4)) {
               mp.setDataSource(sa);
             } else if (sa.startsWith("file://")) {
-              mp.setDataSource(Shared.normalizePath(
-                  Shared.stripLeadingSlash(sa.substring(7))));
-            } else if (Shared.effScope(scope, sa) == FileScope.Asset || Shared.isAssetPath(sa)) {
+              File ff = Shared.resolveRooted(sa);
+              if (ff == null || !ff.exists()) {
+                Ids.unregister(Ids.AUDIO, id);
+                Shared.err(Tools_Audio.this, "Audio", id, "file tidak ada");
+                return;
+              }
+              mp.setDataSource(ff.getAbsolutePath());
+            } else if (Shared.isAssetPath(sa)) {
               android.content.res.AssetFileDescriptor afd =
                   context.getAssets().openFd(Shared.assetName(sa));
               try {
@@ -259,7 +263,7 @@ public class Tools_Audio extends AndroidNonvisibleComponent
                 }
               }
             } else {
-              File f = Shared.resolve(context, Shared.effScope(scope, sa), sa);
+              File f = Shared.resolveRooted(sa);
               if (f == null || !f.exists()) {
                 Ids.unregister(Ids.AUDIO, id);
                 Shared.err(Tools_Audio.this, "Audio", id, "file tidak ada");

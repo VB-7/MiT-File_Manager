@@ -425,61 +425,6 @@ public class Tools_Base extends AndroidNonvisibleComponent {
 
   // ================= SCOPE (Helper) =================
 
-  @SimpleFunction(description = "SET: atur scope bawaan (Helper) untuk SEMUA operasi "
-      + "file Tools_* yang scope-nya TIDAK DIKENAL. Nama teks: App, Private, "
-      + "Cache, Shared, Legacy, Asset (bebas huruf), atau \"\" = absolut "
-      + "(\"berlaku apa adanya\"). Nama tak dikenal = diabaikan + error. "
-      + "Default App (selalu bisa tulis, tanpa izin).")
-  public void SetScope(String scope) {
-    String s = scope == null ? "" : scope.trim();
-    if (!Shared.setDefaultScopeName(s)) {
-      Shared.err(this, "Id", 0, "nama scope tidak dikenal: " + s);
-    }
-  }
-
-  @SimpleFunction(description = "Baca scope bawaan saat ini (nama: App, "
-      + "Private, Cache, Shared, Legacy, Asset; kosong = absolut).")
-  public String GetScope() {
-    return Shared.getDefaultScopeName();
-  }
-
-  @SimpleFunction(description = "Tempel scope ke SATU path saja (tidak "
-      + "mempengaruhi path lain). Cth: Scope(\"App\", \"gambar/a.jpg\") jadi "
-      + "\"App:gambar/a.jpg\" — colok hasilnya ke path blok file mana pun. "
-      + "Scope teks bebas huruf (\"app\" = App); scope \"\" = tanpa prefix "
-      + "(sama dengan CustomPath). Di dalam fungsi file, prefix ini MENANG "
-      + "atas scope bawaan.")
-  public String Scope(String scope, String path) {
-    String p = Shared.normalizePath(path == null ? "" : path);
-    String s = scope == null ? "" : scope.trim();
-    String n = "";
-    if (s.equalsIgnoreCase("App")) {
-      n = "App";
-    } else if (s.equalsIgnoreCase("Private")) {
-      n = "Private";
-    } else if (s.equalsIgnoreCase("Cache")) {
-      n = "Cache";
-    } else if (s.equalsIgnoreCase("Shared")) {
-      n = "Shared";
-    } else if (s.equalsIgnoreCase("Legacy")) {
-      n = "Legacy";
-    } else if (s.equalsIgnoreCase("Asset")) {
-      n = "Asset";
-    }
-    if (n.length() == 0) {
-      return p;
-    }
-    return n + ":" + p;
-  }
-
-  @SimpleFunction(description = "Helper CUSTOM PATH: penanda path kustom/absolut, "
-      + "sama gunanya dengan scope \"\" (string kosong). Path dipakai APA ADANYA, "
-      + "tanpa ditempeli scope. Colok hasilnya ke path blok file mana pun. "
-      + "Cth: CustomPath(\"/storage/emulated/0/Download/a.jpg\").")
-  public String CustomPath(String path) {
-    return Shared.normalizePath(path == null ? "" : path);
-  }
-
   // ================= ID: Task =================
 
   @SimpleFunction(description = "Semua id tugas/alarm Tools_Task (URUT PEMBUATAN, "
@@ -672,7 +617,7 @@ public class Tools_Base extends AndroidNonvisibleComponent {
 
   @SimpleFunction(description = "Versi paket Tools (sama untuk semua Tools_* dalam satu .aix).")
   public int ToolsVersion() {
-    return 12;
+    return 13;
   }
 
   // ================= OP + ERROR =================
