@@ -1933,21 +1933,21 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
       + "ruang ikut ketutup). Tanpa feedback; cek dulu pakai IsLayoutExists "
       + "bila ragu.")
   public void SetLayoutVisible(String layout, int id, boolean visible) {
-    layout.SetLayoutVisible(layout, id, visible);
+    this.layout.SetLayoutVisible(layout, id, visible);
   }
 
   @SimpleFunction(description = "True bila layout dinamis ber-id ini ADA dan "
       + "tipenya PERSIS sama dengan layout yang diminta (colok TypeVertical/"
       + "dll). False bila id tidak ada ATAU tipe beda.")
   public boolean IsLayoutExists(String layout, int id) {
-    return layout.IsLayoutExists(layout, id);
+    return this.layout.IsLayoutExists(layout, id);
   }
 
   @SimpleFunction(description = "True bila layout dinamis ber-id ini ADA, "
       + "tipenya cocok (seperti IsLayoutExists), DAN sedang tampil (visible). "
       + "False bila tidak ada / tipe beda / sedang GONE.")
   public boolean IsLayoutVisible(String layout, int id) {
-    return layout.IsLayoutVisible(layout, id);
+    return this.layout.IsLayoutVisible(layout, id);
   }
 
   @SimpleFunction(description = "Tipe layout ber-id (\"VerticalArrangement\" "
@@ -1986,39 +1986,39 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
       + "sama dengan layout yang diminta (untuk dicolok ke soket container, "
       + "mis. Create button). null bila id tidak ada ATAU tipe beda.")
   public Object GetLayout(String layout, int id) {
-    return layout.GetLayout(layout, id);
+    return this.layout.GetLayout(layout, id);
   }
 
   @SimpleFunction(description = "SET: atur lebar + tinggi layout dinamis ber-id "
       + "(tipe wajib cocok). Angka SAMA seperti blok bawaan MIT: -2 = isi "
       + "penuh (fill parent), -1 = otomatis, positif = pixel. Tanpa feedback.")
   public void SetLayoutSize(String layout, int id, int width, int height) {
-    layout.SetLayoutSize(layout, id, width, height);
+    this.layout.SetLayoutSize(layout, id, width, height);
   }
 
   @SimpleFunction(description = "SET: warna latar layout dinamis ber-id (tipe "
       + "wajib cocok). Colok blok warna MIT. Tanpa feedback.")
   public void SetLayoutBackgroundColor(String layout, int id, int color) {
-    layout.SetLayoutBackgroundColor(layout, id, color);
+    this.layout.SetLayoutBackgroundColor(layout, id, color);
   }
 
   @SimpleFunction(description = "SET: perataan isi layout dinamis ber-id (tipe "
       + "wajib cocok). Angka SAMA seperti blok bawaan MIT: horizontal 1=kiri, "
       + "2=tengah, 3=kanan; vertikal 1=atas, 2=tengah, 3=bawah. Tanpa feedback.")
   public void SetLayoutAlignment(String layout, int id, int horizontal, int vertical) {
-    layout.SetLayoutAlignment(layout, id, horizontal, vertical);
+    this.layout.SetLayoutAlignment(layout, id, horizontal, vertical);
   }
 
   @SimpleFunction(description = "Lebar layout dinamis ber-id (angka MIT: -2 isi, "
       + "-1 otomatis, positif pixel). -3 bila id tidak ada / tipe beda.")
   public int GetLayoutWidth(String layout, int id) {
-    return layout.GetLayoutWidth(layout, id);
+    return this.layout.GetLayoutWidth(layout, id);
   }
 
   @SimpleFunction(description = "Tinggi layout dinamis ber-id (angka MIT). "
       + "-3 bila id tidak ada / tipe beda.")
   public int GetLayoutHeight(String layout, int id) {
-    return layout.GetLayoutHeight(layout, id);
+    return this.layout.GetLayoutHeight(layout, id);
   }
 
   @SimpleEvent(description = "Layout dinamis jadi: id + nama tipe.")
