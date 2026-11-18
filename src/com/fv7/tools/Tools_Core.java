@@ -30,7 +30,7 @@ import java.util.Map;
 import java.util.Set;
 
 @DesignerComponent(
-    version = 17,
+    version = 18,
     description = "Tools_Core: mesin komponen dinamis generik ber-id. Bikin komponen "
         + "MIT apa pun saat aplikasi jalan (Button, Label, TextBox, Image, CheckBox, "
         + "Switch, Slider, Spinner, ListView, DatePicker, TimePicker, "
@@ -39,7 +39,10 @@ import java.util.Set;
         + "plus SetProperty/GetProperty/Invoke generik. Id dikelola CreateDynamicId. "
         + "List id URUT PEMBUATAN. Catatan: event klik komponen dinamis dilayani "
         + "Tools_Core (blok Any generik MIT tidak ikut terpicu untuknya). "
-        + "(v17 2026-11-17: tanpa perubahan fungsi; penomoran versi.)",
+        + "(v18: create Button/Label/TextBox/Image +lebar/tinggi; "
+        + "+SetDynamicSize/Visible/Text/TextColor/BackgroundColor "
+        + "+GetDynamicWidth/Height. v17 2026-11-17: tanpa perubahan fungsi; "
+        + "penomoran versi.)",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,
@@ -362,53 +365,61 @@ public class Tools_Core extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "CALL: Jalan pintas: bikin Button dinamis ber-id "
-      + "lengkap dengan teks, warna, ukuran font, tebal, visibilitas. "
+      + "lengkap dengan teks, warna, ukuran font, tebal, visibilitas, "
+      + "LEBAR + TINGGI (angka MIT: -2 isi, -1 otomatis, positif pixel). "
       + "Sama seperti Create + Set berulang, tapi satu blok.")
   public void CallCreateDynamicButton(AndroidViewComponent container, int id,
       String text, int textColor, int backgroundColor, float fontSize,
-      boolean bold, boolean visible) {
+      boolean bold, boolean visible, int width, int height) {
     build("Button", container, id,
         new String[] { "Text", "TextColor", "BackgroundColor", "FontSize",
-            "FontBold", "Visible" },
+            "FontBold", "Visible", "Width", "Height" },
         new Object[] { text, Integer.valueOf(textColor),
             Integer.valueOf(backgroundColor), new Float(fontSize),
-            Boolean.valueOf(bold), Boolean.valueOf(visible) });
+            Boolean.valueOf(bold), Boolean.valueOf(visible),
+            Integer.valueOf(width), Integer.valueOf(height) });
   }
 
   @SimpleFunction(description = "CALL: Jalan pintas: bikin Label dinamis ber-id "
-      + "lengkap dengan teks, warna, ukuran font, tebal, visibilitas.")
+      + "lengkap dengan teks, warna, ukuran font, tebal, visibilitas, "
+      + "LEBAR + TINGGI (angka MIT).")
   public void CallCreateDynamicLabel(AndroidViewComponent container, int id,
       String text, int textColor, int backgroundColor, float fontSize,
-      boolean bold, boolean visible) {
+      boolean bold, boolean visible, int width, int height) {
     build("Label", container, id,
         new String[] { "Text", "TextColor", "BackgroundColor", "FontSize",
-            "FontBold", "Visible" },
+            "FontBold", "Visible", "Width", "Height" },
         new Object[] { text, Integer.valueOf(textColor),
             Integer.valueOf(backgroundColor), new Float(fontSize),
-            Boolean.valueOf(bold), Boolean.valueOf(visible) });
+            Boolean.valueOf(bold), Boolean.valueOf(visible),
+            Integer.valueOf(width), Integer.valueOf(height) });
   }
 
   @SimpleFunction(description = "CALL: Jalan pintas: bikin TextBox dinamis ber-id "
-      + "lengkap dengan hint, warna, ukuran font, tebal, visibilitas.")
+      + "lengkap dengan hint, warna, ukuran font, tebal, visibilitas, "
+      + "LEBAR + TINGGI (angka MIT).")
   public void CallCreateDynamicTextBox(AndroidViewComponent container, int id,
       String hint, int textColor, int backgroundColor, float fontSize,
-      boolean bold, boolean visible) {
+      boolean bold, boolean visible, int width, int height) {
     build("TextBox", container, id,
         new String[] { "Hint", "TextColor", "BackgroundColor", "FontSize",
-            "FontBold", "Visible" },
+            "FontBold", "Visible", "Width", "Height" },
         new Object[] { hint, Integer.valueOf(textColor),
             Integer.valueOf(backgroundColor), new Float(fontSize),
-            Boolean.valueOf(bold), Boolean.valueOf(visible) });
+            Boolean.valueOf(bold), Boolean.valueOf(visible),
+            Integer.valueOf(width), Integer.valueOf(height) });
   }
 
   @SimpleFunction(description = "CALL: Jalan pintas: bikin Image (gambar MIT) "
-      + "dinamis ber-id dengan picture + visibilitas. Isi picture seperti "
-      + "Image.Picture biasa (path/asset/URL).")
+      + "dinamis ber-id dengan picture + visibilitas + LEBAR + TINGGI "
+      + "(angka MIT). Isi picture seperti Image.Picture biasa "
+      + "(path/asset/URL).")
   public void CallCreateDynamicImage(AndroidViewComponent container, int id,
-      String picturePath, boolean visible) {
+      String picturePath, boolean visible, int width, int height) {
     build("Image", container, id,
-        new String[] { "Picture", "Visible" },
-        new Object[] { picturePath, Boolean.valueOf(visible) });
+        new String[] { "Picture", "Visible", "Width", "Height" },
+        new Object[] { picturePath, Boolean.valueOf(visible),
+            Integer.valueOf(width), Integer.valueOf(height) });
   }
 
   @SimpleFunction(description = "Baca properti komponen dinamis ber-id "
@@ -497,6 +508,79 @@ public class Tools_Core extends AndroidNonvisibleComponent
           m == null ? "invoke gagal" : "invoke gagal: " + m);
       return "";
     }
+  }
+
+  // ================= PROPERTI PENTING (tanpa nebak nama) =================
+
+  @SimpleFunction(description = "SET: atur lebar + tinggi komponen dinamis ber-id "
+      + "(semua tipe: Button/Label/TextBox/Image/dll). Angka SAMA seperti blok "
+      + "bawaan MIT: -2 = isi penuh, -1 = otomatis, positif = pixel. "
+      + "Tanpa feedback.")
+  public void SetDynamicSize(int id, int width, int height) {
+    applyProperty(id, "Width", Integer.valueOf(width));
+    applyProperty(id, "Height", Integer.valueOf(height));
+  }
+
+  @SimpleFunction(description = "SET: tampil/sembunyi komponen dinamis ber-id. "
+      + "false = GONE (hilang total). Tanpa feedback.")
+  public void SetDynamicVisible(int id, boolean visible) {
+    applyProperty(id, "Visible", Boolean.valueOf(visible));
+  }
+
+  @SimpleFunction(description = "SET: teks komponen dinamis ber-id "
+      + "(Button/Label/TextBox/Hint). Diam bila tipe tak punya teks. "
+      + "Tanpa feedback.")
+  public void SetDynamicText(int id, String text) {
+    applyProperty(id, "Text", text);
+  }
+
+  @SimpleFunction(description = "SET: warna teks komponen dinamis ber-id. "
+      + "Colok blok warna MIT. Diam bila tipe tak punya warna teks. "
+      + "Tanpa feedback.")
+  public void SetDynamicTextColor(int id, int color) {
+    applyProperty(id, "TextColor", Integer.valueOf(color));
+  }
+
+  @SimpleFunction(description = "SET: warna latar komponen dinamis ber-id. "
+      + "Colok blok warna MIT. Tanpa feedback.")
+  public void SetDynamicBackgroundColor(int id, int color) {
+    applyProperty(id, "BackgroundColor", Integer.valueOf(color));
+  }
+
+  /** Baca properti angka. -3 bila tidak ada/gagal. */
+  private int getIntProp(int id, String name) {
+    Component comp;
+    synchronized (compLock) {
+      comp = comps.get(Integer.valueOf(id));
+    }
+    if (comp == null) {
+      return -3;
+    }
+    try {
+      Method getter = findGetter(comp.getClass(), name);
+      if (getter == null) {
+        return -3;
+      }
+      Object r = getter.invoke(comp);
+      if (r instanceof Number) {
+        return ((Number) r).intValue();
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    return -3;
+  }
+
+  @SimpleFunction(description = "Lebar komponen dinamis ber-id (angka MIT: "
+      + "-2 isi, -1 otomatis, positif pixel). -3 bila tidak ada/gagal.")
+  public int GetDynamicWidth(int id) {
+    return getIntProp(id, "Width");
+  }
+
+  @SimpleFunction(description = "Tinggi komponen dinamis ber-id (angka MIT). "
+      + "-3 bila tidak ada/gagal.")
+  public int GetDynamicHeight(int id) {
+    return getIntProp(id, "Height");
   }
 
   // ================= ID =================
@@ -617,29 +701,29 @@ public class Tools_Core extends AndroidNonvisibleComponent
 
   @SimpleEvent(description = "Komponen dinamis jadi: id + nama tipe.")
   public void ComponentCreated(int id, String typeName) {
-    EventDispatcher.dispatchEvent(this, "ComponentCreated",
+    Shared.fire(this, "ComponentCreated",
         Integer.valueOf(id), typeName);
   }
 
   @SimpleEvent(description = "Komponen dinamis di-klik: id.")
   public void CoreClicked(int id) {
-    EventDispatcher.dispatchEvent(this, "CoreClicked", Integer.valueOf(id));
+    Shared.fire(this, "CoreClicked", Integer.valueOf(id));
   }
 
   @SimpleEvent(description = "Komponen dinamis di-long-klik: id.")
   public void CoreLongClicked(int id) {
-    EventDispatcher.dispatchEvent(this, "CoreLongClicked", Integer.valueOf(id));
+    Shared.fire(this, "CoreLongClicked", Integer.valueOf(id));
   }
 
   @SimpleEvent(description = "Komponen dinamis di-klik 2x cepat: id.")
   public void CoreDoubleClicked(int id) {
-    EventDispatcher.dispatchEvent(this, "CoreDoubleClicked", Integer.valueOf(id));
+    Shared.fire(this, "CoreDoubleClicked", Integer.valueOf(id));
   }
 
   @SimpleEvent(description = "SATU-SATUNYA error Tools_Core. component = nama "
       + "operasi (bandingkan dengan blok OpCore).")
   public void ErrorOccurred(String component, int id, String message) {
-    EventDispatcher.dispatchEvent(this, "ErrorOccurred",
+    Shared.fire(this, "ErrorOccurred",
         component, Integer.valueOf(id), message);
   }
 

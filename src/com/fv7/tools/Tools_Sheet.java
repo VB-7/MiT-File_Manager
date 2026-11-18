@@ -890,19 +890,19 @@ public class Tools_Sheet extends AndroidNonvisibleComponent
   @SimpleEvent(description = "Sheet ber-id tertutup (back/luar/Dismiss): id. "
       + "Registrasi tetap, tampilkan lagi via CallShowSheet.")
   public void SheetHidden(int id) {
-    EventDispatcher.dispatchEvent(this, "SheetHidden", Integer.valueOf(id));
+    Shared.fire(this, "SheetHidden", Integer.valueOf(id));
   }
 
   @SimpleEvent(description = "Sheet ber-id tampil (hasil CallShowSheet): id.")
   public void SheetShown(int id) {
-    EventDispatcher.dispatchEvent(this, "SheetShown", Integer.valueOf(id));
+    Shared.fire(this, "SheetShown", Integer.valueOf(id));
   }
 
   @SimpleEvent(description = "SATU-SATUNYA error Tools_Sheet (Sheet, Toast, "
       + "Notification). component = nama operasi (bandingkan dengan blok "
       + "OpSheet/OpToast/OpNotification).")
   public void ErrorOccurred(String component, int id, String message) {
-    EventDispatcher.dispatchEvent(this, "ErrorOccurred",
+    Shared.fire(this, "ErrorOccurred",
         component, Integer.valueOf(id), message);
   }
 

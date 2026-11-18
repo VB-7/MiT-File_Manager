@@ -35,14 +35,15 @@ import java.util.List;
 import java.util.Map;
 
 @DesignerComponent(
-    version = 17,
+    version = 18,
     description = "Tools_File (sistem draft): awalan Is = boolean (colok ke if), "
         + "awalan Call = async + hasil lewat event, awalan Set = tanpa feedback. "
         + "Semua path otomatis di-root ke /storage/emulated/0 "
         + "(\"/Download/a.jpg\" jadi \"/storage/emulated/0/Download/a.jpg\"; "
         + "absolut apa adanya). Salin/pindah digabung satu blok "
         + "CallCopyOrMoveFile (isMove) + info duplikat. "
-        + "(v17 2026-11-17: penomoran versi. v16: gate izin otomatis 16 "
+        + "(v18: 3 blok duplikat 1-input Is/GetMany/GetListDuplicateFileOr-"
+        + "Directory. v17 2026-11-17: penomoran versi. v16: gate izin otomatis 16 "
         + "operasi + blok pintar CallEnsure*/Is* + 10 Helper Permission + "
         + "all-files access Android 11+.)",
     category = ComponentCategory.EXTENSION,
@@ -1716,6 +1717,150 @@ public class Tools_File extends AndroidNonvisibleComponent
     return out;
   }
 
+  // ================= DUPLIKAT FILE OR DIRECTORY =================
+
+  /** True bila s tak kosong dan isinya digit semua. */
+  private boolean dupIsDigits(String s) {
+    if (s == null || s.length() == 0) {
+      return false;
+    }
+    for (int i = 0; i < s.length(); i = i + 1) {
+      char c = s.charAt(i);
+      if (c < '0' || c > '9') {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /** Kunci keluarga nama: buang counter "_N" / " (N)", lalu huruf kecil semua.
+   *  Mode file: ekstensi ikut jadi bagian kunci (image.jpg beda dengan
+   *  image.png). Contoh: "image_2.jpg" dan "image (1).jpg" -> "image.jpg". */
+  private String dupKey(String name, boolean isFile) {
+    try {
+      String n = Shared.sanitize(Shared.clean(name));
+      String base = n;
+      String ext = "";
+      if (isFile) {
+        int d = n.lastIndexOf('.');
+        if (d > 0) {
+          base = n.substring(0, d);
+          ext = n.substring(d);
+        }
+      }
+      if (base.endsWith(")")) {
+        int o = base.lastIndexOf('(');
+        if (o > 0 && dupIsDigits(base.substring(o + 1,
+            base.length() - 1).trim())) {
+          base = base.substring(0, o).trim();
+        }
+      }
+      int u = base.lastIndexOf('_');
+      if (u > 0 && dupIsDigits(base.substring(u + 1))) {
+        base = base.substring(0, u);
+      }
+      String k = base + ext;
+      if (k.length() == 0) {
+        return "";
+      }
+      return k.toLowerCase(java.util.Locale.US);
+    } catch (Exception e) {
+      return "";
+    }
+  }
+
+  /** Daftar path lengkap satu keluarga duplikat dalam 1 laci yang sama
+   *  (tanpa masuk subfolder). Termasuk inputnya sendiri bila ada. */
+  private ArrayList<String> collectDuplicates(String fileOrDirectory) {
+    ArrayList<String> out = new ArrayList<String>();
+    try {
+      String p = Shared.clean(fileOrDirectory);
+      if (p.length() == 0 || wantAsset(p)) {
+        return out;
+      }
+      File t = rootedFile(p);
+      if (t == null) {
+        return out;
+      }
+      boolean folderMode = p.endsWith("/")
+          || (t.exists() && t.isDirectory());
+      String name = t.getName();
+      if (name.length() == 0) {
+        return out;
+      }
+      File drawer = t.getParentFile();
+      if (drawer == null || !drawer.isDirectory()) {
+        return out;
+      }
+      String key = dupKey(name, !folderMode);
+      if (key.length() == 0) {
+        return out;
+      }
+      File[] fs = drawer.listFiles();
+      if (fs != null) {
+        for (int i = 0; i < fs.length; i = i + 1) {
+          String en = fs[i].getName();
+          if (en.length() == 0) {
+            continue;
+          }
+          if (key.equals(dupKey(en, fs[i].isFile()))) {
+            out.add(fs[i].getAbsolutePath());
+          }
+        }
+      }
+      Collections.sort(out);
+    } catch (Exception e) {
+      // abaikan, pemanggil Is/Get yang memutuskan
+    }
+    return out;
+  }
+
+  @SimpleFunction(description = "True bila file/folder input PUNYA DUPLIKAT "
+      + "di dalam 1 laci yang sama: ada yang namanya sama persis, atau satu "
+      + "keluarga counter (mis. image.jpg dengan image_1.jpg / "
+      + "image (1).jpg). Input satu saja: \"/Download/image.jpg\" = mode "
+      + "file, \"/Download/\" atau path folder = mode folder. Hanya level "
+      + "laci itu, tanpa masuk subfolder. Cocok untuk validasi sebelum "
+      + "simpan/rename.")
+  public boolean IsDuplicateFileOrDirectory(String fileOrDirectory) {
+    try {
+      return collectDuplicates(fileOrDirectory).size() > 0;
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
+  @SimpleFunction(description = "Berapa banyak duplikat file/folder input di "
+      + "dalam 1 laci yang sama (termasuk inputnya sendiri bila ada). 0 = "
+      + "tidak ada duplikat. Keluarga nama sama seperti "
+      + "IsDuplicateFileOrDirectory; hanya level laci itu, tanpa masuk "
+      + "subfolder.")
+  public int GetManyDuplicateFileOrDirectory(String fileOrDirectory) {
+    try {
+      return collectDuplicates(fileOrDirectory).size();
+    } catch (Exception e) {
+      String m = e.getMessage();
+      Shared.err(this, "Duplicate", 0,
+          m == null ? "hitung duplikat gagal" : m);
+      return 0;
+    }
+  }
+
+  @SimpleFunction(description = "Daftar path lengkap duplikat file/folder "
+      + "input di dalam 1 laci yang sama (termasuk inputnya sendiri bila "
+      + "ada). Urut abjad. Kosong = tidak ada duplikat. Keluarga nama sama "
+      + "seperti IsDuplicateFileOrDirectory; tanpa masuk subfolder.")
+  public List<String> GetListDuplicateFileOrDirectory(String fileOrDirectory) {
+    try {
+      return collectDuplicates(fileOrDirectory);
+    } catch (Exception e) {
+      String m = e.getMessage();
+      Shared.err(this, "Duplicate", 0,
+          m == null ? "list duplikat gagal" : m);
+      return new ArrayList<String>();
+    }
+  }
+
   @SimpleFunction(description = "Kategori file dari nama/path: image, audio, "
       + "video, text, archive, document, apk, atau unknown. Berdasarkan "
       + "ekstensi (tak peduli huruf besar). Bandingkan dengan blok "
@@ -2298,7 +2443,7 @@ public class Tools_File extends AndroidNonvisibleComponent
       + "gagal karena izin).")
   public void DirectoryHidden(String path, boolean success, String message,
       String needPermission) {
-    EventDispatcher.dispatchEvent(this, "DirectoryHidden", path,
+    Shared.fire(this, "DirectoryHidden", path,
         Boolean.valueOf(success), message, needPermission);
   }
 
@@ -2306,7 +2451,7 @@ public class Tools_File extends AndroidNonvisibleComponent
       + "message + needPermission.")
   public void NomediaFileCreated(String path, boolean success, String message,
       String needPermission) {
-    EventDispatcher.dispatchEvent(this, "NomediaFileCreated", path,
+    Shared.fire(this, "NomediaFileCreated", path,
         Boolean.valueOf(success), message, needPermission);
   }
 
@@ -2314,7 +2459,7 @@ public class Tools_File extends AndroidNonvisibleComponent
       + "message + needPermission.")
   public void NomediaFileDeleted(String path, boolean success, String message,
       String needPermission) {
-    EventDispatcher.dispatchEvent(this, "NomediaFileDeleted", path,
+    Shared.fire(this, "NomediaFileDeleted", path,
         Boolean.valueOf(success), message, needPermission);
   }
 
@@ -2322,7 +2467,7 @@ public class Tools_File extends AndroidNonvisibleComponent
       + "message + needPermission.")
   public void DirectoryCreated(String path, boolean success, String message,
       String needPermission) {
-    EventDispatcher.dispatchEvent(this, "DirectoryCreated", path,
+    Shared.fire(this, "DirectoryCreated", path,
         Boolean.valueOf(success), message, needPermission);
   }
 
@@ -2330,7 +2475,7 @@ public class Tools_File extends AndroidNonvisibleComponent
       + "message + needPermission.")
   public void FileDeleted(String path, boolean success, String message,
       String needPermission) {
-    EventDispatcher.dispatchEvent(this, "FileDeleted", path,
+    Shared.fire(this, "FileDeleted", path,
         Boolean.valueOf(success), message, needPermission);
   }
 
@@ -2338,7 +2483,7 @@ public class Tools_File extends AndroidNonvisibleComponent
       + "terhapus + message + needPermission.")
   public void FileListDeleted(boolean success, int total, int deleted,
       String message, String needPermission) {
-    EventDispatcher.dispatchEvent(this, "FileListDeleted",
+    Shared.fire(this, "FileListDeleted",
         Boolean.valueOf(success), Integer.valueOf(total),
         Integer.valueOf(deleted), message, needPermission);
   }
@@ -2347,7 +2492,7 @@ public class Tools_File extends AndroidNonvisibleComponent
       + "success + message + needPermission.")
   public void FileRenamed(String path, boolean success, String message,
       String needPermission) {
-    EventDispatcher.dispatchEvent(this, "FileRenamed", path,
+    Shared.fire(this, "FileRenamed", path,
         Boolean.valueOf(success), message, needPermission);
   }
 
@@ -2355,7 +2500,7 @@ public class Tools_File extends AndroidNonvisibleComponent
       + "success + message + needPermission.")
   public void FolderRenamed(String path, boolean success, String message,
       String needPermission) {
-    EventDispatcher.dispatchEvent(this, "FolderRenamed", path,
+    Shared.fire(this, "FolderRenamed", path,
         Boolean.valueOf(success), message, needPermission);
   }
 
@@ -2363,7 +2508,7 @@ public class Tools_File extends AndroidNonvisibleComponent
       + "message + needPermission.")
   public void EmptyFileCreated(String path, boolean success, String message,
       String needPermission) {
-    EventDispatcher.dispatchEvent(this, "EmptyFileCreated", path,
+    Shared.fire(this, "EmptyFileCreated", path,
         Boolean.valueOf(success), message, needPermission);
   }
 
@@ -2371,7 +2516,7 @@ public class Tools_File extends AndroidNonvisibleComponent
       + "message + needPermission.")
   public void FileSaved(String path, boolean success, String message,
       String needPermission) {
-    EventDispatcher.dispatchEvent(this, "FileSaved", path,
+    Shared.fire(this, "FileSaved", path,
         Boolean.valueOf(success), message, needPermission);
   }
 
@@ -2379,28 +2524,28 @@ public class Tools_File extends AndroidNonvisibleComponent
       + "message + needPermission.")
   public void Base64FileSaved(String path, boolean success, String message,
       String needPermission) {
-    EventDispatcher.dispatchEvent(this, "Base64FileSaved", path,
+    Shared.fire(this, "Base64FileSaved", path,
         Boolean.valueOf(success), message, needPermission);
   }
 
   @SimpleEvent(description = "Bacaan dimulai (CallReadText): persiapan "
       + "(tampilkan loading).")
   public void ReadStarted(String path) {
-    EventDispatcher.dispatchEvent(this, "ReadStarted", path);
+    Shared.fire(this, "ReadStarted", path);
   }
 
   @SimpleEvent(description = "Hasil CallReadText: success pertama, path "
       + "absolut, fileName paling belakang, content = isi file.")
   public void GotText(boolean success, String path,
       String fileName, String content) {
-    EventDispatcher.dispatchEvent(this, "GotText", Boolean.valueOf(success), path, fileName, content);
+    Shared.fire(this, "GotText", Boolean.valueOf(success), path, fileName, content);
   }
 
   @SimpleEvent(description = "Salin/pindah dimulai: path sumber + tujuan + "
       + "nama file + isMoved.")
   public void CopyOrMoveStarted(String fromPath, String toPath,
       String fileName, boolean isMoved) {
-    EventDispatcher.dispatchEvent(this, "CopyOrMoveStarted", fromPath,
+    Shared.fire(this, "CopyOrMoveStarted", fromPath,
         toPath, fileName, Boolean.valueOf(isMoved));
   }
 
@@ -2408,7 +2553,7 @@ public class Tools_File extends AndroidNonvisibleComponent
       + "total & berjalan.")
   public void CopyOrMoveProgressChanged(int progress, long byteTotal,
       long byteProgress) {
-    EventDispatcher.dispatchEvent(this, "CopyOrMoveProgressChanged",
+    Shared.fire(this, "CopyOrMoveProgressChanged",
         Integer.valueOf(progress), Long.valueOf(byteTotal),
         Long.valueOf(byteProgress));
   }
@@ -2418,7 +2563,7 @@ public class Tools_File extends AndroidNonvisibleComponent
       + "rename manual).")
   public void CopyOrMoveFinished(boolean success, String path,
       String fileName, boolean isDuplicated) {
-    EventDispatcher.dispatchEvent(this, "CopyOrMoveFinished",
+    Shared.fire(this, "CopyOrMoveFinished",
         Boolean.valueOf(success), path, fileName,
         Boolean.valueOf(isDuplicated));
   }
@@ -2427,7 +2572,7 @@ public class Tools_File extends AndroidNonvisibleComponent
       + "Pasang need_permission dari event lain ke GetPermission.")
   public void GotPermission(boolean success, String permission,
       String message) {
-    EventDispatcher.dispatchEvent(this, "GotPermission",
+    Shared.fire(this, "GotPermission",
         Boolean.valueOf(success), permission, message);
   }
 
@@ -2436,19 +2581,19 @@ public class Tools_File extends AndroidNonvisibleComponent
       + "dibatalkan user.")
   public void AfterFilePicked(boolean success, String uri,
       String path, String fileName) {
-    EventDispatcher.dispatchEvent(this, "AfterFilePicked", Boolean.valueOf(success), uri, path, fileName);
+    Shared.fire(this, "AfterFilePicked", Boolean.valueOf(success), uri, path, fileName);
   }
 
   @SimpleEvent(description = "Hasil OpenFile: success + pesan.")
   public void AfterOpenFile(boolean success, String message) {
-    EventDispatcher.dispatchEvent(this, "AfterOpenFile",
+    Shared.fire(this, "AfterOpenFile",
         Boolean.valueOf(success), message);
   }
 
   @SimpleEvent(description = "SATU-SATUNYA error Tools_File. component = nama "
       + "operasi (bandingkan dengan blok Op...). id selalu 0 (tanpa id).")
   public void ErrorOccurred(String component, int id, String message) {
-    EventDispatcher.dispatchEvent(this, "ErrorOccurred", component,
+    Shared.fire(this, "ErrorOccurred", component,
         Integer.valueOf(id), message);
   }
 

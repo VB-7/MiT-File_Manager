@@ -660,25 +660,25 @@ public class Tools_Audio extends AndroidNonvisibleComponent
 
   @SimpleEvent(description = "Audio mulai bunyi: id + durasi (ms) diketahui.")
   public void AudioStarted(int id, int duration) {
-    EventDispatcher.dispatchEvent(this, "AudioStarted",
+    Shared.fire(this, "AudioStarted",
         Integer.valueOf(id), Integer.valueOf(duration));
   }
 
   @SimpleEvent(description = "Progres audio berubah: id + posisi + durasi (ms) + persen 0-100.")
   public void AudioProgressChanged(int id, int position, int duration, int percent) {
-    EventDispatcher.dispatchEvent(this, "AudioProgressChanged",
+    Shared.fire(this, "AudioProgressChanged",
         Integer.valueOf(id), Integer.valueOf(position), Integer.valueOf(duration),
         Integer.valueOf(percent));
   }
 
   @SimpleEvent(description = "Audio selesai (tidak loop). Putar lagi via CallPlayAudio.")
   public void AudioFinished(int id) {
-    EventDispatcher.dispatchEvent(this, "AudioFinished", Integer.valueOf(id));
+    Shared.fire(this, "AudioFinished", Integer.valueOf(id));
   }
 
   @SimpleEvent(description = "SATU-SATUNYA error Tools_Audio.")
   public void ErrorOccurred(String component, int id, String message) {
-    EventDispatcher.dispatchEvent(this, "ErrorOccurred",
+    Shared.fire(this, "ErrorOccurred",
         component, Integer.valueOf(id), message);
   }
 

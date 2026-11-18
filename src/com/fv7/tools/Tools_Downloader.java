@@ -1422,7 +1422,7 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
   @SimpleEvent(description = "Hasil CallGuessFileName: url asal + fileName "
       + "tebakan + mimeType (kosong bila tak diketahui).")
   public void FileNameGuessed(String url, String fileName, String mimeType) {
-    EventDispatcher.dispatchEvent(this, "FileNameGuessed", url, fileName,
+    Shared.fire(this, "FileNameGuessed", url, fileName,
         mimeType);
   }
 
@@ -1527,14 +1527,14 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
 
   @SimpleEvent(description = "Unduhan dimulai: siapkan tampilan (nama + path tujuan).")
   public void DownloadStarted(int id, String fileName, String savePath) {
-    EventDispatcher.dispatchEvent(this, "DownloadStarted",
+    Shared.fire(this, "DownloadStarted",
         Integer.valueOf(id), fileName, savePath);
   }
 
   @SimpleEvent(description = "Progres unduhan berubah: persen 0-100 + byte.")
   public void DownloadProgressChanged(int id, int percent, long receivedBytes,
       long totalBytes) {
-    EventDispatcher.dispatchEvent(this, "DownloadProgressChanged",
+    Shared.fire(this, "DownloadProgressChanged",
         Integer.valueOf(id), Integer.valueOf(percent), Long.valueOf(receivedBytes),
         Long.valueOf(totalBytes));
   }
@@ -1543,26 +1543,26 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
       + "success=false = gagal/dibatalkan (lihat message + ErrorOccurred).")
   public void DownloadFinished(int id, boolean success, String savePath, String fileName,
       String message) {
-    EventDispatcher.dispatchEvent(this, "DownloadFinished",
+    Shared.fire(this, "DownloadFinished",
         Integer.valueOf(id), Boolean.valueOf(success), savePath, fileName, message);
   }
 
   @SimpleEvent(description = "Batch unduhan dimulai: total URL + folder tujuan.")
   public void DownloadBatchStarted(int total, String folder) {
-    EventDispatcher.dispatchEvent(this, "DownloadBatchStarted",
+    Shared.fire(this, "DownloadBatchStarted",
         Integer.valueOf(total), folder);
   }
 
   @SimpleEvent(description = "Batch unduhan selesai semua: total + jumlah ok + folder.")
   public void DownloadBatchFinished(int total, int okCount, String folder) {
-    EventDispatcher.dispatchEvent(this, "DownloadBatchFinished",
+    Shared.fire(this, "DownloadBatchFinished",
         Integer.valueOf(total), Integer.valueOf(okCount), folder);
   }
 
   @SimpleEvent(description = "SATU-SATUNYA error Tools_Downloader. component = nama operasi "
       + "(bandingkan dengan blok OpDownload).")
   public void ErrorOccurred(String component, int id, String message) {
-    EventDispatcher.dispatchEvent(this, "ErrorOccurred",
+    Shared.fire(this, "ErrorOccurred",
         component, Integer.valueOf(id), message);
   }
 

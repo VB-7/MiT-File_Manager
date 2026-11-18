@@ -522,6 +522,12 @@ public class Tools_Base extends AndroidNonvisibleComponent {
     return TagIds.contains(id, tag);
   }
 
+  @SimpleFunction(description = "True bila tag ini ADA (masih menyimpan "
+      + "id). Beda dengan IsTagIdSaved yang cek id di dalam satu tag.")
+  public boolean IsTagIdExists(String tag) {
+    return TagIds.tagExists(tag);
+  }
+
   @SimpleFunction(description = "Jumlah id tercatat di tag ini.")
   public int GetTagIdCount(String tag) {
     return TagIds.count(tag);
@@ -619,13 +625,26 @@ public class Tools_Base extends AndroidNonvisibleComponent {
 
   @SimpleFunction(description = "Versi paket Tools (sama untuk semua Tools_* dalam satu .aix).")
   public int ToolsVersion() {
-    return 17;
+    return 18;
   }
 
   @SimpleFunction(description = "Catatan update paket Tools (dibaca lewat blok, "
       + "karena panel info extension tidak bisa diubah manual).")
   public String GetWhatsNew() {
-    return "v17 2026-11-17: CallDownload 4 pintu (http/data:/content:/file:); "
+    return "v18 2026-11-18: 3 blok duplikat 1-input "
+        + "(IsDuplicateFileOrDirectory boolean, GetManyDuplicateFileOr-"
+        + "Directory number, GetListDuplicateFileOrDirectory list; keluarga "
+        + "counter _N/(N), 1 laci tanpa subfolder; + IsTagIdExists(tag); "
+        + "+ SetLayoutVisible/IsLayoutExists/IsLayoutVisible (tipe+id wajib "
+        + "cocok); + GetLayout/SetLayoutSize/BackgroundColor/Alignment/"
+        + "GetLayoutWidth/Height; create layout +lebar/tinggi/visible/warna; "
+        + "Core create Button/Label/TextBox/Image +lebar/tinggi + "
+        + "SetDynamicSize/Visible/Text/TextColor/BackgroundColor + "
+        + "GetDynamicWidth/Height; Image +SetImageSize/Visible/Fit + "
+        + "GetImageWidth/Height +IsImageVisible (BREAKING: proyek lama yang "
+        + "pakai create di atas wajib pasang ulang bloknya); + Tools_All_in_One "
+        + "(fasad 460 blok 12 tools + ikon, event dicerminkan via bus)). "
+        + "v17 2026-11-17: CallDownload 4 pintu (http/data:/content:/file:); "
         + "CallGuessFileName + FileNameGuessed; versi anotasi 17 + catatan "
         + "update per komponen. v16: gate izin otomatis 16 operasi storage; "
         + "IsAllFilesAccessGranted/OpenAllFilesAccessSettings; "
@@ -658,7 +677,7 @@ public class Tools_Base extends AndroidNonvisibleComponent {
   @SimpleEvent(description = "SATU-SATUNYA error Tools_Base. component = nama operasi "
       + "(bandingkan dengan blok Op...).")
   public void ErrorOccurred(String component, int id, String message) {
-    EventDispatcher.dispatchEvent(this, "ErrorOccurred",
+    Shared.fire(this, "ErrorOccurred",
         component, Integer.valueOf(id), message);
   }
 }

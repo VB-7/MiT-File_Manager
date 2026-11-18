@@ -64,7 +64,7 @@ public final class Shared {
       // abaikan
     }
     try {
-      EventDispatcher.dispatchEvent(comp, "ErrorOccurred", component,
+      fire(comp, "ErrorOccurred", component,
           Integer.valueOf(id), m);
     } catch (Exception e) {
       // abaikan
@@ -81,6 +81,35 @@ public final class Shared {
     } catch (Exception e) {
       return "";
     }
+  }
+
+  // ================= cermin All-in-One =================
+
+  /** Instance Tools_All_in_One yang menerima salinan semua event (boleh null). */
+  private static volatile Component allInOneSink = null;
+
+  /** Daftarkan fasad All-in-One sebagai penerima salinan event. Terakhir menang. */
+  public static void registerAllInOne(Component c) {
+    allInOneSink = c;
+  }
+
+  /** Kirim event ke komponen asal + salinannya ke All-in-One (bila ada & beda). */
+  public static boolean fire(Component origin, String event, Object... args) {
+    boolean r = false;
+    try {
+      r = EventDispatcher.dispatchEvent(origin, event, args);
+    } catch (Exception e) {
+      // abaikan
+    }
+    try {
+      Component s = allInOneSink;
+      if (s != null && s != origin) {
+        EventDispatcher.dispatchEvent(s, event, args);
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    return r;
   }
 
   // ================= izin sadar-OS =================

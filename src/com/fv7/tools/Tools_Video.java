@@ -839,25 +839,25 @@ public class Tools_Video extends AndroidNonvisibleComponent
 
   @SimpleEvent(description = "Video mulai main: id + durasi (ms) diketahui.")
   public void VideoStarted(int id, int duration) {
-    EventDispatcher.dispatchEvent(this, "VideoStarted",
+    Shared.fire(this, "VideoStarted",
         Integer.valueOf(id), Integer.valueOf(duration));
   }
 
   @SimpleEvent(description = "Progres video berubah: id + posisi + durasi (ms) + persen 0-100.")
   public void VideoProgressChanged(int id, int position, int duration, int percent) {
-    EventDispatcher.dispatchEvent(this, "VideoProgressChanged",
+    Shared.fire(this, "VideoProgressChanged",
         Integer.valueOf(id), Integer.valueOf(position), Integer.valueOf(duration),
         Integer.valueOf(percent));
   }
 
   @SimpleEvent(description = "Video selesai (tidak loop). Putar lagi via CallPlayVideoIn.")
   public void VideoFinished(int id) {
-    EventDispatcher.dispatchEvent(this, "VideoFinished", Integer.valueOf(id));
+    Shared.fire(this, "VideoFinished", Integer.valueOf(id));
   }
 
   @SimpleEvent(description = "SATU-SATUNYA error Tools_Video.")
   public void ErrorOccurred(String component, int id, String message) {
-    EventDispatcher.dispatchEvent(this, "ErrorOccurred",
+    Shared.fire(this, "ErrorOccurred",
         component, Integer.valueOf(id), message);
   }
 

@@ -177,6 +177,15 @@ public final class TagIds {
     return s == null ? 0 : s.size();
   }
 
+  /** True bila tag ini ADA (masih punya isi). Tag kosong otomatis dibuang. */
+  public static synchronized boolean tagExists(String tag) {
+    String t = norm(tag);
+    if (t.length() == 0) {
+      return false;
+    }
+    return tags.containsKey(t);
+  }
+
   /** Hapus satu id dari tag. Tag yang kosong ikut dibuang. */
   public static synchronized boolean remove(Object idIn, String tag) {
     int id = toId(idIn);

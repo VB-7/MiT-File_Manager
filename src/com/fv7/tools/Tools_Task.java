@@ -1607,13 +1607,13 @@ public class Tools_Task extends AndroidNonvisibleComponent
 
   @SimpleEvent(description = "Tugas dalam-aplikasi dimulai: id + payload.")
   public void TaskStarted(int id, String payload) {
-    EventDispatcher.dispatchEvent(this, "TaskStarted",
+    Shared.fire(this, "TaskStarted",
         Integer.valueOf(id), payload == null ? "" : payload);
   }
 
   @SimpleEvent(description = "Tugas berulang tick ke-n: id + tick + payload.")
   public void TaskTick(int id, int tick, String payload) {
-    EventDispatcher.dispatchEvent(this, "TaskTick",
+    Shared.fire(this, "TaskTick",
         Integer.valueOf(id), Integer.valueOf(tick),
         payload == null ? "" : payload);
     synchronized (lock) {
@@ -1626,7 +1626,7 @@ public class Tools_Task extends AndroidNonvisibleComponent
   @SimpleEvent(description = "Tugas selesai: success + payload + message.")
   public void TaskFinished(int id, boolean success, String payload,
       String message) {
-    EventDispatcher.dispatchEvent(this, "TaskFinished",
+    Shared.fire(this, "TaskFinished",
         Integer.valueOf(id), Boolean.valueOf(success),
         payload == null ? "" : payload, message == null ? "" : message);
     synchronized (lock) {
@@ -1638,21 +1638,21 @@ public class Tools_Task extends AndroidNonvisibleComponent
 
   @SimpleEvent(description = "Tugas dibatalkan: id.")
   public void TaskCancelled(int id) {
-    EventDispatcher.dispatchEvent(this, "TaskCancelled",
+    Shared.fire(this, "TaskCancelled",
         Integer.valueOf(id));
   }
 
   @SimpleEvent(description = "Alarm sistem bunyi (aplikasi dibuka oleh alarm): "
       + "id + payload. Selalu cek juga via CheckStartupAlarm di Initialize.")
   public void AlarmFired(int id, String payload) {
-    EventDispatcher.dispatchEvent(this, "AlarmFired",
+    Shared.fire(this, "AlarmFired",
         Integer.valueOf(id), payload == null ? "" : payload);
   }
 
   @SimpleEvent(description = "SATU-SATUNYA error Tools_Task. component = nama "
       + "operasi (bandingkan dengan blok OpTask/OpAlarm/OpVar/OpNotification).")
   public void ErrorOccurred(String component, int id, String message) {
-    EventDispatcher.dispatchEvent(this, "ErrorOccurred",
+    Shared.fire(this, "ErrorOccurred",
         component, Integer.valueOf(id), message);
   }
 

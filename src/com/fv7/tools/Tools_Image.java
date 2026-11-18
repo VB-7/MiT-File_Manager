@@ -45,12 +45,13 @@ import java.util.List;
 import java.util.Map;
 
 @DesignerComponent(
-    version = 17,
+    version = 18,
     description = "Tools_Image: tampilkan BANYAK gambar ber-id ke layout (path/URL/base64 mandiri) + "
         + "gambar dari base64 + info ukuran. Id dikelola CreateImageId / Tools_Base. "
         + "Sukses tampil tanpa event (langsung kelihatan); gagal via ErrorOccurred. "
         + "List id URUT PEMBUATAN. "
-        + "(v17 2026-11-17: tanpa perubahan fungsi; penomoran versi.)",
+        + "(v18: +SetImageSize/Visible/Fit +GetImageWidth/Height +IsImageVisible. "
+        + "v17 2026-11-17: tanpa perubahan fungsi; penomoran versi.)",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,
@@ -800,6 +801,168 @@ public class Tools_Image extends AndroidNonvisibleComponent
     } catch (Exception e) {
       String m = e.getMessage();
       Shared.err(this, "Image", id, m == null ? "reset gagal" : m);
+    }
+  }
+
+  // ================= UKURAN + TAMPIL (angka MIT: -2 isi, -1 otomatis) =================
+
+  private ImageView imageOf(int id) {
+    synchronized (viewLock) {
+      return views.get(Integer.valueOf(id));
+    }
+  }
+
+  /** MIT -> android: -2 isi penuh, -1 otomatis, positif pixel. Negatif lain
+   *  (persen) tak didukung view mentah -> otomatis. */
+  private int mitToAndroidSize(int s) {
+    if (s == -2) {
+      return ViewGroup.LayoutParams.MATCH_PARENT;
+    }
+    if (s == -1 || s <= -1000) {
+      return ViewGroup.LayoutParams.WRAP_CONTENT;
+    }
+    if (s > 0) {
+      return s;
+    }
+    return ViewGroup.LayoutParams.WRAP_CONTENT;
+  }
+
+  private int androidToMitSize(int s) {
+    if (s == ViewGroup.LayoutParams.MATCH_PARENT) {
+      return -2;
+    }
+    if (s == ViewGroup.LayoutParams.WRAP_CONTENT) {
+      return -1;
+    }
+    return s;
+  }
+
+  @SimpleFunction(description = "SET: atur lebar + tinggi gambar ber-id. Angka "
+      + "SAMA seperti blok bawaan MIT: -2 = isi penuh, -1 = otomatis, positif "
+      + "= pixel. Persen tidak didukung (dianggap otomatis). Tanpa feedback.")
+  public void SetImageSize(final int id, final int width, final int height) {
+    try {
+      form.runOnUiThread(new Runnable() {
+        public void run() {
+          try {
+            ImageView iv = imageOf(id);
+            if (iv == null) {
+              return;
+            }
+            ViewGroup.LayoutParams lp = iv.getLayoutParams();
+            if (lp == null) {
+              lp = new ViewGroup.LayoutParams(
+                  ViewGroup.LayoutParams.MATCH_PARENT,
+                  ViewGroup.LayoutParams.WRAP_CONTENT);
+            }
+            lp.width = mitToAndroidSize(width);
+            lp.height = mitToAndroidSize(height);
+            iv.setLayoutParams(lp);
+          } catch (Exception e) {
+            // Set = tanpa feedback
+          }
+        }
+      });
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  @SimpleFunction(description = "SET: tampil/sembunyi gambar ber-id. "
+      + "false = GONE (hilang total). Tanpa feedback.")
+  public void SetImageVisible(final int id, final boolean visible) {
+    try {
+      form.runOnUiThread(new Runnable() {
+        public void run() {
+          try {
+            ImageView iv = imageOf(id);
+            if (iv != null) {
+              iv.setVisibility(visible ? View.VISIBLE : View.GONE);
+            }
+          } catch (Exception e) {
+            // Set = tanpa feedback
+          }
+        }
+      });
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  @SimpleFunction(description = "SET: mode pas gambar ber-id. fit true = "
+      + "seluruh gambar muat di dalam (tidak kepotong); false = penuhi "
+      + "tampilan (bisa kepotong). Mematikan zoom bila sedang aktif. "
+      + "Tanpa feedback.")
+  public void SetImageFit(final int id, final boolean fit) {
+    try {
+      form.runOnUiThread(new Runnable() {
+        public void run() {
+          try {
+            ImageView iv = imageOf(id);
+            if (iv == null) {
+              return;
+            }
+            synchronized (viewLock) {
+              zoomHandlers.remove(Integer.valueOf(id));
+            }
+            iv.setOnTouchListener(null);
+            iv.setScaleType(fit ? ImageView.ScaleType.FIT_CENTER
+                : ImageView.ScaleType.CENTER_CROP);
+            iv.setAdjustViewBounds(fit);
+          } catch (Exception e) {
+            // Set = tanpa feedback
+          }
+        }
+      });
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  @SimpleFunction(description = "Lebar gambar ber-id (angka MIT: -2 isi, "
+      + "-1 otomatis, positif pixel). -3 bila id tidak ada.")
+  public int GetImageWidth(int id) {
+    try {
+      ImageView iv = imageOf(id);
+      if (iv == null) {
+        return -3;
+      }
+      ViewGroup.LayoutParams lp = iv.getLayoutParams();
+      if (lp == null) {
+        return -3;
+      }
+      return androidToMitSize(lp.width);
+    } catch (Exception e) {
+      return -3;
+    }
+  }
+
+  @SimpleFunction(description = "Tinggi gambar ber-id (angka MIT). "
+      + "-3 bila id tidak ada.")
+  public int GetImageHeight(int id) {
+    try {
+      ImageView iv = imageOf(id);
+      if (iv == null) {
+        return -3;
+      }
+      ViewGroup.LayoutParams lp = iv.getLayoutParams();
+      if (lp == null) {
+        return -3;
+      }
+      return androidToMitSize(lp.height);
+    } catch (Exception e) {
+      return -3;
+    }
+  }
+
+  @SimpleFunction(description = "True bila gambar ber-id sedang tampil "
+      + "(visible). False bila tidak ada / sedang GONE.")
+  public boolean IsImageVisible(int id) {
+    try {
+      ImageView iv = imageOf(id);
+      return iv != null && iv.getVisibility() == View.VISIBLE;
+    } catch (Exception e) {
+      return false;
     }
   }
 
@@ -1611,61 +1774,61 @@ public class Tools_Image extends AndroidNonvisibleComponent
 
   @SimpleEvent(description = "Hasil CallShowImage: gambar ber-id tampil. id + path tampil.")
   public void ImageShown(int id, String path) {
-    EventDispatcher.dispatchEvent(this, "ImageShown", Integer.valueOf(id), path);
+    Shared.fire(this, "ImageShown", Integer.valueOf(id), path);
   }
 
   @SimpleEvent(description = "Gambar ber-id di-klik: id.")
   public void ImageClicked(int id) {
-    EventDispatcher.dispatchEvent(this, "ImageClicked", Integer.valueOf(id));
+    Shared.fire(this, "ImageClicked", Integer.valueOf(id));
   }
 
   @SimpleEvent(description = "Gambar ber-id di-long-klik: id.")
   public void ImageLongClicked(int id) {
-    EventDispatcher.dispatchEvent(this, "ImageLongClicked", Integer.valueOf(id));
+    Shared.fire(this, "ImageLongClicked", Integer.valueOf(id));
   }
 
   @SimpleEvent(description = "Skala zoom gambar berubah (akhir gesture): "
       + "id + skala (1.0 = pas). Fallback: GetZoom.")
   public void ZoomChanged(int id, float scale) {
-    EventDispatcher.dispatchEvent(this, "ZoomChanged", Integer.valueOf(id),
+    Shared.fire(this, "ZoomChanged", Integer.valueOf(id),
         new Float(scale));
   }
 
   @SimpleEvent(description = "Slider jadi: id + arah (true = kanan-kiri).")
   public void SliderCreated(int id, boolean horizontal) {
-    EventDispatcher.dispatchEvent(this, "SliderCreated", Integer.valueOf(id),
+    Shared.fire(this, "SliderCreated", Integer.valueOf(id),
         Boolean.valueOf(horizontal));
   }
 
   @SimpleEvent(description = "Halaman slider pindah: id slider + index "
       + "(0 = pertama). Fallback: GetSliderIndex.")
   public void SliderChanged(int sliderId, int index) {
-    EventDispatcher.dispatchEvent(this, "SliderChanged",
+    Shared.fire(this, "SliderChanged",
         Integer.valueOf(sliderId), Integer.valueOf(index));
   }
 
   @SimpleEvent(description = "Halaman slider di-klik: id slider + index.")
   public void SliderClicked(int sliderId, int index) {
-    EventDispatcher.dispatchEvent(this, "SliderClicked",
+    Shared.fire(this, "SliderClicked",
         Integer.valueOf(sliderId), Integer.valueOf(index));
   }
 
   @SimpleEvent(description = "Proses base64-gambar dimulai.")
   public void PictureStarted() {
-    EventDispatcher.dispatchEvent(this, "PictureStarted");
+    Shared.fire(this, "PictureStarted");
   }
 
   @SimpleEvent(description = "Hasil CallBase64ToPicture: success pertama, path absolut "
       + "(cache), fileName paling belakang. Path siap ke Image.Picture.")
   public void AfterPictureBase64Ready(boolean success, String path,
       String fileName, String message) {
-    EventDispatcher.dispatchEvent(this, "AfterPictureBase64Ready", Boolean.valueOf(success), path, fileName, message);
+    Shared.fire(this, "AfterPictureBase64Ready", Boolean.valueOf(success), path, fileName, message);
   }
 
   @SimpleEvent(description = "SATU-SATUNYA error Tools_Image. component = nama operasi "
       + "(bandingkan dengan blok Op...).")
   public void ErrorOccurred(String component, int id, String message) {
-    EventDispatcher.dispatchEvent(this, "ErrorOccurred",
+    Shared.fire(this, "ErrorOccurred",
         component, Integer.valueOf(id), message);
   }
 

@@ -597,13 +597,13 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
 
   @SimpleEvent(description = "Bikin ZIP dimulai: total file + path ZIP tujuan.")
   public void ZipStarted(int total, String zipPath) {
-    EventDispatcher.dispatchEvent(this, "ZipStarted",
+    Shared.fire(this, "ZipStarted",
         Integer.valueOf(total), zipPath);
   }
 
   @SimpleEvent(description = "Progres bikin ZIP berubah: index/total + nama file + persen.")
   public void ZipProgressChanged(int index, int total, String fileName, int filePercent) {
-    EventDispatcher.dispatchEvent(this, "ZipProgressChanged",
+    Shared.fire(this, "ZipProgressChanged",
         Integer.valueOf(index), Integer.valueOf(total), fileName,
         Integer.valueOf(filePercent));
   }
@@ -612,20 +612,20 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
       + "jumlah ok/gagal.")
   public void ZipFinished(boolean success, String zipPath, String fileName,
       int doneCount, int failCount, String message) {
-    EventDispatcher.dispatchEvent(this, "ZipFinished", Boolean.valueOf(success), zipPath, fileName, Integer.valueOf(doneCount),
+    Shared.fire(this, "ZipFinished", Boolean.valueOf(success), zipPath, fileName, Integer.valueOf(doneCount),
         Integer.valueOf(failCount), message);
   }
 
   @SimpleEvent(description = "Ekstrak ZIP dimulai: nama ZIP + total entri + folder tujuan.")
   public void UnzipStarted(String zipName, int total, String destFolder) {
-    EventDispatcher.dispatchEvent(this, "UnzipStarted", zipName,
+    Shared.fire(this, "UnzipStarted", zipName,
         Integer.valueOf(total), destFolder);
   }
 
   @SimpleEvent(description = "Progres ekstrak berubah: index/total + nama entri + persen.")
   public void UnzipProgressChanged(int index, int total, String entryName,
       int entryPercent) {
-    EventDispatcher.dispatchEvent(this, "UnzipProgressChanged",
+    Shared.fire(this, "UnzipProgressChanged",
         Integer.valueOf(index), Integer.valueOf(total), entryName,
         Integer.valueOf(entryPercent));
   }
@@ -633,13 +633,13 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
   @SimpleEvent(description = "Ekstrak selesai: success + folder + jumlah ok/gagal.")
   public void UnzipFinished(boolean success, String destFolder,
       int doneCount, int failCount, String message) {
-    EventDispatcher.dispatchEvent(this, "UnzipFinished", Boolean.valueOf(success), destFolder, Integer.valueOf(doneCount), Integer.valueOf(failCount),
+    Shared.fire(this, "UnzipFinished", Boolean.valueOf(success), destFolder, Integer.valueOf(doneCount), Integer.valueOf(failCount),
         message);
   }
 
   @SimpleEvent(description = "SATU-SATUNYA error Tools_Compress.")
   public void ErrorOccurred(String component, int id, String message) {
-    EventDispatcher.dispatchEvent(this, "ErrorOccurred",
+    Shared.fire(this, "ErrorOccurred",
         component, Integer.valueOf(id), message);
   }
 

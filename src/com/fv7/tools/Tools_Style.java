@@ -719,14 +719,14 @@ public class Tools_Style extends AndroidNonvisibleComponent {
   @SimpleEvent(description = "Animasi Tools_Style mulai: komponen + tipe "
       + "(fade/slide/scale/rotation). Fallback: IsAnimationRunning.")
   public void AnimationStarted(AndroidViewComponent comp, String animationType) {
-    EventDispatcher.dispatchEvent(this, "AnimationStarted", comp,
+    Shared.fire(this, "AnimationStarted", comp,
         animationType == null ? "" : animationType);
   }
 
   @SimpleEvent(description = "Animasi Tools_Style selesai: komponen + tipe. "
       + "Fallback: IsAnimationRunning.")
   public void AnimationEnded(AndroidViewComponent comp, String animationType) {
-    EventDispatcher.dispatchEvent(this, "AnimationEnded", comp,
+    Shared.fire(this, "AnimationEnded", comp,
         animationType == null ? "" : animationType);
   }
 
@@ -735,7 +735,7 @@ public class Tools_Style extends AndroidNonvisibleComponent {
   @SimpleEvent(description = "SATU-SATUNYA error Tools_Style. component = nama "
       + "operasi (bandingkan dengan blok OpStyle). Id selalu 0 (stateless).")
   public void ErrorOccurred(String component, int id, String message) {
-    EventDispatcher.dispatchEvent(this, "ErrorOccurred",
+    Shared.fire(this, "ErrorOccurred",
         component, Integer.valueOf(id), message);
   }
 
