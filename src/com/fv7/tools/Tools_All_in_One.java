@@ -17,12 +17,14 @@ import com.google.appinventor.components.runtime.util.YailList;
 import java.util.List;
 
 @DesignerComponent(
-    version = 18,
+    version = 19,
     description = "Tools_All_in_One: SATU komponen berisi SEMUA blok 12 Tools_* "
         + "(Audio/Base/Compress/Core/Downloader/File/Image/Layout/Sheet/Style/Task/Video). "
         + "Fasad: semua blok diteruskan ke mesin aslinya, semua event dicerminkan ke sini. "
         + "Cocok bila tidak mau banyak komponen di daftar blok. "
-        + "(v18 2026-11-18: komponen baru.)",
+        + "(v19: ikuti Tools_Image v19 — ShowImage +width/height/fit, slider +paths, "
+        + "+SetImageSource; fasad CallShowImage satu pintu. "
+        + "v18 2026-11-18: komponen baru.)",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,
@@ -1667,14 +1669,16 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "CALL: tampilkan gambar ber-id ke layout (Arrangement MIT / dinamis). "
-      + "Bisa jalan bareng (satu id = satu gambar). source kosong = pakai path "
-      + "(otomatis di-root /storage/emulated/0). "
-      + "source bisa: path file, file:/// absolut, http(s) URL (di-cache otomatis), "
-      + "atau base64 (mentah / data:...). id = penanda (minta ke CreateImageId / "
-      + "Tools_Base CreateUniqueId, reservasi otomatis diadopsi). Sukses menembak "
+      + "SATU pintu input: path file/asset, file:/// absolut, http(s) URL "
+      + "(di-cache otomatis), base64 (mentah / data:...), atau content:// — "
+      + "terdeteksi otomatis. Bisa jalan bareng (satu id = satu gambar). "
+      + "id = penanda. "
+      + "width/height angka MIT (-2 isi, -1 otomatis, positif pixel); fit true = muat "
+      + "penuh tanpa kepotong, false = penuhi tampilan. Sukses menembak "
       + "ImageShown; gagal via ErrorOccurred.")
-  public void CallShowImage(AndroidViewComponent container, String source, String path, int id) {
-    image.CallShowImage(container, source, path, id);
+  public void CallShowImage(AndroidViewComponent container, String source, int id,
+      int width, int height, boolean fit) {
+    image.CallShowImage(container, source, id, width, height, fit);
   }
 
   @SimpleFunction(description = "SET: hapus SEMUA gambar Tools_Image dari layout itu "
@@ -1723,6 +1727,15 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     image.SetImageFit(id, fit);
   }
 
+  @SimpleFunction(description = "SET: ganti gambar ber-id yang SUDAH tampil "
+      + "dengan sumber baru (satu pintu: path file/asset, file:/// absolut, "
+      + "http(s) URL, base64, atau content://). View, ukuran & mode fit TETAP; "
+      + "zoom bila aktif di-reset ke pas. Sukses menembak ImageShown; gagal via "
+      + "ErrorOccurred (gambar lama tetap tampil).")
+  public void SetImageSource(int id, String source) {
+    image.SetImageSource(id, source);
+  }
+
   @SimpleFunction(description = "Lebar gambar ber-id (angka MIT: -2 isi, "
       + "-1 otomatis, positif pixel). -3 bila id tidak ada.")
   public int GetImageWidth(int id) {
@@ -1743,10 +1756,12 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
 
   @SimpleFunction(description = "CALL: bikin slider gambar ber-id (geser kanan-kiri "
       + "bila horizontal=true, atas-bawah bila false — lebih dari Iago/Boson "
-      + "yang cuma kiri-kanan). Isi via SetSliderImages. Geser menembak "
+      + "yang cuma kiri-kanan). paths = list gambar langsung (boleh kosong = isi "
+      + "belakangan via SetSliderImages, maks 20). Geser menembak "
       + "SliderChanged; baca kapan saja via GetSliderIndex.")
-  public void CallCreateImageSlider(AndroidViewComponent container, int id, boolean horizontal) {
-    image.CallCreateImageSlider(container, id, horizontal);
+  public void CallCreateImageSlider(AndroidViewComponent container, int id, boolean horizontal,
+      Object paths) {
+    image.CallCreateImageSlider(container, id, horizontal, paths);
   }
 
   @SimpleFunction(description = "SET: isi slider ber-id dengan daftar gambar "
