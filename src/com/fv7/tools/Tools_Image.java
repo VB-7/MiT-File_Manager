@@ -45,12 +45,17 @@ import java.util.List;
 import java.util.Map;
 
 @DesignerComponent(
-    version = 18,
+    version = 19,
     description = "Tools_Image: tampilkan BANYAK gambar ber-id ke layout (path/URL/base64 mandiri) + "
         + "gambar dari base64 + info ukuran. Id dikelola CreateImageId / Tools_Base. "
         + "Sukses tampil tanpa event (langsung kelihatan); gagal via ErrorOccurred. "
         + "List id URUT PEMBUATAN. "
-        + "(v18: +SetImageSize/Visible/Fit +GetImageWidth/Height +IsImageVisible. "
+        + "(v19: SATU pintu input — CallShowImage(source saja, +width/height/fit), "
+        + "CallCreateImageSlider(+paths list), GetImageSize universal "
+        + "(path/asset/URL/base64/content://), +SetImageSource ganti gambar "
+        + "show-image yang sudah tampil (view/ukuran/fit tetap, zoom di-reset, "
+        + "tembak ImageShown). v18: +SetImageSize/Visible/Fit "
+        + "+GetImageWidth/Height +IsImageVisible. "
         + "v17 2026-11-17: tanpa perubahan fungsi; penomoran versi.)",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
@@ -164,14 +169,18 @@ public class Tools_Image extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "CALL: tampilkan gambar ber-id ke layout (Arrangement MIT / dinamis). "
-      + "Bisa jalan bareng (satu id = satu gambar). source kosong = pakai path "
-      + "(otomatis di-root /storage/emulated/0). "
-      + "source bisa: path file, file:/// absolut, http(s) URL (di-cache otomatis), "
-      + "atau base64 (mentah / data:...). id = penanda (minta ke CreateImageId / "
-      + "Tools_Base CreateUniqueId, reservasi otomatis diadopsi). Sukses menembak "
+      + "SATU pintu input: path file/asset, file:/// absolut, http(s) URL "
+      + "(di-cache otomatis), base64 (mentah / data:...), atau content:// — "
+      + "terdeteksi otomatis. Bisa jalan bareng (satu id = satu gambar). "
+      + "id = penanda (minta ke CreateImageId / "
+      + "Tools_Base CreateUniqueId, reservasi otomatis diadopsi). "
+      + "width/height angka MIT: -2 = isi penuh, -1 = otomatis, positif = pixel. "
+      + "fit true = seluruh gambar muat (tidak kepotong); false = penuhi tampilan "
+      + "(bisa kepotong). Sukses menembak "
       + "ImageShown; gagal via ErrorOccurred.")
   public void CallShowImage(final AndroidViewComponent container, final String source,
-      final String path, final int id) {
+      final int id, final int width, final int height,
+      final boolean fit) {
     if (id < 1) {
       Shared.err(this, "Image", id, "id harus >= 1 (pakai CreateImageId)");
       return;
@@ -189,8 +198,10 @@ public class Tools_Image extends AndroidNonvisibleComponent
     }
     Ids.setActive(Ids.IMAGE, id, true);
     final String src = Shared.clean(source == null ? "" : source);
-    final String fP = Shared.clean(path == null ? "" : path);
     final AndroidViewComponent fContainer = container;
+    final int fW = width;
+    final int fH = height;
+    final boolean fFit = fit;
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         Bitmap bmp = null;
@@ -276,11 +287,54 @@ public class Tools_Image extends AndroidNonvisibleComponent
               }
               disp = dst.getAbsolutePath();
             }
+          } else if (src.regionMatches(true, 0, "content://", 0, 10)) {
+            InputStream in = null;
+            try {
+              in = context.getContentResolver().openInputStream(
+                  android.net.Uri.parse(src));
+            } catch (Exception e) {
+              in = null;
+            }
+            if (in == null) {
+              err = "content tidak bisa dibuka";
+            } else {
+              byte[] data;
+              try {
+                data = Shared.readAll(in);
+              } finally {
+                try {
+                  in.close();
+                } catch (Exception e) {
+                  // abaikan
+                }
+              }
+              bmp = boundedDecode(data);
+              if (bmp == null) {
+                err = "content bukan gambar yang valid";
+              } else {
+                File cache = context.getCacheDir();
+                if (!cache.exists()) {
+                  cache.mkdirs();
+                }
+                File dst = Shared.uniqueFile(cache, "img_" + id + "_content.png");
+                FileOutputStream out = new FileOutputStream(dst);
+                try {
+                  out.write(data);
+                  out.flush();
+                } finally {
+                  try {
+                    out.close();
+                  } catch (Exception e) {
+                    // abaikan
+                  }
+                }
+                disp = dst.getAbsolutePath();
+              }
+            }
           } else {
-            String usePath = src.length() > 0 ? src : fP;
-            String p = Shared.clean(usePath);
+            String p = src;
             if (p.length() == 0) {
-              err = "path kosong";
+              err = "gambar kosong";
             } else if (Shared.isAssetPath(p)) {
               InputStream in = context.getAssets().open(Shared.assetName(p));
               byte[] data;
@@ -297,10 +351,10 @@ public class Tools_Image extends AndroidNonvisibleComponent
               if (bmp == null) {
                 err = "asset bukan gambar yang valid";
               } else {
-                disp = usePath;
+                disp = p;
               }
             } else {
-              File f = Shared.resolveRooted(usePath);
+              File f = Shared.resolveRooted(p);
               if (f == null || !f.exists()) {
                 err = "file tidak ada";
               } else {
@@ -354,8 +408,9 @@ public class Tools_Image extends AndroidNonvisibleComponent
                   iv = views.get(Integer.valueOf(id));
                   if (iv == null) {
                     iv = new ImageView(activity);
-                    iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
-                    iv.setAdjustViewBounds(true);
+                    iv.setScaleType(fFit ? ImageView.ScaleType.FIT_CENTER
+                        : ImageView.ScaleType.CENTER_CROP);
+                    iv.setAdjustViewBounds(fFit);
                     views.put(Integer.valueOf(id), iv);
                   }
                 }
@@ -373,8 +428,8 @@ public class Tools_Image extends AndroidNonvisibleComponent
                   }
                 });
                 ViewGroup.LayoutParams lp = new ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT);
+                    mitToAndroidSize(fW),
+                    mitToAndroidSize(fH));
                 iv.setImageBitmap(fBmp);
                 vg.addView(iv, lp);
                 ImageShown(id, fDisp);
@@ -919,6 +974,119 @@ public class Tools_Image extends AndroidNonvisibleComponent
     }
   }
 
+  @SimpleFunction(description = "SET: ganti gambar ber-id yang SUDAH tampil "
+      + "dengan sumber baru. SATU pintu input sama seperti CallShowImage: "
+      + "path file/asset, file:/// absolut, http(s) URL (di-cache otomatis), "
+      + "base64 (mentah / data:...), atau content:// — terdeteksi otomatis. "
+      + "View, ukuran & mode fit TETAP (tidak dibuat ulang); zoom bila aktif "
+      + "di-reset ke pas. Sukses menembak ImageShown; gagal via ErrorOccurred "
+      + "(gambar lama tetap tampil).")
+  public void SetImageSource(final int id, final String source) {
+    ImageView cur;
+    synchronized (viewLock) {
+      cur = views.get(Integer.valueOf(id));
+    }
+    if (cur == null) {
+      Shared.err(this, "Image", id,
+          "id gambar tidak ada (tampilkan dulu via CallShowImage)");
+      return;
+    }
+    final String src = Shared.clean(source == null ? "" : source);
+    if (src.length() == 0) {
+      Shared.err(this, "Image", id, "gambar kosong");
+      return;
+    }
+    AsynchUtil.runAsynchronously(new Runnable() {
+      public void run() {
+        byte[] data = null;
+        Bitmap bmp = null;
+        try {
+          data = loadRawBytes(src);
+          if (data != null) {
+            bmp = boundedDecode(data);
+          }
+        } catch (Exception e) {
+          bmp = null;
+        }
+        if (bmp == null) {
+          Shared.err(Tools_Image.this, "Image", id,
+              "gambar tidak terbaca (path/URL/base64/content tidak valid)");
+          return;
+        }
+        String disp = "";
+        try {
+          if (src.regionMatches(true, 0, "http", 0, 4)
+              || src.startsWith("data:") || looksBase64(src)
+              || src.regionMatches(true, 0, "content://", 0, 10)) {
+            File cache = context.getCacheDir();
+            if (!cache.exists()) {
+              cache.mkdirs();
+            }
+            File dst = new File(cache, "img_" + id + "_set.png");
+            FileOutputStream out = new FileOutputStream(dst);
+            try {
+              out.write(data);
+              out.flush();
+            } finally {
+              try {
+                out.close();
+              } catch (Exception e) {
+                // abaikan
+              }
+            }
+            disp = dst.getAbsolutePath();
+          } else if (Shared.isAssetPath(src)) {
+            disp = src;
+          } else {
+            File f = Shared.resolveRooted(src);
+            disp = (f == null) ? src : f.getAbsolutePath();
+          }
+        } catch (Exception e) {
+          disp = src;
+        }
+        final Bitmap fBmp = bmp;
+        final String fDisp = disp;
+        try {
+          form.runOnUiThread(new Runnable() {
+            public void run() {
+              try {
+                ImageView iv = imageOf(id);
+                if (iv == null) {
+                  Shared.err(Tools_Image.this, "Image", id,
+                      "id gambar tidak ada (tampilkan dulu via CallShowImage)");
+                  return;
+                }
+                iv.setImageBitmap(fBmp);
+                synchronized (viewLock) {
+                  ZoomHandler h = zoomHandlers.get(Integer.valueOf(id));
+                  if (h != null) {
+                    try {
+                      h.scale = 1.0f;
+                      h.lastFired = 1.0f;
+                      h.ready = false;
+                      h.start();
+                    } catch (Exception e) {
+                      // abaikan
+                    }
+                  }
+                }
+                ImageShown(id, fDisp);
+              } catch (Exception e) {
+                String m = e.getMessage();
+                Shared.err(Tools_Image.this, "Image", id,
+                    m == null ? "ganti gambar gagal" : m);
+              }
+            }
+          });
+        } catch (Exception e) {
+          String m = e.getMessage();
+          Shared.err(Tools_Image.this, "Image", id,
+              m == null ? "ganti gambar gagal" : m);
+        }
+      }
+    });
+  }
+
   @SimpleFunction(description = "Lebar gambar ber-id (angka MIT: -2 isi, "
       + "-1 otomatis, positif pixel). -3 bila id tidak ada.")
   public int GetImageWidth(int id) {
@@ -968,6 +1136,105 @@ public class Tools_Image extends AndroidNonvisibleComponent
 
   // ================= SLIDER =================
 
+  /** Satu pintu baca byte gambar: http(s) URL, base64 (mentah / data:...),
+   *  content://, asset, atau path file. null bila gagal. */
+  private byte[] loadRawBytes(String s) {
+    if (s == null || s.length() == 0) {
+      return null;
+    }
+    try {
+      if (s.regionMatches(true, 0, "http", 0, 4)) {
+        HttpURLConnection c = (HttpURLConnection) new java.net.URL(s)
+            .openConnection();
+        c.setConnectTimeout(20000);
+        c.setReadTimeout(20000);
+        c.setInstanceFollowRedirects(true);
+        c.setRequestProperty("User-Agent", "Mozilla/5.0");
+        int code = c.getResponseCode();
+        if (code >= 400) {
+          try {
+            c.disconnect();
+          } catch (Exception e) {
+            // abaikan
+          }
+          return null;
+        }
+        InputStream in = c.getInputStream();
+        try {
+          return Shared.readAll(in);
+        } finally {
+          try {
+            in.close();
+          } catch (Exception e) {
+            // abaikan
+          }
+          try {
+            c.disconnect();
+          } catch (Exception e) {
+            // abaikan
+          }
+        }
+      }
+      if (s.startsWith("data:") || looksBase64(s)) {
+        String b64 = s;
+        int comma = s.indexOf(',');
+        if (s.startsWith("data:") && comma >= 0) {
+          b64 = s.substring(comma + 1);
+        }
+        return Base64.decode(b64.trim(), Base64.DEFAULT);
+      }
+      if (s.regionMatches(true, 0, "content://", 0, 10)) {
+        InputStream in = null;
+        try {
+          in = context.getContentResolver().openInputStream(
+              android.net.Uri.parse(s));
+          if (in == null) {
+            return null;
+          }
+          return Shared.readAll(in);
+        } catch (Exception e) {
+          return null;
+        } finally {
+          try {
+            if (in != null) {
+              in.close();
+            }
+          } catch (Exception e) {
+            // abaikan
+          }
+        }
+      }
+      if (Shared.isAssetPath(s)) {
+        InputStream in = context.getAssets().open(Shared.assetName(s));
+        try {
+          return Shared.readAll(in);
+        } finally {
+          try {
+            in.close();
+          } catch (Exception e) {
+            // abaikan
+          }
+        }
+      }
+      File f = Shared.resolveRooted(s);
+      if (f == null || !f.exists()) {
+        return null;
+      }
+      FileInputStream fin = new FileInputStream(f);
+      try {
+        return Shared.readAll(fin);
+      } finally {
+        try {
+          fin.close();
+        } catch (Exception e) {
+          // abaikan
+        }
+      }
+    } catch (Exception e) {
+      return null;
+    }
+  }
+
   private Bitmap loadBitmap(String src, String fallbackPath) {
     try {
       String s = Shared.clean(src == null ? "" : src);
@@ -1013,6 +1280,10 @@ public class Tools_Image extends AndroidNonvisibleComponent
           b64 = s.substring(comma + 1);
         }
         return boundedDecode(Base64.decode(b64.trim(), Base64.DEFAULT));
+      }
+      if (s.regionMatches(true, 0, "content://", 0, 10)) {
+        byte[] raw = loadRawBytes(s);
+        return raw == null ? null : boundedDecode(raw);
       }
       String p = usePath;
       if (p.length() == 0) {
@@ -1086,10 +1357,12 @@ public class Tools_Image extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "CALL: bikin slider gambar ber-id (geser kanan-kiri "
       + "bila horizontal=true, atas-bawah bila false — lebih dari Iago/Boson "
-      + "yang cuma kiri-kanan). Isi via SetSliderImages. Geser menembak "
+      + "yang cuma kiri-kanan). paths = list gambar langsung (path file/asset, "
+      + "URL http, atau base64; boleh list kosong = isi belakangan via "
+      + "SetSliderImages, maks 20). Geser menembak "
       + "SliderChanged; baca kapan saja via GetSliderIndex.")
   public void CallCreateImageSlider(final AndroidViewComponent container,
-      final int id, final boolean horizontal) {
+      final int id, final boolean horizontal, final Object paths) {
     if (id < 1) {
       Shared.err(this, "Slider", id, "id harus >= 1 (pakai CreateSliderId)");
       return;
@@ -1098,6 +1371,8 @@ public class Tools_Image extends AndroidNonvisibleComponent
       Shared.err(this, "Slider", id, "ID " + id + " sedang dipakai slider lain");
       return;
     }
+    final List<String> init = toStrList(paths);
+    final List<String> first = init.size() > 20 ? init.subList(0, 20) : init;
     synchronized (viewLock) {
       if (sliders.containsKey(Integer.valueOf(id))) {
         Shared.err(this, "Slider", id, "ID " + id + " masih ada "
@@ -1160,6 +1435,9 @@ public class Tools_Image extends AndroidNonvisibleComponent
             }
             Ids.setActive(Ids.SLIDER, id, true);
             SliderCreated(id, horizontal);
+            if (!first.isEmpty()) {
+              fillSliderImages(id, first);
+            }
           } catch (Exception e) {
             Ids.setActive(Ids.SLIDER, id, false);
             Ids.unregister(Ids.SLIDER, id);
@@ -1272,6 +1550,10 @@ public class Tools_Image extends AndroidNonvisibleComponent
       return;
     }
     final List<String> use = list.size() > 20 ? list.subList(0, 20) : list;
+    fillSliderImages(sliderId, use);
+  }
+
+  private void fillSliderImages(final int sliderId, final List<String> use) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         final ArrayList<Bitmap> bmps = new ArrayList<Bitmap>();
@@ -1717,42 +1999,20 @@ public class Tools_Image extends AndroidNonvisibleComponent
     });
   }
 
-  @SimpleFunction(description = "Lebar dan tinggi gambar (pixel). Kembali: list [lebar, tinggi]. "
-      + "[0, 0] bila bukan gambar / tidak ada.")
+  @SimpleFunction(description = "Lebar dan tinggi gambar (pixel). SATU pintu: "
+      + "path file/asset, http(s) URL, base64, atau content:// — terdeteksi "
+      + "otomatis. Kembali: list [lebar, tinggi]. [0, 0] bila bukan gambar / "
+      + "tidak ada.")
   public List<Integer> GetImageSize(String path) {
     ArrayList<Integer> out = new ArrayList<Integer>();
     out.add(Integer.valueOf(0));
     out.add(Integer.valueOf(0));
     try {
-      String p = Shared.clean(path);
-      byte[] data = null;
-      if (Shared.isAssetPath(p)) {
-        InputStream in = context.getAssets().open(Shared.assetName(p));
-        try {
-          data = Shared.readAll(in);
-        } finally {
-          try {
-            in.close();
-          } catch (Exception e) {
-            // abaikan
-          }
-        }
-      } else {
-        File f = Shared.resolveRooted(path);
-        if (f == null || !f.exists()) {
-          Shared.err(this, "Image", 0, "file tidak ada");
-          return out;
-        }
-        FileInputStream fin = new FileInputStream(f);
-        try {
-          data = Shared.readAll(fin);
-        } finally {
-          try {
-            fin.close();
-          } catch (Exception e) {
-            // abaikan
-          }
-        }
+      String p = Shared.clean(path == null ? "" : path);
+      byte[] data = loadRawBytes(p);
+      if (data == null) {
+        Shared.err(this, "Image", 0, "gambar tidak terbaca");
+        return out;
       }
       BitmapFactory.Options o = new BitmapFactory.Options();
       o.inJustDecodeBounds = true;
