@@ -277,7 +277,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           Shared.err(Tools_File.this, "Directory", 0, permMsg);
           fireOnUi(new Runnable() {
             public void run() {
-              DirectoryHidden(Shared.clean(directory), false, permMsg, WRITE_PERM);
+              DirectoryHidden(false, Shared.clean(directory), permMsg, WRITE_PERM);
             }
           });
           return;
@@ -290,7 +290,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             Shared.err(Tools_File.this, "Directory", 0, msg);
             fireOnUi(new Runnable() {
               public void run() {
-                DirectoryHidden(Shared.clean(directory), false, msg, "");
+                DirectoryHidden(false, Shared.clean(directory), msg, "");
               }
             });
             return;
@@ -299,7 +299,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           if (d.getName().startsWith(".")) {
             fireOnUi(new Runnable() {
               public void run() {
-                DirectoryHidden(abs, true, "sudah hidden", "");
+                DirectoryHidden(true, abs, "sudah hidden", "");
               }
             });
             return;
@@ -310,7 +310,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             Shared.err(Tools_File.this, "Directory", 0, msg);
             fireOnUi(new Runnable() {
               public void run() {
-                DirectoryHidden(abs, false, msg, "");
+                DirectoryHidden(false, abs, msg, "");
               }
             });
             return;
@@ -325,7 +325,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           final String needF = need;
           fireOnUi(new Runnable() {
             public void run() {
-              DirectoryHidden(np, ok, msg, needF);
+              DirectoryHidden(ok, np, msg, needF);
             }
           });
         } catch (SecurityException se) {
@@ -333,8 +333,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           Shared.err(Tools_File.this, "Directory", 0, msg);
           fireOnUi(new Runnable() {
             public void run() {
-              DirectoryHidden(Shared.clean(directory), false, msg,
-                  WRITE_PERM);
+              DirectoryHidden(false, Shared.clean(directory), msg, WRITE_PERM);
             }
           });
         } catch (Exception e) {
@@ -343,7 +342,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           Shared.err(Tools_File.this, "Directory", 0, msg);
           fireOnUi(new Runnable() {
             public void run() {
-              DirectoryHidden(Shared.clean(directory), false, msg, "");
+              DirectoryHidden(false, Shared.clean(directory), msg, "");
             }
           });
         }
@@ -361,7 +360,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           Shared.err(Tools_File.this, "Directory", 0, permMsg);
           fireOnUi(new Runnable() {
             public void run() {
-              NomediaFileCreated(Shared.clean(folder), false, permMsg, WRITE_PERM);
+              NomediaFileCreated(false, Shared.clean(folder), permMsg, WRITE_PERM);
             }
           });
           return;
@@ -372,7 +371,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             Shared.err(Tools_File.this, "Directory", 0, msg);
             fireOnUi(new Runnable() {
               public void run() {
-                NomediaFileCreated(Shared.clean(folder), false, msg, "");
+                NomediaFileCreated(false, Shared.clean(folder), msg, "");
               }
             });
             return;
@@ -383,7 +382,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             Shared.err(Tools_File.this, "Directory", 0, msg);
             fireOnUi(new Runnable() {
               public void run() {
-                NomediaFileCreated(Shared.clean(folder), false, msg, "");
+                NomediaFileCreated(false, Shared.clean(folder), msg, "");
               }
             });
             return;
@@ -400,7 +399,7 @@ public class Tools_File extends AndroidNonvisibleComponent
               final String abs = d.getAbsolutePath();
               fireOnUi(new Runnable() {
                 public void run() {
-                  NomediaFileCreated(abs, false, msg, WRITE_PERM);
+                  NomediaFileCreated(false, abs, msg, WRITE_PERM);
                 }
               });
               return;
@@ -414,7 +413,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           }
           fireOnUi(new Runnable() {
             public void run() {
-              NomediaFileCreated(abs, okF, msg, okF ? "" : WRITE_PERM);
+              NomediaFileCreated(okF, abs, msg, okF ? "" : WRITE_PERM);
             }
           });
         } catch (Exception e) {
@@ -423,7 +422,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           Shared.err(Tools_File.this, "Directory", 0, msg);
           fireOnUi(new Runnable() {
             public void run() {
-              NomediaFileCreated(Shared.clean(folder), false, msg, "");
+              NomediaFileCreated(false, Shared.clean(folder), msg, "");
             }
           });
         }
@@ -441,7 +440,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           Shared.err(Tools_File.this, "Directory", 0, permMsg);
           fireOnUi(new Runnable() {
             public void run() {
-              NomediaFileDeleted(Shared.clean(folder), false, permMsg, WRITE_PERM);
+              NomediaFileDeleted(false, Shared.clean(folder), permMsg, WRITE_PERM);
             }
           });
           return;
@@ -452,7 +451,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             Shared.err(Tools_File.this, "Directory", 0, msg);
             fireOnUi(new Runnable() {
               public void run() {
-                NomediaFileDeleted(Shared.clean(folder), false, msg, "");
+                NomediaFileDeleted(false, Shared.clean(folder), msg, "");
               }
             });
             return;
@@ -463,7 +462,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             Shared.err(Tools_File.this, "Directory", 0, msg);
             fireOnUi(new Runnable() {
               public void run() {
-                NomediaFileDeleted(Shared.clean(folder), false, msg, "");
+                NomediaFileDeleted(false, Shared.clean(folder), msg, "");
               }
             });
             return;
@@ -478,7 +477,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           }
           fireOnUi(new Runnable() {
             public void run() {
-              NomediaFileDeleted(abs, okF, msg, okF ? "" : WRITE_PERM);
+              NomediaFileDeleted(okF, abs, msg, okF ? "" : WRITE_PERM);
             }
           });
         } catch (SecurityException se) {
@@ -486,8 +485,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           Shared.err(Tools_File.this, "Directory", 0, msg);
           fireOnUi(new Runnable() {
             public void run() {
-              NomediaFileDeleted(Shared.clean(folder), false, msg,
-                  WRITE_PERM);
+              NomediaFileDeleted(false, Shared.clean(folder), msg, WRITE_PERM);
             }
           });
         } catch (Exception e) {
@@ -496,7 +494,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           Shared.err(Tools_File.this, "Directory", 0, msg);
           fireOnUi(new Runnable() {
             public void run() {
-              NomediaFileDeleted(Shared.clean(folder), false, msg, "");
+              NomediaFileDeleted(false, Shared.clean(folder), msg, "");
             }
           });
         }
@@ -514,7 +512,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           Shared.err(Tools_File.this, "Directory", 0, permMsg);
           fireOnUi(new Runnable() {
             public void run() {
-              DirectoryCreated(Shared.clean(folder), false, permMsg, WRITE_PERM);
+              DirectoryCreated(false, Shared.clean(folder), permMsg, WRITE_PERM);
             }
           });
           return;
@@ -525,7 +523,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             Shared.err(Tools_File.this, "Directory", 0, msg);
             fireOnUi(new Runnable() {
               public void run() {
-                DirectoryCreated(Shared.clean(folder), false, msg, "");
+                DirectoryCreated(false, Shared.clean(folder), msg, "");
               }
             });
             return;
@@ -536,7 +534,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             Shared.err(Tools_File.this, "Directory", 0, msg);
             fireOnUi(new Runnable() {
               public void run() {
-                DirectoryCreated(Shared.clean(folder), false, msg, "");
+                DirectoryCreated(false, Shared.clean(folder), msg, "");
               }
             });
             return;
@@ -552,7 +550,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           }
           fireOnUi(new Runnable() {
             public void run() {
-              DirectoryCreated(abs, ok, msg, ok ? "" : WRITE_PERM);
+              DirectoryCreated(ok, abs, msg, ok ? "" : WRITE_PERM);
             }
           });
         } catch (SecurityException se) {
@@ -560,7 +558,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           Shared.err(Tools_File.this, "Directory", 0, msg);
           fireOnUi(new Runnable() {
             public void run() {
-              DirectoryCreated(Shared.clean(folder), false, msg, WRITE_PERM);
+              DirectoryCreated(false, Shared.clean(folder), msg, WRITE_PERM);
             }
           });
         } catch (Exception e) {
@@ -569,7 +567,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           Shared.err(Tools_File.this, "Directory", 0, msg);
           fireOnUi(new Runnable() {
             public void run() {
-              DirectoryCreated(Shared.clean(folder), false, msg, "");
+              DirectoryCreated(false, Shared.clean(folder), msg, "");
             }
           });
         }
@@ -589,7 +587,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           Shared.err(Tools_File.this, "File", 0, permMsg);
           fireOnUi(new Runnable() {
             public void run() {
-              FileDeleted(Shared.clean(path), false, permMsg, WRITE_PERM);
+              FileDeleted(false, Shared.clean(path), permMsg, WRITE_PERM);
             }
           });
           return;
@@ -600,7 +598,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             Shared.err(Tools_File.this, "File", 0, msg);
             fireOnUi(new Runnable() {
               public void run() {
-                FileDeleted(Shared.clean(path), false, msg, "");
+                FileDeleted(false, Shared.clean(path), msg, "");
               }
             });
             return;
@@ -611,7 +609,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             Shared.err(Tools_File.this, "File", 0, msg);
             fireOnUi(new Runnable() {
               public void run() {
-                FileDeleted(Shared.clean(path), false, msg, "");
+                FileDeleted(false, Shared.clean(path), msg, "");
               }
             });
             return;
@@ -625,7 +623,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           }
           fireOnUi(new Runnable() {
             public void run() {
-              FileDeleted(abs, okF, msg, okF ? "" : WRITE_PERM);
+              FileDeleted(okF, abs, msg, okF ? "" : WRITE_PERM);
             }
           });
         } catch (SecurityException se) {
@@ -633,7 +631,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           Shared.err(Tools_File.this, "File", 0, msg);
           fireOnUi(new Runnable() {
             public void run() {
-              FileDeleted(Shared.clean(path), false, msg, WRITE_PERM);
+              FileDeleted(false, Shared.clean(path), msg, WRITE_PERM);
             }
           });
         } catch (Exception e) {
@@ -642,7 +640,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           Shared.err(Tools_File.this, "File", 0, msg);
           fireOnUi(new Runnable() {
             public void run() {
-              FileDeleted(Shared.clean(path), false, msg, "");
+              FileDeleted(false, Shared.clean(path), msg, "");
             }
           });
         }
@@ -729,7 +727,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           Shared.err(Tools_File.this, "File", 0, permMsg);
           fireOnUi(new Runnable() {
             public void run() {
-              FileRenamed(Shared.clean(path), false, permMsg, WRITE_PERM);
+              FileRenamed(false, Shared.clean(path), permMsg, WRITE_PERM);
             }
           });
           return;
@@ -740,7 +738,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             Shared.err(Tools_File.this, "File", 0, msg);
             fireOnUi(new Runnable() {
               public void run() {
-                FileRenamed(Shared.clean(path), false, msg, "");
+                FileRenamed(false, Shared.clean(path), msg, "");
               }
             });
             return;
@@ -751,7 +749,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             Shared.err(Tools_File.this, "File", 0, msg);
             fireOnUi(new Runnable() {
               public void run() {
-                FileRenamed(Shared.clean(path), false, msg, "");
+                FileRenamed(false, Shared.clean(path), msg, "");
               }
             });
             return;
@@ -764,7 +762,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             final String abs = f.getAbsolutePath();
             fireOnUi(new Runnable() {
               public void run() {
-                FileRenamed(abs, false, msg, "");
+                FileRenamed(false, abs, msg, "");
               }
             });
             return;
@@ -777,7 +775,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           }
           fireOnUi(new Runnable() {
             public void run() {
-              FileRenamed(np, ok, msg, ok ? "" : WRITE_PERM);
+              FileRenamed(ok, np, msg, ok ? "" : WRITE_PERM);
             }
           });
         } catch (SecurityException se) {
@@ -785,7 +783,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           Shared.err(Tools_File.this, "File", 0, msg);
           fireOnUi(new Runnable() {
             public void run() {
-              FileRenamed(Shared.clean(path), false, msg, WRITE_PERM);
+              FileRenamed(false, Shared.clean(path), msg, WRITE_PERM);
             }
           });
         } catch (Exception e) {
@@ -794,7 +792,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           Shared.err(Tools_File.this, "File", 0, msg);
           fireOnUi(new Runnable() {
             public void run() {
-              FileRenamed(Shared.clean(path), false, msg, "");
+              FileRenamed(false, Shared.clean(path), msg, "");
             }
           });
         }
@@ -812,7 +810,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           Shared.err(Tools_File.this, "File", 0, permMsg);
           fireOnUi(new Runnable() {
             public void run() {
-              FolderRenamed(Shared.clean(path), false, permMsg, WRITE_PERM);
+              FolderRenamed(false, Shared.clean(path), permMsg, WRITE_PERM);
             }
           });
           return;
@@ -823,7 +821,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             Shared.err(Tools_File.this, "File", 0, msg);
             fireOnUi(new Runnable() {
               public void run() {
-                FolderRenamed(Shared.clean(path), false, msg, "");
+                FolderRenamed(false, Shared.clean(path), msg, "");
               }
             });
             return;
@@ -834,7 +832,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             Shared.err(Tools_File.this, "File", 0, msg);
             fireOnUi(new Runnable() {
               public void run() {
-                FolderRenamed(Shared.clean(path), false, msg, "");
+                FolderRenamed(false, Shared.clean(path), msg, "");
               }
             });
             return;
@@ -847,7 +845,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             final String abs = f.getAbsolutePath();
             fireOnUi(new Runnable() {
               public void run() {
-                FolderRenamed(abs, false, msg, "");
+                FolderRenamed(false, abs, msg, "");
               }
             });
             return;
@@ -860,7 +858,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           }
           fireOnUi(new Runnable() {
             public void run() {
-              FolderRenamed(np, ok, msg, ok ? "" : WRITE_PERM);
+              FolderRenamed(ok, np, msg, ok ? "" : WRITE_PERM);
             }
           });
         } catch (SecurityException se) {
@@ -868,7 +866,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           Shared.err(Tools_File.this, "File", 0, msg);
           fireOnUi(new Runnable() {
             public void run() {
-              FolderRenamed(Shared.clean(path), false, msg, WRITE_PERM);
+              FolderRenamed(false, Shared.clean(path), msg, WRITE_PERM);
             }
           });
         } catch (Exception e) {
@@ -877,7 +875,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           Shared.err(Tools_File.this, "File", 0, msg);
           fireOnUi(new Runnable() {
             public void run() {
-              FolderRenamed(Shared.clean(path), false, msg, "");
+              FolderRenamed(false, Shared.clean(path), msg, "");
             }
           });
         }
@@ -897,7 +895,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           Shared.err(Tools_File.this, "File", 0, permMsg);
           fireOnUi(new Runnable() {
             public void run() {
-              EmptyFileCreated(Shared.clean(path), false, permMsg, WRITE_PERM);
+              EmptyFileCreated(false, Shared.clean(path), permMsg, WRITE_PERM);
             }
           });
           return;
@@ -908,7 +906,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             Shared.err(Tools_File.this, "File", 0, msg);
             fireOnUi(new Runnable() {
               public void run() {
-                EmptyFileCreated(Shared.clean(path), false, msg, "");
+                EmptyFileCreated(false, Shared.clean(path), msg, "");
               }
             });
             return;
@@ -919,7 +917,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             Shared.err(Tools_File.this, "File", 0, msg);
             fireOnUi(new Runnable() {
               public void run() {
-                EmptyFileCreated(Shared.clean(path), false, msg, "");
+                EmptyFileCreated(false, Shared.clean(path), msg, "");
               }
             });
             return;
@@ -936,8 +934,7 @@ public class Tools_File extends AndroidNonvisibleComponent
               Shared.err(Tools_File.this, "File", 0, msg);
               fireOnUi(new Runnable() {
                 public void run() {
-                  EmptyFileCreated(Shared.clean(path), false, msg,
-                      WRITE_PERM);
+                  EmptyFileCreated(false, Shared.clean(path), msg, WRITE_PERM);
                 }
               });
               return;
@@ -951,7 +948,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           }
           fireOnUi(new Runnable() {
             public void run() {
-              EmptyFileCreated(abs, okF, msg, okF ? "" : WRITE_PERM);
+              EmptyFileCreated(okF, abs, msg, okF ? "" : WRITE_PERM);
             }
           });
         } catch (Exception e) {
@@ -960,7 +957,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           Shared.err(Tools_File.this, "File", 0, msg);
           fireOnUi(new Runnable() {
             public void run() {
-              EmptyFileCreated(Shared.clean(path), false, msg, "");
+              EmptyFileCreated(false, Shared.clean(path), msg, "");
             }
           });
         }
@@ -980,7 +977,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           Shared.err(Tools_File.this, "File", 0, permMsg);
           fireOnUi(new Runnable() {
             public void run() {
-              FileSaved(Shared.clean(path), false, permMsg, WRITE_PERM);
+              FileSaved(false, Shared.clean(path), permMsg, WRITE_PERM);
             }
           });
           return;
@@ -991,7 +988,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             Shared.err(Tools_File.this, "File", 0, msg);
             fireOnUi(new Runnable() {
               public void run() {
-                FileSaved(Shared.clean(path), false, msg, "");
+                FileSaved(false, Shared.clean(path), msg, "");
               }
             });
             return;
@@ -1002,7 +999,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             Shared.err(Tools_File.this, "File", 0, msg);
             fireOnUi(new Runnable() {
               public void run() {
-                FileSaved(Shared.clean(path), false, msg, "");
+                FileSaved(false, Shared.clean(path), msg, "");
               }
             });
             return;
@@ -1025,7 +1022,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           final String abs = f.getAbsolutePath();
           fireOnUi(new Runnable() {
             public void run() {
-              FileSaved(abs, true, "", "");
+              FileSaved(true, abs, "", "");
             }
           });
         } catch (SecurityException se) {
@@ -1033,7 +1030,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           Shared.err(Tools_File.this, "File", 0, msg);
           fireOnUi(new Runnable() {
             public void run() {
-              FileSaved(Shared.clean(path), false, msg, WRITE_PERM);
+              FileSaved(false, Shared.clean(path), msg, WRITE_PERM);
             }
           });
         } catch (Exception e) {
@@ -1042,7 +1039,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           Shared.err(Tools_File.this, "File", 0, msg);
           fireOnUi(new Runnable() {
             public void run() {
-              FileSaved(Shared.clean(path), false, msg, "");
+              FileSaved(false, Shared.clean(path), msg, "");
             }
           });
         }
@@ -1069,7 +1066,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           Shared.err(Tools_File.this, "Base64", 0, permMsg);
           fireOnUi(new Runnable() {
             public void run() {
-              Base64FileSaved(Shared.clean(path), false, permMsg, WRITE_PERM);
+              Base64FileSaved(false, Shared.clean(path), permMsg, WRITE_PERM);
             }
           });
           return;
@@ -1081,7 +1078,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             Shared.err(Tools_File.this, "Base64", 0, msg);
             fireOnUi(new Runnable() {
               public void run() {
-                Base64FileSaved(Shared.clean(path), false, msg, "");
+                Base64FileSaved(false, Shared.clean(path), msg, "");
               }
             });
             return;
@@ -1093,7 +1090,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             Shared.err(Tools_File.this, "Base64", 0, msg);
             fireOnUi(new Runnable() {
               public void run() {
-                Base64FileSaved(Shared.clean(path), false, msg, "");
+                Base64FileSaved(false, Shared.clean(path), msg, "");
               }
             });
             return;
@@ -1110,7 +1107,7 @@ public class Tools_File extends AndroidNonvisibleComponent
             Shared.err(Tools_File.this, "Base64", 0, msg);
             fireOnUi(new Runnable() {
               public void run() {
-                Base64FileSaved(Shared.clean(path), false, msg, "");
+                Base64FileSaved(false, Shared.clean(path), msg, "");
               }
             });
             return;
@@ -1134,7 +1131,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           final String abs = lastBase64Path;
           fireOnUi(new Runnable() {
             public void run() {
-              Base64FileSaved(abs, true, "", "");
+              Base64FileSaved(true, abs, "", "");
             }
           });
         } catch (SecurityException se) {
@@ -1143,7 +1140,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           Shared.err(Tools_File.this, "Base64", 0, msg);
           fireOnUi(new Runnable() {
             public void run() {
-              Base64FileSaved(Shared.clean(path), false, msg, WRITE_PERM);
+              Base64FileSaved(false, Shared.clean(path), msg, WRITE_PERM);
             }
           });
         } catch (Exception e) {
@@ -1153,7 +1150,7 @@ public class Tools_File extends AndroidNonvisibleComponent
           Shared.err(Tools_File.this, "Base64", 0, msg);
           fireOnUi(new Runnable() {
             public void run() {
-              Base64FileSaved(Shared.clean(path), false, msg, "");
+              Base64FileSaved(false, Shared.clean(path), msg, "");
             }
           });
         }
