@@ -35,21 +35,23 @@ import java.util.List;
 import java.util.Map;
 
 @DesignerComponent(
-    version = 18,
-    description = "Tools_File (sistem draft): awalan Is = boolean (colok ke if), "
-        + "awalan Call = async + hasil lewat event, awalan Set = tanpa feedback. "
-        + "Semua path otomatis di-root ke /storage/emulated/0 "
-        + "(\"/Download/a.jpg\" jadi \"/storage/emulated/0/Download/a.jpg\"; "
-        + "absolut apa adanya). Salin/pindah digabung satu blok "
-        + "CallCopyOrMoveFile (isMove) + info duplikat. "
-        + "(v18: 3 blok duplikat 1-input Is/GetMany/GetListDuplicateFileOr-"
-        + "Directory. v17 2026-11-17: penomoran versi. v16: gate izin otomatis 16 "
-        + "operasi + blok pintar CallEnsure*/Is* + 10 Helper Permission + "
-        + "all-files access Android 11+.)",
+    version = 20,
+    description = "Tools_File: file/folder teks, salin/pindah/hapus/rename, direktori, izin "
+        + "+ 10 helper izin, picker/opener, base64-ke-file, info ruang. Konvensi awalan: "
+        + "Is = boolean (colok ke if), Call = async + hasil lewat event, Set = tanpa "
+        + "feedback, Get = nilai balik sinkron. Semua path otomatis di-root ke "
+        + "/storage/emulated/0 (\"/Download/a.jpg\" jadi "
+        + "\"/storage/emulated/0/Download/a.jpg\"; absolut apa adanya). Salin/pindah "
+        + "digabung satu blok CallCopyOrMoveFile (isMove) + info duplikat. "
+        + "Izin kamera/mic/lokasi = CADANGAN RESMI untuk blok foto/rekam/lokasi (hadir "
+        + "mulai v21); hapus bila batal. Keluarga Open = panggil dunia luar: OpenFile + "
+        + "OpenFilePicker berperilaku Call (hasil lewat event), OpenAllFilesAccessSettings "
+        + "berperilaku Set (berangkat saja, tanpa feedback).",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,
-    iconName = "aiwebres/tools_file.jpg")
+    iconName = "aiwebres/tools_file.jpg",
+    helpUrl = "https://github.com/VB-7/MiT-File_Manager")
 @SimpleObject(external = true)
 @UsesPermissions({"android.permission.READ_EXTERNAL_STORAGE",
     "android.permission.WRITE_EXTERNAL_STORAGE",
@@ -257,9 +259,9 @@ public class Tools_File extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "True bila ada salinan/pindahan "
-      + "CallCopyOrMoveFile yang masih berjalan.")
-  public boolean IsBusy() {
+  @SimpleFunction(description = "True bila salinan/pindahan CallCopyOrMoveFile "
+      + "yang masih berjalan. Khusus operasi itu (slot copyormove).")
+  public boolean IsCopyOrMoveBusy() {
     return Shared.slotBusy("copyormove");
   }
 
@@ -649,8 +651,8 @@ public class Tools_File extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "CALL: hapus BANYAK path sekaligus (tanpa loop "
-      + "manual). paths = list / teks koma. Hasil lewat FileListDeleted "
-      + "(total + terhapus).")
+      + "manual). paths = list, atau teks pisah koma (\"/a.jpg, /b.jpg\"; koma "
+      + "boleh spasi). Hasil lewat FileListDeleted (total + terhapus).")
   public void CallDeleteList(final Object paths) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
@@ -966,8 +968,9 @@ public class Tools_File extends AndroidNonvisibleComponent
     });
   }
 
-  @SimpleFunction(description = "CALL: tulis teks ke file (UTF-8). "
-      + "append=true = sambung di akhir. Hasil lewat FileSaved.")
+  @SimpleFunction(description = "CALL: tulis teks ke file (UTF-8; timpa isi "
+      + "lama). append=true = sambung di akhir (sama seperti CallAppendFile). "
+      + "Hanya untuk teks; file biner rusak bila lewat sini. Hasil lewat FileSaved.")
   public void CallSaveFile(final String path, final String content,
       final boolean append) {
     AsynchUtil.runAsynchronously(new Runnable() {
@@ -1045,6 +1048,13 @@ public class Tools_File extends AndroidNonvisibleComponent
         }
       }
     });
+  }
+
+  @SimpleFunction(description = "CALL: sambung teks di AKHIR file (UTF-8; "
+      + "tidak menimpa isi lama). Sama seperti CallSaveFile(append=true). "
+      + "File belum ada = dibuat baru. Hasil lewat FileSaved.")
+  public void CallAppendFile(final String path, final String content) {
+    CallSaveFile(path, content, true);
   }
 
   @SimpleFunction(description = "CALL: simpan base64 LANGSUNG ke storage "
@@ -1160,7 +1170,9 @@ public class Tools_File extends AndroidNonvisibleComponent
   // ================= CALL: baca teks =================
 
   @SimpleFunction(description = "CALL: baca file teks (UTF-8) di background. "
-      + "Hasil lewat GotText (content = isi file). Mulai lewat ReadStarted.")
+      + "Hanya untuk teks UTF-8; file biner/encoding lain isinya bisa kacau "
+      + "(biner = baca via base64/pustaka lain). Hasil lewat GotText "
+      + "(content = isi file). Mulai lewat ReadStarted.")
   public void CallReadText(final String path) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
@@ -1256,13 +1268,35 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   // ================= CALL: salin / pindah =================
 
-  @SimpleFunction(description = "CALL: salin ATAU pindah file (isMove=true = "
-      + "pindah). Path otomatis di-root /storage/emulated/0. Nama tujuan boleh beda. "
-      + "Bila tujuan SUDAH ADA: tidak disalin, Finished(success=true, "
-      + "isDuplicated=true) -> rename manual ala contoh. Asset hanya bisa "
-      + "jadi sumber. Satu job per saat.")
+  @SimpleFunction(description = "CALL: Salin ATAU pindah file (isMove=true = "
+      + "pindah; salah centang = file pindah padahal mau salin — untuk aman pakai "
+      + "CallCopyFile/CallMoveFile bila ragu). Path otomatis di-root "
+      + "/storage/emulated/0. Nama tujuan boleh beda. Bila tujuan SUDAH ADA: tidak "
+      + "disalin, Finished(success=false, isDuplicated=true) + ErrorOccurred. "
+      + "Asset hanya bisa jadi sumber. Satu job per saat.")
   public void CallCopyOrMoveFile(final String fromFileName, final String toFileName,
       final boolean isMove) {
+    doCopyOrMove(isMove, fromFileName, toFileName);
+  }
+
+  @SimpleFunction(description = "CALL: Salin file (tidak pindah). Sama seperti "
+      + "CallCopyOrMoveFile(isMove=false), tapi tanpa risiko salah centang. "
+      + "Bila tujuan SUDAH ADA: Finished(success=false, isDuplicated=true). "
+      + "Hasil lewat CopyOrMoveFinished.")
+  public void CallCopyFile(final String fromFileName, final String toFileName) {
+    doCopyOrMove(false, fromFileName, toFileName);
+  }
+
+  @SimpleFunction(description = "CALL: Pindah file (sumber ikut terhapus bila sukses). "
+      + "Sama seperti CallCopyOrMoveFile(isMove=true), tapi tanpa risiko salah "
+      + "centang. Bila tujuan SUDAH ADA: Finished(success=false, isDuplicated=true). "
+      + "Hasil lewat CopyOrMoveFinished.")
+  public void CallMoveFile(final String fromFileName, final String toFileName) {
+    doCopyOrMove(true, fromFileName, toFileName);
+  }
+
+  private void doCopyOrMove(final boolean isMove, final String fromFileName,
+      final String toFileName) {
     if (!Shared.claimSlot("copyormove")) {
       final String msg = "masih ada salinan/pindahan berjalan";
       Shared.err(this, "CopyOrMove", 0, msg);
@@ -1301,7 +1335,8 @@ public class Tools_File extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "SET: batalkan salinan/pindahan berjalan. "
-      + "Tanpa feedback (file sebagian dihapus).")
+      + "Tanpa feedback (file sebagian dihapus). Rantai: CopyOrMoveFinished "
+      + "(success=false, need='dibatalkan').")
   public void SetCancelCopyOrMove() {
     copyMoveCancel = true;
   }
@@ -1345,8 +1380,10 @@ public class Tools_File extends AndroidNonvisibleComponent
         return;
       }
       if (dst.exists() && dst.isFile()) {
-        // Sudah ada: JANGAN timpa. Lapor duplikat agar user rename manual.
-        finishCopyOrMove(move, true, dst.getAbsolutePath(), dst.getName(), true, "");
+        // Sudah ada: JANGAN timpa. success=false + isDuplicated agar
+        // logika if-success pemanggil tetap benar.
+        finishCopyOrMove(move, false, dst.getAbsolutePath(), dst.getName(), true,
+            "tujuan sudah ada, tidak ditimpa (rename manual / hapus dulu)");
         return;
       }
       if (dst.getParentFile() != null) {
@@ -1495,7 +1532,8 @@ public class Tools_File extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Path absolut dari input (di-root ke "
-      + "/storage/emulated/0; absolut/URL/aset apa adanya).")
+      + "/storage/emulated/0; absolut/URL/aset apa adanya). Cth: "
+      + "\"/Download/a.jpg\" -> \"/storage/emulated/0/Download/a.jpg\".")
   public String GetFullPath(String path) {
     try {
       if (wantAsset(path)) {
@@ -1507,8 +1545,9 @@ public class Tools_File extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Ukuran file dalam byte. Folder = total isi "
-      + "rekursif. path seperti IsFileOrDirectoryExists.")
+  @SimpleFunction(description = "Ukuran file dalam byte (-1 bila tidak ada "
+      + "/ gagal). Folder = total isi rekursif; folder besar = bisa lambat "
+      + "(hitung rekursif, UI beku sesaat). path seperti IsFileOrDirectoryExists.")
   public long FileSize(String path) {
     try {
       if (wantAsset(path)) {
@@ -1532,9 +1571,37 @@ public class Tools_File extends AndroidNonvisibleComponent
     }
   }
 
+  @SimpleFunction(description = "Waktu ubah terakhir file/folder (milidetik "
+      + "epoch; 0 bila tidak ada/gagal). Bandingkan 2 file = mana yang baru. "
+      + "Ubah ke tanggal pakai blok tanggal App Inventor.")
+  public long GetLastModified(String path) {
+    try {
+      File f = rootedFile(path);
+      if (f == null || !f.exists()) {
+        return 0L;
+      }
+      return f.lastModified();
+    } catch (Exception e) {
+      return 0L;
+    }
+  }
+
+  @SimpleFunction(description = "True bila path ada DAN bisa dibaca aplikasi. "
+      + "False = tidak ada, atau tidak ada izin baca (cek IsPermissionGranted "
+      + "/ aktifkan 'Akses semua file').")
+  public boolean IsFileReadable(String path) {
+    try {
+      File f = rootedFile(path);
+      return f != null && f.exists() && f.canRead();
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
   @SimpleFunction(description = "Folder khusus aplikasi (tanpa izin tambahan, "
       + "aman Android 11+). Cth: /storage/emulated/0/Android/data/<paket>/"
-      + "files. Hasilnya bisa langsung dipakai sebagai path blok lain.")
+      + "files. Hasilnya bisa langsung dipakai sebagai path blok lain. Pakai "
+      + "ini agar TIDAK perlu izin storage sama sekali.")
   public String GetAndroidSpecificDirectory() {
     try {
       File f = context.getExternalFilesDir(null);
@@ -1593,7 +1660,7 @@ public class Tools_File extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Sisa ruang kosong (byte) di kartu SD "
-      + "(/storage/emulated/0).")
+      + "(/storage/emulated/0). -1 bila gagal dibaca.")
   public long FreeSpace() {
     try {
       File r = rootedFile("");
@@ -1620,10 +1687,12 @@ public class Tools_File extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Daftar file (path lengkap). filter = "
+  @SimpleFunction(description = "GET: Daftar file (path lengkap). filter = "
       + "ekstensi tanpa titik (boleh koma: jpg,png; kosong = semua). "
-      + "recursive = sertakan isi subfolder. path seperti IsFileOrDirectoryExists.")
-  public List<String> ListFiles(String path, String filter, boolean recursive) {
+      + "recursive = sertakan isi subfolder. path seperti IsFileOrDirectoryExists. "
+      + "File besar + recursive = bisa lambat (UI beku sesaat); untuk daftar besar "
+      + "pakai filter/tipe secukupnya.")
+  public List<String> GetFiles(String path, String filter, boolean recursive) {
     ArrayList<String> out = new ArrayList<String>();
     try {
       String p = Shared.clean(path);
@@ -1687,9 +1756,9 @@ public class Tools_File extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Daftar subfolder (path lengkap, tanpa "
+  @SimpleFunction(description = "GET: Daftar subfolder (path lengkap, tanpa "
       + "rekursif). path seperti IsFileOrDirectoryExists.")
-  public List<String> ListFolders(String folder) {
+  public List<String> GetFolders(String folder) {
     ArrayList<String> out = new ArrayList<String>();
     try {
       String p = Shared.clean(folder);
@@ -1769,7 +1838,7 @@ public class Tools_File extends AndroidNonvisibleComponent
     }
   }
 
-  /** Daftar path lengkap satu keluarga duplikat dalam 1 laci yang sama
+  /** Daftar path lengkap satu keluarga duplikat dalam 1 folder yang sama
    *  (tanpa masuk subfolder). Termasuk inputnya sendiri bila ada. */
   private ArrayList<String> collectDuplicates(String fileOrDirectory) {
     ArrayList<String> out = new ArrayList<String>();
@@ -1816,11 +1885,11 @@ public class Tools_File extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "True bila file/folder input PUNYA DUPLIKAT "
-      + "di dalam 1 laci yang sama: ada yang namanya sama persis, atau satu "
+      + "di dalam 1 folder yang sama: ada yang namanya sama persis, atau satu "
       + "keluarga counter (mis. image.jpg dengan image_1.jpg / "
       + "image (1).jpg). Input satu saja: \"/Download/image.jpg\" = mode "
       + "file, \"/Download/\" atau path folder = mode folder. Hanya level "
-      + "laci itu, tanpa masuk subfolder. Cocok untuk validasi sebelum "
+      + "folder itu, tanpa masuk subfolder. Cocok untuk validasi sebelum "
       + "simpan/rename.")
   public boolean IsDuplicateFileOrDirectory(String fileOrDirectory) {
     try {
@@ -1831,9 +1900,9 @@ public class Tools_File extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Berapa banyak duplikat file/folder input di "
-      + "dalam 1 laci yang sama (termasuk inputnya sendiri bila ada). 0 = "
+      + "dalam 1 folder yang sama (termasuk inputnya sendiri bila ada). 0 = "
       + "tidak ada duplikat. Keluarga nama sama seperti "
-      + "IsDuplicateFileOrDirectory; hanya level laci itu, tanpa masuk "
+      + "IsDuplicateFileOrDirectory; hanya level folder itu, tanpa masuk "
       + "subfolder.")
   public int GetManyDuplicateFileOrDirectory(String fileOrDirectory) {
     try {
@@ -1847,10 +1916,10 @@ public class Tools_File extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Daftar path lengkap duplikat file/folder "
-      + "input di dalam 1 laci yang sama (termasuk inputnya sendiri bila "
+      + "input di dalam 1 folder yang sama (termasuk inputnya sendiri bila "
       + "ada). Urut abjad. Kosong = tidak ada duplikat. Keluarga nama sama "
       + "seperti IsDuplicateFileOrDirectory; tanpa masuk subfolder.")
-  public List<String> GetListDuplicateFileOrDirectory(String fileOrDirectory) {
+  public List<String> GetDuplicateFileOrDirectory(String fileOrDirectory) {
     try {
       return collectDuplicates(fileOrDirectory);
     } catch (Exception e) {
@@ -1862,19 +1931,24 @@ public class Tools_File extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Kategori file dari nama/path: image, audio, "
-      + "video, text, archive, document, apk, atau unknown. Berdasarkan "
-      + "ekstensi (tak peduli huruf besar). Bandingkan dengan blok "
-      + "TypeImage/dll. Olah string saja.")
+      + "video, text, archive, document, apk, atau unknown (boleh alias Indonesia "
+      + "seperti GetFilesByType). Berdasarkan ekstensi (tak peduli huruf besar). "
+      + "Bandingkan dengan blok TypeImage/dll. Olah string saja. Nama bisa dibohongi "
+      + "(jpg padahal zip) — bila akurasi penting pakai DetectArchiveType "
+      + "Tools_Compress.")
   public String FileTypeOf(String pathOrName) {
     return Shared.fileCategory(pathOrName);
   }
 
-  @SimpleFunction(description = "Daftar file (path lengkap) yang kategorinya "
-      + "cocok. type = image/audio/video/text/archive/document/apk (boleh "
-      + "alias: gambar/musik/vidio/teks/arsip/dokumen) atau salah satu blok "
-      + "TypeImage/dll. recursive = sertakan isi subfolder. "
-      + "path seperti IsFileOrDirectoryExists.")
-  public List<String> ListFilesByType(String folder, String type,
+  @SimpleFunction(description = "GET: Daftar file (path lengkap) yang kategorinya "
+      + "cocok. type = image/audio/video/text/archive/document/apk (boleh alias "
+      + "Indonesia: gambar/musik/video/teks/arsip/dokumen; alias lama vidio tetap "
+      + "diterima) atau salah satu blok TypeImage/dll. recursive = sertakan isi "
+      + "subfolder. path seperti IsFileOrDirectoryExists. Pilih: nama bisa dibohongi "
+      + "(jpg padahal zip) — bila akurasi penting pakai DetectArchiveType "
+      + "Tools_Compress (baca isi); bila kecepatan penting pakai FileTypeOf "
+      + "(baca nama).")
+  public List<String> GetFilesByType(String folder, String type,
       boolean recursive) {
     ArrayList<String> out = new ArrayList<String>();
     String cat = Shared.normCategory(type);
@@ -1992,12 +2066,12 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   // ================= GET PERMISSION =================
 
-  @SimpleFunction(description = "Minta izin Android (cth: "
+  @SimpleFunction(description = "CALL: Minta izin Android (cth: "
       + "android.permission.READ_EXTERNAL_STORAGE). Hasil lewat "
       + "GotPermission. Pasang need_permission dari event lain ke sini. "
       + "Android 11+: izin storage dialihkan ke 'Akses semua file' "
       + "(pakai OpenAllFilesAccessSettings; cek IsAllFilesAccessGranted).")
-  public void GetPermission(final String permission) {
+  public void CallRequestPermission(final String permission) {
     final String p = Shared.clean(permission);
     if (p.length() == 0) {
       Shared.err(this, "Permission", 0, "izin kosong");
@@ -2060,7 +2134,7 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "True bila aplikasi boleh tulis SEMUA file "
       + "bersama. Android 11+ = 'Akses semua file' aktif; Android 10 ke "
-      + "bawah selalu true (izin tulis biasa cukup via GetPermission).")
+      + "bawah selalu true (izin tulis biasa cukup via CallRequestPermission).")
   public boolean IsAllFilesAccessGranted() {
     try {
       if (android.os.Build.VERSION.SDK_INT >= 30) {
@@ -2172,7 +2246,7 @@ public class Tools_File extends AndroidNonvisibleComponent
       });
       return;
     }
-    GetPermission(eff);
+    CallRequestPermission(eff);
   }
 
   @SimpleFunction(description = "CALL: pastikan izin tulis storage beres "
@@ -2184,15 +2258,17 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   // ================= HELPER IZIN =================
 
-  @SimpleProperty(description = "Helper read-only: izin kamera. Colok ke "
+  @SimpleProperty(description = "Helper read-only: izin kamera (CADANGAN — belum ada "
+      + "bloknya, hadir mulai v21). Colok ke "
       + "IsPermissionGranted / CallEnsurePermission (tanpa ketik string).",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionCamera() {
     return "android.permission.CAMERA";
   }
 
-  @SimpleProperty(description = "Helper read-only: izin mikrofon (rekam "
-      + "suara). Colok ke IsPermissionGranted / CallEnsurePermission.",
+  @SimpleProperty(description = "Helper read-only: izin mikrofon, rekam "
+      + "suara (CADANGAN — belum ada bloknya, hadir mulai v21). Colok ke "
+      + "IsPermissionGranted / CallEnsurePermission.",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionMicrophone() {
     return "android.permission.RECORD_AUDIO";
@@ -2240,15 +2316,17 @@ public class Tools_File extends AndroidNonvisibleComponent
     return "android.permission.READ_MEDIA_AUDIO";
   }
 
-  @SimpleProperty(description = "Helper read-only: izin lokasi akurat. "
-      + "Colok ke IsPermissionGranted / CallEnsurePermission.",
+  @SimpleProperty(description = "Helper read-only: izin lokasi akurat (CADANGAN — "
+      + "belum ada bloknya, hadir mulai v21). Colok ke IsPermissionGranted / "
+      + "CallEnsurePermission.",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionLocationFine() {
     return "android.permission.ACCESS_FINE_LOCATION";
   }
 
-  @SimpleProperty(description = "Helper read-only: izin lokasi kasar. "
-      + "Colok ke IsPermissionGranted / CallEnsurePermission.",
+  @SimpleProperty(description = "Helper read-only: izin lokasi kasar (CADANGAN — "
+      + "belum ada bloknya, hadir mulai v21). Colok ke IsPermissionGranted / "
+      + "CallEnsurePermission.",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionLocationCoarse() {
     return "android.permission.ACCESS_COARSE_LOCATION";
@@ -2438,45 +2516,45 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   // ================= EVENTS =================
 
-  @SimpleEvent(description = "Hasil CallSetHiddenDirectory: path + success + "
+  @SimpleEvent(description = "Hasil CallSetHiddenDirectory: success pertama, path + "
       + "message + needPermission (isi = izin yang harus diminta bila "
       + "gagal karena izin).")
-  public void DirectoryHidden(String path, boolean success, String message,
+  public void DirectoryHidden(boolean success, String path, String message,
       String needPermission) {
-    Shared.fire(this, "DirectoryHidden", path,
-        Boolean.valueOf(success), message, needPermission);
+    Shared.fire(this, "DirectoryHidden", Boolean.valueOf(success), path,
+        message, needPermission);
   }
 
-  @SimpleEvent(description = "Hasil CallMakeNomediaFile: path + success + "
+  @SimpleEvent(description = "Hasil CallMakeNomediaFile: success pertama, path + "
       + "message + needPermission.")
-  public void NomediaFileCreated(String path, boolean success, String message,
+  public void NomediaFileCreated(boolean success, String path, String message,
       String needPermission) {
-    Shared.fire(this, "NomediaFileCreated", path,
-        Boolean.valueOf(success), message, needPermission);
+    Shared.fire(this, "NomediaFileCreated", Boolean.valueOf(success), path,
+        message, needPermission);
   }
 
-  @SimpleEvent(description = "Hasil CallDeleteNomediaFile: path + success + "
+  @SimpleEvent(description = "Hasil CallDeleteNomediaFile: success pertama, path + "
       + "message + needPermission.")
-  public void NomediaFileDeleted(String path, boolean success, String message,
+  public void NomediaFileDeleted(boolean success, String path, String message,
       String needPermission) {
-    Shared.fire(this, "NomediaFileDeleted", path,
-        Boolean.valueOf(success), message, needPermission);
+    Shared.fire(this, "NomediaFileDeleted", Boolean.valueOf(success), path,
+        message, needPermission);
   }
 
-  @SimpleEvent(description = "Hasil CallMakeDirectory: path + success + "
+  @SimpleEvent(description = "Hasil CallMakeDirectory: success pertama, path + "
       + "message + needPermission.")
-  public void DirectoryCreated(String path, boolean success, String message,
+  public void DirectoryCreated(boolean success, String path, String message,
       String needPermission) {
-    Shared.fire(this, "DirectoryCreated", path,
-        Boolean.valueOf(success), message, needPermission);
+    Shared.fire(this, "DirectoryCreated", Boolean.valueOf(success), path,
+        message, needPermission);
   }
 
-  @SimpleEvent(description = "Hasil CallDeleteFile: path + success + "
+  @SimpleEvent(description = "Hasil CallDeleteFile: success pertama, path + "
       + "message + needPermission.")
-  public void FileDeleted(String path, boolean success, String message,
+  public void FileDeleted(boolean success, String path, String message,
       String needPermission) {
-    Shared.fire(this, "FileDeleted", path,
-        Boolean.valueOf(success), message, needPermission);
+    Shared.fire(this, "FileDeleted", Boolean.valueOf(success), path,
+        message, needPermission);
   }
 
   @SimpleEvent(description = "Hasil CallDeleteList: success + total + "
@@ -2488,44 +2566,44 @@ public class Tools_File extends AndroidNonvisibleComponent
         Integer.valueOf(deleted), message, needPermission);
   }
 
-  @SimpleEvent(description = "Hasil CallRenameFile: path (nama baru) + "
-      + "success + message + needPermission.")
-  public void FileRenamed(String path, boolean success, String message,
-      String needPermission) {
-    Shared.fire(this, "FileRenamed", path,
-        Boolean.valueOf(success), message, needPermission);
-  }
-
-  @SimpleEvent(description = "Hasil CallRenameFolder: path (nama baru) + "
-      + "success + message + needPermission.")
-  public void FolderRenamed(String path, boolean success, String message,
-      String needPermission) {
-    Shared.fire(this, "FolderRenamed", path,
-        Boolean.valueOf(success), message, needPermission);
-  }
-
-  @SimpleEvent(description = "Hasil CallCreateEmptyFile: path + success + "
+  @SimpleEvent(description = "Hasil CallRenameFile: success pertama, path (nama baru) + "
       + "message + needPermission.")
-  public void EmptyFileCreated(String path, boolean success, String message,
+  public void FileRenamed(boolean success, String path, String message,
       String needPermission) {
-    Shared.fire(this, "EmptyFileCreated", path,
-        Boolean.valueOf(success), message, needPermission);
+    Shared.fire(this, "FileRenamed", Boolean.valueOf(success), path,
+        message, needPermission);
   }
 
-  @SimpleEvent(description = "Hasil CallSaveFile: path + success + "
+  @SimpleEvent(description = "Hasil CallRenameFolder: success pertama, path (nama baru) + "
       + "message + needPermission.")
-  public void FileSaved(String path, boolean success, String message,
+  public void FolderRenamed(boolean success, String path, String message,
       String needPermission) {
-    Shared.fire(this, "FileSaved", path,
-        Boolean.valueOf(success), message, needPermission);
+    Shared.fire(this, "FolderRenamed", Boolean.valueOf(success), path,
+        message, needPermission);
   }
 
-  @SimpleEvent(description = "Hasil CallSaveBase64ToFile: path + success + "
+  @SimpleEvent(description = "Hasil CallCreateEmptyFile: success pertama, path + "
       + "message + needPermission.")
-  public void Base64FileSaved(String path, boolean success, String message,
+  public void EmptyFileCreated(boolean success, String path, String message,
       String needPermission) {
-    Shared.fire(this, "Base64FileSaved", path,
-        Boolean.valueOf(success), message, needPermission);
+    Shared.fire(this, "EmptyFileCreated", Boolean.valueOf(success), path,
+        message, needPermission);
+  }
+
+  @SimpleEvent(description = "Hasil CallSaveFile: success pertama, path + "
+      + "message + needPermission.")
+  public void FileSaved(boolean success, String path, String message,
+      String needPermission) {
+    Shared.fire(this, "FileSaved", Boolean.valueOf(success), path,
+        message, needPermission);
+  }
+
+  @SimpleEvent(description = "Hasil CallSaveBase64ToFile: success pertama, path + "
+      + "message + needPermission.")
+  public void Base64FileSaved(boolean success, String path, String message,
+      String needPermission) {
+    Shared.fire(this, "Base64FileSaved", Boolean.valueOf(success), path,
+        message, needPermission);
   }
 
   @SimpleEvent(description = "Bacaan dimulai (CallReadText): persiapan "
@@ -2568,8 +2646,8 @@ public class Tools_File extends AndroidNonvisibleComponent
         Boolean.valueOf(isDuplicated));
   }
 
-  @SimpleEvent(description = "Hasil GetPermission: success + izin + pesan. "
-      + "Pasang need_permission dari event lain ke GetPermission.")
+  @SimpleEvent(description = "Hasil CallRequestPermission: success + izin + pesan. "
+      + "Pasang need_permission dari event lain ke CallRequestPermission.")
   public void GotPermission(boolean success, String permission,
       String message) {
     Shared.fire(this, "GotPermission",
@@ -2591,7 +2669,9 @@ public class Tools_File extends AndroidNonvisibleComponent
   }
 
   @SimpleEvent(description = "SATU-SATUNYA error Tools_File. component = nama "
-      + "operasi (bandingkan dengan blok Op...). id selalu 0 (tanpa id).")
+      + "operasi (isi dengan blok kuning OpDirectory/OpFile/OpRead/OpBase64/"
+      + "OpCopyOrMove/OpPick/OpOpen/OpPermission untuk if). Contoh: jika component "
+      + "= OpFile maka tampilkan message. id selalu 0 (tanpa id — cek component saja).")
   public void ErrorOccurred(String component, int id, String message) {
     Shared.fire(this, "ErrorOccurred", component,
         Integer.valueOf(id), message);
@@ -2599,7 +2679,9 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred: "
       + "pesan error terakhir operasi ini (Directory/File/Read/Base64/"
-      + "CopyOrMove/Pick/Open/Permission, kosong bila belum ada).")
+      + "CopyOrMove/Pick/Open/Permission, teks kosong bila belum ada). Isi operation "
+      + "dengan blok kuning (mis. OpFile). Contoh: simpan LastError(OpCopyOrMove) "
+      + "ke variabel.")
   public String LastError(String operation) {
     return Shared.lastError(operation);
   }

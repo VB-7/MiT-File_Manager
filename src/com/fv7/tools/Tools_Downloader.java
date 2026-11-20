@@ -34,17 +34,17 @@ import java.util.Map;
 import java.util.HashMap;
 
 @DesignerComponent(
-    version = 17,
+    version = 20,
     description = "Tools_Downloader: unduh paralel ber-id (pause/resume/cancel per id, "
         + "Started/ProgressChanged/Finished) + unduh batch list URL. Id dikelola "
-        + "Tools_Base (CreateUniqueId) atau CreateDownloadId. List id URUT PEMBUATAN. "
-        + "(v17 2026-11-17: CallDownload 4 pintu http/data:/content:/file:; "
-        + "blok mandiri CallGuessFileName + event FileNameGuessed; "
-        + "v16: gate izin otomatis + SetDownloadNotification.)",
+        + "CreateDownloadId (atau CreateUniqueId Tools_Base). List id URUT PEMBUATAN "
+        + "(index 1 = pertama dibuat). Konvensi awalan: Is = cek boolean; Call = async "
+        + "+ hasil lewat event; Set = langsung tanpa feedback; Get = nilai balik sinkron.",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,
-    iconName = "aiwebres/tools_downloader.jpg")
+    iconName = "aiwebres/tools_downloader.jpg",
+    helpUrl = "https://github.com/VB-7/MiT-File_Manager")
 @SimpleObject(external = true)
 @UsesPermissions({"android.permission.INTERNET",
     "android.permission.READ_EXTERNAL_STORAGE",
@@ -87,6 +87,8 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     String savePath = "";
     String fileName = "";
     String message = "";
+    String url = "";
+    String folder = "";
   }
 
   private static final Map<Integer, DlInfo> infos = new HashMap<Integer, DlInfo>();
@@ -108,16 +110,17 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     this.activity = container.$context();
   }
 
-  @SimpleFunction(description = "CALL: unduh ke folder (otomatis di-root "
-      + "/storage/emulated/0; absolut apa adanya). url = http(s) ATAU data:URL "
+  @SimpleFunction(description = "CALL: unduh ke folder. url = http(s) ATAU data:URL "
       + "(base64/url-encoded, mis. data:image/png;base64,...) ATAU content: URI "
       + "Android (dari file picker) ATAU file: URL / path lokal (disalin). "
-      + "blob: TIDAK didukung (itu objek browser; "
-      + "ubah dulu jadi base64 via JavaScript, lalu kirim sebagai data:URL "
-      + "atau ke CallSaveBase64ToFile). fileName kosong = nama otomatis. "
-      + "id = angka bebas yang belum dipakai (minta ke Tools_Base "
-      + "CreateUniqueId atau CreateDownloadId). Hasil lewat DownloadStarted/"
-      + "ProgressChanged/Finished (bawa id).")
+      + "blob: TIDAK didukung (itu objek browser; ubah dulu jadi base64 via JavaScript, "
+      + "lalu kirim sebagai data:URL atau ke CallSaveBase64ToFile Tools_File). "
+      + "fileName kosong = nama otomatis (seperti CallGuessFileName). folder: boleh nama "
+      + "relatif (Download/ = aman tanpa izin khusus); folder di luar itu butuh izin "
+      + "MANAGE_EXTERNAL_STORAGE. Contoh aman: Download/. id dari CreateDownloadId atau "
+      + "CreateUniqueId Tools_Base. Hasil lewat DownloadStarted/ProgressChanged/Finished "
+      + "(bawa id). Gagal mulai (URL/id/folder salah) = Finished(success=false) + "
+      + "ErrorOccurred.")
   public void CallDownload(String url, String fileName, String folder, int id) {
     String u = Shared.clean(url);
     if (u.length() == 0) {
@@ -178,6 +181,8 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     ni.savePath = "";
     ni.fileName = Shared.clean(fileName);
     ni.message = "";
+    ni.url = u;
+    ni.folder = dir.getAbsolutePath();
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         if (!Shared.ensurePermission(form, activity, Shared.PERM_WRITE_STORAGE)) {
@@ -679,7 +684,7 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
       String mime = c.getContentType();
       String name = op.fileName;
       if (name.length() == 0) {
-        name = GetFileName(op.url, mime == null ? "" : mime,
+        name = guessFileName(op.url, mime == null ? "" : mime,
             disp == null ? "" : disp);
       } else {
         name = Shared.sanitize(name);
@@ -870,10 +875,15 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "CALL: unduh BANYAK URL sekaligus (tanpa loop manual). fileNames "
-      + "boleh kosong (= otomatis semua). folder seperti CallDownload. Tanpa return: "
-      + "pantau tiap id lewat DownloadStarted/DownloadProgressChanged/DownloadFinished. "
-      + "Ringkasan lewat DownloadBatchFinished. Satu batch per saat.")
+  @SimpleFunction(description = "CALL: unduh BANYAK URL sekaligus (tanpa loop manual). "
+      + "urls = list teks URL (atau satu teks URL); fileNames = list nama (atau satu teks; "
+      + "boleh kosong = otomatis semua; yang kurang dari jumlah URL = otomatis). "
+      + "Contoh: urls = [url1, url2], fileNames = kosongkan. folder seperti CallDownload. "
+      + "Tanpa return: id tiap URL ketahuan saat DownloadStarted menyala (cocokkan via "
+      + "fileName/savePath yang dibawanya). Pantau tiap id lewat "
+      + "DownloadStarted/DownloadProgressChanged/DownloadFinished. Ringkasan lewat "
+      + "DownloadBatchFinished. Satu batch per saat. Tiap id batch bisa dipasang "
+      + "SetDownloadNotification satu-satu (notif per file).")
   public void CallDownloadList(Object urls, Object fileNames,
       String folder) {
     int started = 0;
@@ -959,7 +969,8 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     return out;
   }
 
-  @SimpleFunction(description = "SET: batalkan unduhan berjalan (per id). File sebagian dihapus. Tanpa feedback.")
+  @SimpleFunction(description = "SET: Batalkan unduhan berjalan. File sebagian dihapus. "
+      + "Umpan balik via DownloadFinished(success=false). Tanpa event sendiri.")
   public void SetCancelDownload(int id) {
     cancelStatic(id);
   }
@@ -981,7 +992,9 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: jeda unduhan berjalan (per id). Lanjut via SetResumeDownload. Tanpa feedback.")
+  @SimpleFunction(description = "SET: Jeda unduhan berjalan. Unduhan berhenti menulis, "
+      + "lanjut dari posisi sama saat Resume (BUKAN ulang dari 0). Verifikasi via "
+      + "IsDownloadPaused / GetDownloadStatus (status jadi jeda). Tanpa feedback.")
   public void SetPauseDownload(int id) {
     DlOp op;
     synchronized (lock) {
@@ -995,7 +1008,9 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     infoOf(id).status = "jeda";
   }
 
-  @SimpleFunction(description = "SET: lanjutkan unduhan yang dijeda (per id). Tanpa feedback.")
+  @SimpleFunction(description = "SET: Lanjutkan unduhan yang dijeda (lanjut dari posisi "
+      + "jeda, tanpa unduh ulang). Verifikasi via IsDownloadPaused / GetDownloadStatus "
+      + "(status kembali jalan). Tanpa feedback.")
   public void SetResumeDownload(int id) {
     DlOp op;
     synchronized (lock) {
@@ -1010,6 +1025,91 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     }
     Ids.setActive(Ids.DOWNLOAD, id, true);
     infoOf(id).status = "jalan";
+  }
+
+  @SimpleFunction(description = "True bila id unduhan ini sedang dijeda (Pause tapi "
+      + "belum Cancel/selesai). False = jalan/selesai/gagal/batal/belum ada.")
+  public boolean IsDownloadPaused(int id) {
+    synchronized (lock) {
+      DlInfo i = infos.get(Integer.valueOf(id));
+      return i != null && "jeda".equals(i.status);
+    }
+  }
+
+  @SimpleFunction(description = "Persen unduhan id ini (0-100). = index 1 dari "
+      + "GetDownloadProgress.")
+  public int GetDownloadPercent(int id) {
+    synchronized (lock) {
+      DlInfo i = infos.get(Integer.valueOf(id));
+      return i == null ? 0 : i.percent;
+    }
+  }
+
+  @SimpleFunction(description = "Path file tujuan id ini (kosong bila belum mulai). "
+      + "= index 2 dari GetDownloadResult.")
+  public String GetDownloadSavePath(int id) {
+    synchronized (lock) {
+      DlInfo i = infos.get(Integer.valueOf(id));
+      return i == null ? "" : i.savePath;
+    }
+  }
+
+  @SimpleFunction(description = "Nama file id ini (kosong bila belum mulai). "
+      + "= index 3 dari GetDownloadResult.")
+  public String GetDownloadFileName(int id) {
+    synchronized (lock) {
+      DlInfo i = infos.get(Integer.valueOf(id));
+      return i == null ? "" : i.fileName;
+    }
+  }
+
+  @SimpleFunction(description = "CALL: Unduh ulang id ini dari awal (byte dihitung ulang "
+      + "dari 0). Untuk id yang gagal/dibatalkan/selesai. Id yang masih jalan harus "
+      + "di-Cancel dulu. Hasil lewat DownloadFinished seperti biasa.")
+  public void CallRetryDownload(int id) {
+    String u;
+    String fn;
+    String folder;
+    synchronized (lock) {
+      DlInfo i = infos.get(Integer.valueOf(id));
+      if (i == null || i.url == null || i.url.length() == 0) {
+        Shared.err(this, "Download", id, "id belum pernah mengunduh");
+        return;
+      }
+      u = i.url;
+      fn = i.fileName;
+      folder = i.folder;
+    }
+    synchronized (lock) {
+      if (downloads.containsKey(Integer.valueOf(id))) {
+        Shared.err(this, "Download", id, "masih ada unduhan jalan (Cancel dulu)");
+        return;
+      }
+    }
+    cancelStatic(id);
+    Ids.setActive(Ids.DOWNLOAD, id, false);
+    CallDownload(u, fn, folder, id);
+  }
+
+  @SimpleFunction(description = "Total URL batch yang sedang jalan (0 bila tidak ada batch).")
+  public int GetBatchTotal() {
+    synchronized (lock) {
+      return dlBatchTotal;
+    }
+  }
+
+  @SimpleFunction(description = "Jumlah URL batch yang sudah selesai (sukses/gagal).")
+  public int GetBatchDone() {
+    synchronized (lock) {
+      return dlBatchDone;
+    }
+  }
+
+  @SimpleFunction(description = "Jumlah URL batch yang sukses.")
+  public int GetBatchOk() {
+    synchronized (lock) {
+      return dlBatchOk;
+    }
   }
 
   // ================= ID =================
@@ -1036,7 +1136,8 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     return Ids.activeIdsOf(Ids.DOWNLOAD);
   }
 
-  @SimpleFunction(description = "Id unduhan yang terakhir dibuat/di-start. -1 bila kosong.")
+  @SimpleFunction(description = "Id unduhan yang terakhir disentuh (dibuat atau di-start). "
+      + "-1 bila kosong. Beda dengan GetLastDownloadId (terakhir dibuat).")
   public int CurrentDownloadId() {
     return Ids.currentOf(Ids.DOWNLOAD);
   }
@@ -1046,7 +1147,8 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     return Ids.firstOf(Ids.DOWNLOAD);
   }
 
-  @SimpleFunction(description = "Id TERAKHIR DIBUAT. -1 bila kosong.")
+  @SimpleFunction(description = "Id unduhan TERAKHIR DIBUAT. -1 bila kosong. Beda dengan "
+      + "CurrentDownloadId (terakhir disentuh).")
   public int GetLastDownloadId() {
     return Ids.lastOf(Ids.DOWNLOAD);
   }
@@ -1056,7 +1158,8 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     return Ids.previousOf(Ids.DOWNLOAD, id);
   }
 
-  @SimpleFunction(description = "True bila id unduhan ini sedang jalan (tidak dijeda).")
+  @SimpleFunction(description = "True bila id unduhan ini sedang jalan (tidak dijeda). "
+      + "Bedakan jeda vs berhenti via IsDownloadPaused.")
   public boolean IsDownloadIdActive(int id) {
     return Ids.isActive(Ids.DOWNLOAD, id);
   }
@@ -1086,14 +1189,13 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "SET: tampilkan progres unduhan di bar notifikasi "
-      + "Android (per id, otomatis: nama file + persen). show=true = tampil + update "
+      + "Android (otomatis: nama file + persen). show=true = tampil + update "
       + "tiap Started/Progress/Finished; show=false = matikan + hapus notif id itu. "
       + "Pasang sesudah CallDownload, atau di dalam event DownloadStarted/"
       + "ProgressChanged (id sudah terdaftar; di Finished kurang relevan). "
-      + "Tiap id hasil CallDownloadList bisa dipasang satu-satu, agar sistem bisa "
-      + "bedakan Download vs DownloadList. Android 13+ butuh izin "
-      + "POST_NOTIFICATIONS (minta via blok GetPermission Tools_File). "
-      + "Tanpa feedback.")
+      + "Tiap id hasil CallDownloadList bisa dipasang satu-satu (notif per file). "
+      + "Android 13+ butuh izin POST_NOTIFICATIONS (minta via blok CallRequestPermission "
+      + "Tools_File). Tanpa feedback.")
   public void SetDownloadNotification(int id, boolean show) {
     synchronized (lock) {
       if (show) {
@@ -1230,7 +1332,9 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Fallback polling untuk event "
-      + "DownloadProgressChanged: list [persen 0-100, byte diterima, byte total].")
+      + "DownloadProgressChanged: list [persen 0-100, byte diterima, byte total]. "
+      + "Contoh ambil persen: select list item (hasil blok ini) index 1. "
+      + "Jalan pintas: pakai GetDownloadPercent.")
   public List<Object> GetDownloadProgress(int id) {
     ArrayList<Object> out = new ArrayList<Object>();
     synchronized (lock) {
@@ -1249,8 +1353,9 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Fallback polling untuk event DownloadFinished: "
-      + "list [success, savePath, fileName, message]. Tetap ada setelah selesai "
-      + "sampai RemoveDownloadId.")
+      + "list [success, savePath, fileName, message]. Contoh ambil nama: select list item "
+      + "(hasil blok ini) index 3. Jalan pintas: GetDownloadSavePath/GetDownloadFileName. "
+      + "Tetap ada setelah selesai sampai RemoveDownloadId.")
   public List<Object> GetDownloadResult(int id) {
     ArrayList<Object> out = new ArrayList<Object>();
     synchronized (lock) {
@@ -1271,7 +1376,8 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Fallback polling untuk event batch: list "
-      + "[batchJalan, total, selesai, ok].")
+      + "[batchJalan, total, selesai, ok]. Contoh ambil total: select list item "
+      + "(hasil blok ini) index 2. Jalan pintas: GetBatchTotal/GetBatchDone/GetBatchOk.")
   public List<Object> GetBatchProgress() {
     ArrayList<Object> out = new ArrayList<Object>();
     synchronized (lock) {
@@ -1283,17 +1389,19 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     return out;
   }
 
-  @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred: "
-      + "pesan error terakhir operasi ini (kosong bila belum ada).")
+  @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred: pesan error "
+      + "terakhir operasi ini (teks kosong bila belum ada). Isi operation dengan blok "
+      + "kuning (mis. OpDownload).")
   public String LastError(String operation) {
     return Shared.lastError(operation);
   }
 
-  @SimpleFunction(description = "CALL: tebak nama file dari URL saja (1 input, "
+  @SimpleFunction(description = "CALL: Tebak nama file dari URL saja (1 input, "
       + "mandiri — bisa disandingkan komponen lain, mis. Web bawaan MIT untuk "
       + "rename). http(s) = ambil header asli server (ikuti redirect); "
       + "data:/content:/file:/path = tebak lokal tanpa internet. Hasil lewat "
-      + "FileNameGuessed (url + fileName + mimeType).")
+      + "FileNameGuessed (url + fileName + mimeType). Butuh potong path jadi nama? "
+      + "pakai GetFileName Tools_File.")
   public void CallGuessFileName(final String url) {
     final String u = Shared.clean(url);
     if (u.length() == 0) {
@@ -1385,14 +1493,14 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
           } catch (Exception e) {
             // pakai url asal
           }
-          fireGuess(u, GetFileName(finalUrl, mime, disp), mime);
+          fireGuess(u, guessFileName(finalUrl, mime, disp), mime);
         } catch (Exception e) {
           String m = e.getMessage();
           if (m == null) {
             m = "tebak nama gagal";
           }
           Shared.err(Tools_Downloader.this, "Download", 0, m);
-          fireGuess(u, GetFileName(u, "", ""), "");
+          fireGuess(u, guessFileName(u, "", ""), "");
         } finally {
           if (c != null) {
             try {
@@ -1426,9 +1534,9 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
         mimeType);
   }
 
-  @SimpleFunction(description = "GET: nama file dari URL, mime, dan content-disposition "
-      + "(dipakai otomatis bila fileName CallDownload dikosongkan).")
-  public String GetFileName(String url, String mimeType, String contentDisposition) {
+  /** Tebak nama file dari URL/mime/disposition. Dipakai otomatis bila fileName
+   *  CallDownload dikosongkan + oleh CallGuessFileName. */
+  private static String guessFileName(String url, String mimeType, String contentDisposition) {
     String name = null;
     if (contentDisposition != null && contentDisposition.length() > 0) {
       int star = contentDisposition.indexOf("filename*=");
@@ -1494,7 +1602,7 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     return name;
   }
 
-  private String urlDecode(String s) {
+  private static String urlDecode(String s) {
     try {
       return URLDecoder.decode(s, "UTF-8");
     } catch (Exception e) {
@@ -1560,7 +1668,8 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
   }
 
   @SimpleEvent(description = "SATU-SATUNYA error Tools_Downloader. component = nama operasi "
-      + "(bandingkan dengan blok OpDownload).")
+      + "(isi dengan blok kuning OpDownload untuk if). Contoh: jika component = OpDownload "
+      + "maka tampilkan message.")
   public void ErrorOccurred(String component, int id, String message) {
     Shared.fire(this, "ErrorOccurred",
         component, Integer.valueOf(id), message);
@@ -1568,7 +1677,8 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
 
   // ================= OP =================
 
-  @SimpleProperty(description = "Nama operasi Download (untuk if di ErrorOccurred).",
+  @SimpleProperty(description = "Nama operasi Download untuk if di ErrorOccurred. Contoh: "
+      + "colok ke perbandingan = dengan component dari event ErrorOccurred.",
       category = PropertyCategory.BEHAVIOR)
   public String OpDownload() {
     return "Download";

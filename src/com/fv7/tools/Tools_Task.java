@@ -35,20 +35,27 @@ import java.util.Map;
 import java.util.Set;
 
 @DesignerComponent(
-    version = 17,
+    version = 20,
     description = "Tools_Task: penjadwal full-stack ber-id. Tugas dalam-aplikasi "
         + "(sekali/berulang/terjadwal) + alarm sistem via AlarmManager (buka "
         + "aplikasi saat bunyi) + notifikasi ongoing + wake-lock + variabel/extra "
-        + "per tugas + persistensi alarm (RestoreAlarms). Id dikelola "
-        + "CreateTaskId / Tools_Base. Tanpa Service/receiver khusus (aman "
+        + "per tugas + persistensi alarm. Gudang Var/Extra tinggal di sini karena "
+        + "tersimpan di HP (survive reboot) + terbaca saat alarm menyalakan aplikasi. "
+        + "Id dikelola CreateTaskId. Tanpa Service/receiver khusus (aman "
         + "manifest, lolos Play). Setiap event ada fallback polling "
         + "(GetTaskStatus/Result/Progress, GetAlarmInfo, CheckStartupAlarm). "
-        + "List id URUT PEMBUATAN. "
-        + "(v17 2026-11-17: tanpa perubahan fungsi; penomoran versi.)",
+        + "List id URUT PEMBUATAN. WAJIB di Screen.Initialize: CallCheckStartupAlarm "
+        + "lalu CallRestoreAlarms (alarm TIDAK hidup sendiri habis reboot). DENAH "
+        + "BERHENTI: jeda sementara -> SetPauseTask; batalkan jadwal tapi alarm "
+        + "tetap -> CallCancelTask; cabut alarm tapi jadwal tetap -> SetCancelAlarm; "
+        + "buang selamanya -> RemoveTaskId. Konvensi awalan: Is = boolean (colok ke "
+        + "if), Call = async + hasil lewat event, Set = tanpa feedback sukses "
+        + "(gagal via ErrorOccurred), Get = nilai balik sinkron.",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,
-    iconName = "aiwebres/tools_task.jpg")
+    iconName = "aiwebres/tools_task.jpg",
+    helpUrl = "https://github.com/VB-7/MiT-File_Manager")
 @SimpleObject(external = true)
 @UsesPermissions({"android.permission.WAKE_LOCK",
     "android.permission.RECEIVE_BOOT_COMPLETED",
@@ -350,7 +357,7 @@ public class Tools_Task extends AndroidNonvisibleComponent
   // ================= ID =================
 
   @SimpleFunction(description = "Buat id tugas unik baru (Number, siap pakai "
-      + "ke CallSchedule*/CallSetAlarm). Urutan pembuatan menentukan urutan list.")
+      + "ke CallSchedule*/CallScheduleAlarm). Urutan pembuatan menentukan urutan list.")
   public int CreateTaskId() {
     int id = Ids.createFor(Ids.TASK);
     if (id < 1) {
@@ -368,11 +375,6 @@ public class Tools_Task extends AndroidNonvisibleComponent
   @SimpleFunction(description = "Id tugas/alarm yang aktif (jalan/jeda/terpasang, "
       + "URUT PEMBUATAN).")
   public List<Integer> GetActiveTaskIds() {
-    return Ids.activeIdsOf(Ids.TASK);
-  }
-
-  @SimpleFunction(description = "Alias GetActiveTaskIds: id yang masih pending.")
-  public List<Integer> GetPendingTaskIds() {
     return Ids.activeIdsOf(Ids.TASK);
   }
 
@@ -417,7 +419,7 @@ public class Tools_Task extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "CALL: Batalkan SEMUA tugas dalam-aplikasi (alarm "
-      + "sistem tidak ikut; pakai CallCancelAllAlarms bila perlu). Tiap tugas "
+      + "sistem tidak ikut; pakai SetCancelAllAlarms bila perlu). Tiap tugas "
       + "yang jalan menembak TaskCancelled.")
   public void CallCancelAllTasks() {
     ArrayList<Integer> all;
@@ -687,15 +689,17 @@ public class Tools_Task extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "CALL: Jadwalkan tugas sekali jalan: id + jeda "
-      + "mili-detik + payload teks (JSON via Tools_Base bila perlu). "
-      + "Menembak TaskStarted lalu TaskFinished. Sukses menembak Started; gagal via ErrorOccurred.")
+      + "mili-detik + payload teks. Jadwal diterima = menembak TaskStarted, lalu "
+      + "TaskFinished. Payload kompleks = JSON via Tools_Base (kirim JsonEncode, "
+      + "terima JsonDecode). Gagal via ErrorOccurred.")
   public void CallScheduleOnce(int id, long delayMillis, String payload) {
     scheduleKind(id, "once", delayMillis, 0, 1, payload);
   }
 
   @SimpleFunction(description = "CALL: Jadwalkan tugas berulang: id + jeda awal + "
-      + "interval + jumlah ulang (mis. 5) atau -1 = selamanya + payload. "
-      + "Tiap tick menembak TaskTick; selesai menembak TaskFinished.")
+      + "interval + jumlah ulang (mis. 5; -1/0 = selamanya; 1 = sekali) + payload. "
+      + "Tiap tick menembak TaskTick; selesai menembak TaskFinished. Payload "
+      + "kompleks = JSON via Tools_Base (kirim JsonEncode, terima JsonDecode).")
   public void CallScheduleRepeating(int id, long initialDelayMillis,
       long intervalMillis, int repeatCount, String payload) {
     long iv = intervalMillis < MIN_INTERVAL ? MIN_INTERVAL : intervalMillis;
@@ -704,7 +708,8 @@ public class Tools_Task extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "CALL: Jadwalkan tugas pada jam epoch mili-detik "
-      + "(lihat NowMillis). Lewat = langsung jalan.")
+      + "(lihat NowMillis; mau jam harian tanpa epoch = CallScheduleDailyAt). "
+      + "Lewat = langsung jalan.")
   public void CallScheduleAt(int id, long epochMillis, String payload) {
     long delay = epochMillis - System.currentTimeMillis();
     if (delay < 0) {
@@ -714,11 +719,14 @@ public class Tools_Task extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "SET: Jeda tugas ber-id (berlaku untuk once/repeating "
-      + "yang belum selesai). Lanjut via SetResumeTask.")
+      + "yang belum selesai). Lanjut via SetResumeTask. Bukan jeda/jalan = ErrorOccurred. "
+      + "Sukses diam.")
   public void SetPauseTask(int id) {
     synchronized (lock) {
       Task t = tasks.get(Integer.valueOf(id));
       if (t == null || !"jalan".equals(t.status)) {
+        Shared.err(this, "Task", id, "tidak bisa dijeda (status: "
+            + (t == null ? "tidak ada" : t.status) + ")");
         return;
       }
       try {
@@ -736,12 +744,15 @@ public class Tools_Task extends AndroidNonvisibleComponent
     updateActive(id);
   }
 
-  @SimpleFunction(description = "SET: Lanjutkan tugas yang dijeda (SetPauseTask).")
+  @SimpleFunction(description = "SET: Lanjutkan tugas yang dijeda (SetPauseTask). "
+      + "Bukan jeda = ErrorOccurred. Sukses diam.")
   public void SetResumeTask(int id) {
     Task t;
     synchronized (lock) {
       t = tasks.get(Integer.valueOf(id));
       if (t == null || !"jeda".equals(t.status)) {
+        Shared.err(this, "Task", id, "tidak bisa dilanjut (status: "
+            + (t == null ? "tidak ada" : t.status) + ")");
         return;
       }
       t.status = "jalan";
@@ -880,7 +891,64 @@ public class Tools_Task extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Waktu sekarang epoch mili-detik (untuk CallScheduleAt/SetAlarm).")
+  @SimpleFunction(description = "True bila tugas ber-id sedang dijeda (SetPauseTask, "
+      + "belum resume/batal). False = jalan/selesai/batal/tidak ada (ragu? cek "
+      + "GetTaskStatus).")
+  public boolean IsTaskPaused(int id) {
+    synchronized (lock) {
+      Task t = tasks.get(Integer.valueOf(id));
+      return t != null && t.paused;
+    }
+  }
+
+  @SimpleFunction(description = "Sisa mili-detik sampai bunyi berikutnya (jalan = "
+      + "nextFire - sekarang; jeda = sisa saat dijeda; selesai/batal/tidak ada = 0). "
+      + "Pasangan GetTaskProgress (index 4 = nextFireAt).")
+  public long GetTaskRemaining(int id) {
+    synchronized (lock) {
+      Task t = tasks.get(Integer.valueOf(id));
+      if (t == null) {
+        return 0;
+      }
+      if ("jeda".equals(t.status)) {
+        return Math.max(0, t.remaining);
+      }
+      if ("jalan".equals(t.status)) {
+        return Math.max(0, t.nextFire - System.currentTimeMillis());
+      }
+      return 0;
+    }
+  }
+
+  @SimpleFunction(description = "Mili-detik sejak tick terakhir (jalan; jeda = nilai "
+      + "saat dijeda; belum pernah bunyi = sejak dijadwalkan; selesai/batal/tidak "
+      + "ada = 0).")
+  public long GetTaskElapsed(int id) {
+    synchronized (lock) {
+      Task t = tasks.get(Integer.valueOf(id));
+      if (t == null) {
+        return 0;
+      }
+      long now = System.currentTimeMillis();
+      if ("jalan".equals(t.status)) {
+        if (t.lastTickAt > 0) {
+          return Math.max(0, now - t.lastTickAt);
+        }
+        if (t.nextFire > 0 && t.delay > 0) {
+          return Math.max(0, t.delay - (t.nextFire - now));
+        }
+        return 0;
+      }
+      if ("jeda".equals(t.status)) {
+        long base = (t.lastTickAt > 0 && "repeating".equals(t.kind))
+            ? t.interval : t.delay;
+        return Math.max(0, base - t.remaining);
+      }
+      return 0;
+    }
+  }
+
+  @SimpleFunction(description = "Waktu sekarang epoch mili-detik (untuk CallScheduleAt/CallScheduleAlarm).")
   public long NowMillis() {
     return System.currentTimeMillis();
   }
@@ -889,7 +957,7 @@ public class Tools_Task extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "Fallback polling untuk event Task*: status "
       + "tugas ber-id. Salah satu: antri, jalan, jeda, selesai, batal, gagal, "
-      + "alarm, atau tidak ada.")
+      + "alarm, atau tidak ada. Jeda = cek IsTaskPaused; sisa = GetTaskRemaining.")
   public String GetTaskStatus(int id) {
     synchronized (lock) {
       Task t = tasks.get(Integer.valueOf(id));
@@ -904,7 +972,7 @@ public class Tools_Task extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Fallback polling untuk TaskFinished: list "
-      + "[success, payload, message]. Tetap ada sampai RemoveTaskId.")
+      + "[index 1=success, 2=payload, 3=message]. Tetap ada sampai RemoveTaskId.")
   public List<Object> GetTaskResult(int id) {
     ArrayList<Object> out = new ArrayList<Object>();
     synchronized (lock) {
@@ -923,7 +991,7 @@ public class Tools_Task extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Fallback polling untuk TaskTick: list "
-      + "[tickCount, repeatCount, lastTickAt, nextFireAt].")
+      + "[index 1=tickCount, 2=repeatCount, 3=lastTickAt, 4=nextFireAt].")
   public List<Object> GetTaskProgress(int id) {
     ArrayList<Object> out = new ArrayList<Object>();
     synchronized (lock) {
@@ -943,21 +1011,25 @@ public class Tools_Task extends AndroidNonvisibleComponent
     return out;
   }
 
-  @SimpleFunction(description = "Id tugas dalam-aplikasi terakhir yang selesai/bunyi. -1 bila belum ada.")
+  @SimpleFunction(description = "Id tugas dalam-aplikasi terakhir yang selesai/bunyi "
+      + "(-1 bila belum ada). Terakhir-menang: dua selesai berdekatan = kedua "
+      + "menimpa; butuh pasti = TaskFinished.")
   public int GetLastFiredTaskId() {
     synchronized (lock) {
       return lastFiredTaskId;
     }
   }
 
-  @SimpleFunction(description = "Payload tugas terakhir yang selesai/bunyi.")
+  @SimpleFunction(description = "Payload tugas terakhir yang selesai/bunyi "
+      + "(terakhir-menang; butuh pasti = TaskFinished).")
   public String GetLastFiredPayload() {
     synchronized (lock) {
       return lastFiredPayload;
     }
   }
 
-  @SimpleFunction(description = "Waktu epoch tugas terakhir selesai/bunyi. 0 bila belum ada.")
+  @SimpleFunction(description = "Waktu epoch tugas terakhir selesai/bunyi "
+      + "(0 bila belum ada; terakhir-menang; butuh pasti = TaskFinished).")
   public long GetLastFiredTime() {
     synchronized (lock) {
       return lastFiredAt;
@@ -967,11 +1039,13 @@ public class Tools_Task extends AndroidNonvisibleComponent
   // ================= extra per tugas =================
 
   @SimpleFunction(description = "SET: Simpan extra teks untuk tugas ber-id (mis. "
-      + "url, nama file). Menimpa kunci yang sama. Tanpa feedback.")
+      + "url, nama file). Angka -> teks dulu. Menimpa kunci yang sama. "
+      + "Sukses diam; id tidak ada = ErrorOccurred.")
   public void SetTaskExtra(int id, String key, String value) {
     synchronized (lock) {
       Task t = tasks.get(Integer.valueOf(id));
       if (t == null) {
+        Shared.err(this, "Task", id, "tugas tidak ada");
         return;
       }
       String k = key == null ? "" : key.trim();
@@ -1023,7 +1097,7 @@ public class Tools_Task extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Hapus SEMUA extra tugas ber-id.")
-  public void ClearTaskExtras(int id) {
+  public void SetClearTaskExtras(int id) {
     synchronized (lock) {
       Task t = tasks.get(Integer.valueOf(id));
       if (t != null) {
@@ -1035,7 +1109,8 @@ public class Tools_Task extends AndroidNonvisibleComponent
   // ================= variabel global =================
 
   @SimpleFunction(description = "SET: Simpan variabel teks global (bisa dibaca tugas "
-      + "mana pun + blok lain).")
+      + "mana pun + blok lain; tersimpan di HP = survive reboot + terbaca saat "
+      + "alarm menyalakan aplikasi). Angka -> teks dulu. Sukses diam.")
   public void SetVar(String name, String value) {
     String n = name == null ? "" : name.trim();
     if (n.length() == 0) {
@@ -1093,8 +1168,8 @@ public class Tools_Task extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Hapus SEMUA variabel global.")
-  public void ClearVars() {
+  @SimpleFunction(description = "SET: Hapus SEMUA variabel global (tersimpan ikut terhapus).")
+  public void SetClearVars() {
     synchronized (lock) {
       vars.clear();
     }
@@ -1172,9 +1247,10 @@ public class Tools_Task extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "CALL: Pasang alarm SISTEM sekali bunyi: id + epoch "
       + "mili-detik + payload + exact (true = tepat waktu bila izin ada). "
-      + "Bunyi = membuka aplikasi; baca via CheckStartupAlarm/AlarmFired. "
-      + "Tersimpan otomatis (survive reboot via RestoreAlarms).")
-  public void CallSetAlarm(int id, long epochMillis, String payload,
+      + "Bunyi = membuka aplikasi; baca via CallCheckStartupAlarm/AlarmFired. "
+      + "Mau jam harian tanpa epoch = CallScheduleDailyAt. Tersimpan di HP; "
+      + "untuk hidup lagi habis reboot, panggil CallRestoreAlarms di Initialize.")
+  public void CallScheduleAlarm(int id, long epochMillis, String payload,
       boolean exact) {
     if (id < 1) {
       Shared.err(this, "Alarm", id, "id harus >= 1 (pakai CreateTaskId)");
@@ -1209,8 +1285,9 @@ public class Tools_Task extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "CALL: Pasang alarm SISTEM berulang: id + epoch "
       + "pertama + interval + payload. Interval <1 detik dibulatkan ke 1 detik "
-      + "(hemat baterai, aturan Android).")
-  public void CallSetRepeatingAlarm(int id, long firstEpochMillis,
+      + "(hemat baterai, aturan Android). Tersimpan di HP; untuk hidup lagi "
+      + "habis reboot, panggil CallRestoreAlarms di Initialize.")
+  public void CallScheduleRepeatingAlarm(int id, long firstEpochMillis,
       long intervalMillis, String payload) {
     if (id < 1) {
       Shared.err(this, "Alarm", id, "id harus >= 1 (pakai CreateTaskId)");
@@ -1247,8 +1324,29 @@ public class Tools_Task extends AndroidNonvisibleComponent
     return;
   }
 
+  @SimpleFunction(description = "CALL: alarm HARIAN jam dinding tanpa mikir epoch: "
+      + "id + jam 0-23 + menit 0-59 + payload. Bunyi tiap hari jam itu (interval "
+      + "24 jam, mulai kejadian terdekat: lewat jam hari ini = besok). Salah "
+      + "jam/menit = ErrorOccurred. Batal via SetCancelAlarm.")
+  public void CallScheduleDailyAt(int id, int hour, int minute, String payload) {
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+      Shared.err(this, "Alarm", id, "jam 0-23, menit 0-59");
+      return;
+    }
+    java.util.Calendar c = java.util.Calendar.getInstance();
+    c.set(java.util.Calendar.HOUR_OF_DAY, hour);
+    c.set(java.util.Calendar.MINUTE, minute);
+    c.set(java.util.Calendar.SECOND, 0);
+    c.set(java.util.Calendar.MILLISECOND, 0);
+    long epoch = c.getTimeInMillis();
+    if (epoch <= System.currentTimeMillis()) {
+      epoch = epoch + 86400000L;
+    }
+    CallScheduleRepeatingAlarm(id, epoch, 86400000L, payload);
+  }
+
   @SimpleFunction(description = "SET: Cabut alarm sistem ber-id (tugas dalam-aplikasi "
-      + "dengan id sama tidak ikut; pakai CancelTask bila perlu).")
+      + "dengan id sama tidak ikut; pakai CallCancelTask bila perlu).")
   public void SetCancelAlarm(int id) {
     cancelStatic(context, id);
     unpersistAlarm(id);
@@ -1288,8 +1386,8 @@ public class Tools_Task extends AndroidNonvisibleComponent
     return out;
   }
 
-  @SimpleFunction(description = "Fallback polling alarm: list [epochMillis, "
-      + "intervalMillis (0 = sekali), payload]. Kosong = tidak ada.")
+  @SimpleFunction(description = "Fallback polling alarm: list [index 1=epochMillis, "
+      + "2=intervalMillis (0 = sekali), 3=payload]. Kosong = tidak ada.")
   public List<Object> GetAlarmInfo(int id) {
     ArrayList<Object> out = new ArrayList<Object>();
     synchronized (lock) {
@@ -1375,9 +1473,12 @@ public class Tools_Task extends AndroidNonvisibleComponent
     unpersistAlarm(id);
   }
 
-  @SimpleFunction(description = "CALL: Pasang ulang SEMUA alarm tersimpan (mis. "
-      + "habis reboot: panggil di Screen.Initialize). Tanpa return.")
+  @SimpleFunction(description = "CALL: Pasang ulang SEMUA alarm tersimpan (habis "
+      + "reboot: WAJIB panggil di Screen.Initialize; alarm TIDAK hidup sendiri). "
+      + "Selesai menembak AlarmsRestored (jumlah dipasang ulang; 0 = tidak ada "
+      + "tersimpan).")
   public void CallRestoreAlarms() {
+    int restored = 0;
     try {
       SharedPreferences p = prefs(context);
       if (p == null) {
@@ -1432,8 +1533,10 @@ public class Tools_Task extends AndroidNonvisibleComponent
           }
           persistAlarm(a);
           Ids.setActive(Ids.TASK, id, true);
+          restored = restored + 1;
         }
       }
+      AlarmsRestored(restored);
     } catch (Exception e) {
       String m = e.getMessage();
       Shared.err(this, "Alarm", 0, m == null ? "restore gagal" : m);
@@ -1598,7 +1701,8 @@ public class Tools_Task extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred: "
-      + "pesan error terakhir operasi ini (kosong bila belum ada).")
+      + "pesan error terakhir operasi ini (colok OpTask/OpAlarm/OpVar/OpNotification; "
+      + "kosong bila belum ada).")
   public String LastError(String operation) {
     return Shared.lastError(operation);
   }
@@ -1643,14 +1747,23 @@ public class Tools_Task extends AndroidNonvisibleComponent
   }
 
   @SimpleEvent(description = "Alarm sistem bunyi (aplikasi dibuka oleh alarm): "
-      + "id + payload. Selalu cek juga via CheckStartupAlarm di Initialize.")
+      + "id + payload. Selalu cek juga via CallCheckStartupAlarm di Initialize.")
   public void AlarmFired(int id, String payload) {
     Shared.fire(this, "AlarmFired",
         Integer.valueOf(id), payload == null ? "" : payload);
   }
 
+  @SimpleEvent(description = "Restore alarm selesai (hasil CallRestoreAlarms): "
+      + "jumlah alarm dipasang ulang (0 = tidak ada tersimpan). Habis reboot = "
+      + "panggil CallRestoreAlarms di Initialize, alarm TIDAK hidup sendiri.")
+  public void AlarmsRestored(int count) {
+    Shared.fire(this, "AlarmsRestored", Integer.valueOf(count));
+  }
+
   @SimpleEvent(description = "SATU-SATUNYA error Tools_Task. component = nama "
-      + "operasi (bandingkan dengan blok OpTask/OpAlarm/OpVar/OpNotification).")
+      + "operasi (bandingkan dengan blok OpTask/OpAlarm/OpVar/OpNotification; "
+      + "cth: if component = OpAlarm berarti error alarm). id = id terkait "
+      + "(0 bila umum).")
   public void ErrorOccurred(String component, int id, String message) {
     Shared.fire(this, "ErrorOccurred",
         component, Integer.valueOf(id), message);
@@ -1658,26 +1771,29 @@ public class Tools_Task extends AndroidNonvisibleComponent
 
   // ================= OP =================
 
-  @SimpleProperty(description = "Nama operasi Task (untuk if di ErrorOccurred).",
+  @SimpleProperty(description = "Nama operasi Task (untuk if di ErrorOccurred: "
+      + "cth if component = OpTask berarti error tugas).",
       category = PropertyCategory.BEHAVIOR)
   public String OpTask() {
     return "Task";
   }
 
-  @SimpleProperty(description = "Nama operasi Alarm (untuk if di ErrorOccurred).",
+  @SimpleProperty(description = "Nama operasi Alarm (untuk if di ErrorOccurred: "
+      + "cth if component = OpAlarm berarti error alarm).",
       category = PropertyCategory.BEHAVIOR)
   public String OpAlarm() {
     return "Alarm";
   }
 
-  @SimpleProperty(description = "Nama operasi Var (untuk if di ErrorOccurred).",
+  @SimpleProperty(description = "Nama operasi Var (untuk if di ErrorOccurred: "
+      + "cth if component = OpVar berarti error variabel).",
       category = PropertyCategory.BEHAVIOR)
   public String OpVar() {
     return "Var";
   }
 
   @SimpleProperty(description = "Nama operasi Notification (untuk if di "
-      + "ErrorOccurred).",
+      + "ErrorOccurred: cth if component = OpNotification berarti error notifikasi).",
       category = PropertyCategory.BEHAVIOR)
   public String OpNotification() {
     return "Notification";

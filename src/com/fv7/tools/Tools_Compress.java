@@ -31,15 +31,19 @@ import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 @DesignerComponent(
-    version = 17,
+    version = 20,
     description = "Tools_Compress: bikin ZIP, ekstrak ZIP, intip isi ZIP, dan deteksi "
         + "jenis arsip (zip/rar/7z/tar/gz/...) dari magic-bytes. RAR/7z terdeteksi "
         + "namun belum bisa dibuka (butuh library luar) — ZIP penuh bisa. "
-        + "(v16: gate izin otomatis. v17 2026-11-17: penomoran versi.)",
+        + "Pola event = template paket: Started -> ProgressChanged -> Finished + "
+        + "satu ErrorOccurred. Konvensi awalan: Is = boolean (colok ke if), "
+        + "Call = async + hasil lewat event, Set = tanpa feedback, Get = nilai "
+        + "balik sinkron.",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,
-    iconName = "aiwebres/tools_compress.jpg")
+    iconName = "aiwebres/tools_compress.jpg",
+    helpUrl = "https://github.com/VB-7/MiT-File_Manager")
 @SimpleObject(external = true)
 @UsesPermissions({"android.permission.READ_EXTERNAL_STORAGE",
     "android.permission.WRITE_EXTERNAL_STORAGE",
@@ -58,7 +62,8 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
 
   @SimpleFunction(description = "Deteksi jenis file dari ISINYA (bukan ekstensi). Kembali: zip, "
       + "rar, 7z, gz, bz2, xz, tar, apk, pdf, png, jpg, gif, mp3, mp4, atau unknown. "
-      + "Instan, tanpa id.")
+      + "Instan, tanpa id. Pasangan GetZipEntries: hasil \"kosong\" + Detect = bukan-ZIP "
+      + "berarti zip-nya kosong (bukan rusak).")
   public String DetectArchiveType(String path) {
     File tmpAsset = null;
     try {
@@ -91,8 +96,9 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "Daftar isi ZIP (nama entri). Instan. Kosong bila bukan ZIP.")
-  public List<String> ListZipContents(String zipPath) {
+  @SimpleFunction(description = "Daftar isi ZIP (nama entri). Instan. Kosong = bukan ZIP "
+      + "ATAU zip kosong (bedakan via DetectArchiveType dulu).")
+  public List<String> GetZipEntries(String zipPath) {
     ArrayList<String> out = new ArrayList<String>();
     ZipFile zf = null;
     File tmpAsset = null;
@@ -134,7 +140,9 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "CALL: bikin ZIP dari BANYAK file sekaligus (tanpa loop). paths = "
-      + "list path sumber. destZip = path file zip tujuan. Mulai = menembak Started; gagal via ErrorOccurred. "
+      + "list path FILE (folder dilewati, tidak rekursif; list kosong = Finished gagal "
+      + "\"list kosong\"). destZip = path file zip tujuan (sudah ada = DITIMPA). "
+      + "Mulai = menembak Started; gagal via ErrorOccurred. "
       + "Pantau via ZipStarted/ProgressChanged/Finished. Satu proses ZIP per saat.")
   public void CallZipFiles(Object paths, String destZip) {
     if (!Shared.claimSlot("zip")) {
@@ -198,6 +206,11 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
       for (int i = 0; i < paths.size(); i = i + 1) {
         if (zipCancel) {
           deleteTemps(tmpAssets);
+          try {
+            dst.delete();
+          } catch (Exception e0) {
+            // abaikan
+          }
           zipFinished(false, "", "", 0, 0, "Dibatalkan");
           return;
         }
@@ -237,6 +250,11 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
               while ((n = bin.read(buf)) > 0) {
                 if (zipCancel) {
                   deleteTemps(tmpAssets);
+                  try {
+                    dst.delete();
+                  } catch (Exception e0) {
+                    // abaikan
+                  }
                   zipFinished(false, "", "", 0, 0, "Dibatalkan");
                   return;
                 }
@@ -356,7 +374,10 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "CALL: ekstrak ZIP ke folder. Struktur folder di dalam ZIP dijaga. "
-      + "Batalkan via SetCancelZip. Pantau via UnzipStarted/ProgressChanged/Finished.")
+      + "destFolder sudah ada = DIGABUNG (file sama nama ditimpa). Bukan ZIP valid = "
+      + "Finished gagal \"ekstrak gagal (bukan ZIP valid?)\". Batalkan via SetCancelZip "
+      + "(file yang sudah terekstrak tetap ada). Pantau via "
+      + "UnzipStarted/ProgressChanged/Finished.")
   public void CallUnzip(String zipPath, String destFolder) {
     if (!Shared.claimSlot("zip")) {
       Shared.err(this, "Zip", 0, "masih ada proses arsip berjalan");
@@ -557,7 +578,10 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "SET: batalkan proses ZIP/Unzip berjalan. Tanpa feedback.")
+  @SimpleFunction(description = "SET: batalkan proses ZIP/Unzip berjalan. Tanpa feedback "
+      + "(tidak ada event Cancelled: cancel = Set yang pasti). Efek: berhenti; file ZIP "
+      + "sebagian DIHAPUS, file yang sudah terekstrak tetap ada. Verifikasi via IsZipBusy "
+      + "(false = sudah berhenti) lalu coba-lagi.")
   public void SetCancelZip() {
     if (!Shared.slotBusy("zip")) {
       return;
@@ -601,11 +625,11 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
         Integer.valueOf(total), zipPath);
   }
 
-  @SimpleEvent(description = "Progres bikin ZIP berubah: index/total + nama file + persen.")
-  public void ZipProgressChanged(int index, int total, String fileName, int filePercent) {
+  @SimpleEvent(description = "Progres bikin ZIP berubah: index/total + nama file + percent (0-100).")
+  public void ZipProgressChanged(int index, int total, String fileName, int percent) {
     Shared.fire(this, "ZipProgressChanged",
         Integer.valueOf(index), Integer.valueOf(total), fileName,
-        Integer.valueOf(filePercent));
+        Integer.valueOf(percent));
   }
 
   @SimpleEvent(description = "Bikin ZIP selesai: success + path ZIP + fileName + "
@@ -622,12 +646,12 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
         Integer.valueOf(total), destFolder);
   }
 
-  @SimpleEvent(description = "Progres ekstrak berubah: index/total + nama entri + persen.")
+  @SimpleEvent(description = "Progres ekstrak berubah: index/total + nama entri + percent (0-100).")
   public void UnzipProgressChanged(int index, int total, String entryName,
-      int entryPercent) {
+      int percent) {
     Shared.fire(this, "UnzipProgressChanged",
         Integer.valueOf(index), Integer.valueOf(total), entryName,
-        Integer.valueOf(entryPercent));
+        Integer.valueOf(percent));
   }
 
   @SimpleEvent(description = "Ekstrak selesai: success + folder + jumlah ok/gagal.")
@@ -637,27 +661,32 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
         message);
   }
 
-  @SimpleEvent(description = "SATU-SATUNYA error Tools_Compress.")
+  @SimpleEvent(description = "SATU-SATUNYA error Tools_Compress. component = nama operasi "
+      + "(bandingkan dengan blok OpZip/OpUnzip; cth: if component = OpUnzip berarti error "
+      + "ekstrak). id = id terkait (0 bila umum).")
   public void ErrorOccurred(String component, int id, String message) {
     Shared.fire(this, "ErrorOccurred",
         component, Integer.valueOf(id), message);
   }
 
   @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred: "
-      + "pesan error terakhir operasi ini (Zip/Unzip, kosong bila belum ada).")
+      + "pesan error terakhir operasi ini (colok OpZip/OpUnzip: isi dengan blok kuning "
+      + "itu, JANGAN ketik manual; kosong bila belum ada).")
   public String LastError(String operation) {
     return Shared.lastError(operation);
   }
 
   // ================= OP =================
 
-  @SimpleProperty(description = "Nama operasi Zip (untuk if di ErrorOccurred).",
+  @SimpleProperty(description = "Nama operasi Zip (untuk if di ErrorOccurred: "
+      + "cth if component = OpZip berarti error bikin-ZIP).",
       category = PropertyCategory.BEHAVIOR)
   public String OpZip() {
     return "Zip";
   }
 
-  @SimpleProperty(description = "Nama operasi Unzip (untuk if di ErrorOccurred).",
+  @SimpleProperty(description = "Nama operasi Unzip (untuk if di ErrorOccurred: "
+      + "cth if component = OpUnzip berarti error ekstrak).",
       category = PropertyCategory.BEHAVIOR)
   public String OpUnzip() {
     return "Unzip";

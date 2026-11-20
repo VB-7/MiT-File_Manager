@@ -1,12 +1,17 @@
+// DIGENERATE OTOMATIS oleh tools/gen_facade.mjs — JANGAN EDIT MANUAL.
+// Ubah 12 pemilik (Tools_Audio..Tools_Video), lalu jalan ulang --regen.
 package com.fv7.tools;
 
 import com.google.appinventor.components.annotations.DesignerComponent;
+import com.google.appinventor.components.annotations.DesignerProperty;
 import com.google.appinventor.components.annotations.PropertyCategory;
 import com.google.appinventor.components.annotations.SimpleEvent;
 import com.google.appinventor.components.annotations.SimpleFunction;
 import com.google.appinventor.components.annotations.SimpleObject;
 import com.google.appinventor.components.annotations.SimpleProperty;
+import com.google.appinventor.components.annotations.UsesPermissions;
 import com.google.appinventor.components.common.ComponentCategory;
+import com.google.appinventor.components.common.PropertyTypeConstants;
 import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
 import com.google.appinventor.components.runtime.AndroidViewComponent;
 import com.google.appinventor.components.runtime.Component;
@@ -17,19 +22,40 @@ import com.google.appinventor.components.runtime.util.YailList;
 import java.util.List;
 
 @DesignerComponent(
-    version = 19,
-    description = "Tools_All_in_One: SATU komponen berisi SEMUA blok 12 Tools_* "
-        + "(Audio/Base/Compress/Core/Downloader/File/Image/Layout/Sheet/Style/Task/Video). "
-        + "Fasad: semua blok diteruskan ke mesin aslinya, semua event dicerminkan ke sini. "
-        + "Cocok bila tidak mau banyak komponen di daftar blok. "
-        + "(v19: ikuti Tools_Image v19 — ShowImage +width/height/fit, slider +paths, "
-        + "+SetImageSource; fasad CallShowImage satu pintu. "
-        + "v18 2026-11-18: komponen baru.)",
+    version = 20,
+    description = "Tools_All_in_One: SATU komponen berisi SEMUA blok "
+        + "12 Tools_* (Audio/Base/Compress/Core/Downloader/File/Image/Layout/Sheet/"
+        + "Style/Task/Video). Fasad: semua blok diteruskan ke mesin aslinya, semua "
+        + "event dicerminkan ke sini. Cocok bila tidak mau banyak komponen di daftar "
+        + "blok. JANGAN pasang bareng 12 Tools_* dalam satu aplikasi (event dobel + "
+        + "boros memori). Konvensi awalan: Is = boolean (colok ke if), Call = async + "
+        + "hasil lewat event, Set = tanpa feedback sukses (gagal via ErrorOccurred), "
+        + "Get = nilai balik sinkron. Blok kuning = pilihan tetap (colok ke soket yang "
+        + "cocok). FILE INI DIGENERATE OTOMATIS oleh tools/gen_facade.mjs — jangan "
+        + "edit manual.",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,
-    iconName = "aiwebres/tools_all_in_one.jpg")
+    iconName = "aiwebres/tools_all_in_one.jpg",
+    helpUrl = "https://github.com/VB-7/MiT-File_Manager")
 @SimpleObject(external = true)
+@UsesPermissions({
+    "android.permission.READ_EXTERNAL_STORAGE",
+    "android.permission.WRITE_EXTERNAL_STORAGE",
+    "android.permission.MANAGE_EXTERNAL_STORAGE",
+    "android.permission.INTERNET",
+    "android.permission.POST_NOTIFICATIONS",
+    "android.permission.CAMERA",
+    "android.permission.RECORD_AUDIO",
+    "android.permission.READ_MEDIA_IMAGES",
+    "android.permission.READ_MEDIA_VIDEO",
+    "android.permission.READ_MEDIA_AUDIO",
+    "android.permission.ACCESS_FINE_LOCATION",
+    "android.permission.ACCESS_COARSE_LOCATION",
+    "android.permission.WAKE_LOCK",
+    "android.permission.RECEIVE_BOOT_COMPLETED",
+    "android.permission.SCHEDULE_EXACT_ALARM"
+})
 public class Tools_All_in_One extends AndroidNonvisibleComponent {
 
   private final Tools_Audio audio;
@@ -62,59 +88,76 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     Shared.registerAllInOne(this);
   }
 
+  // ================= Audio =================
+
   @SimpleFunction(description = "CALL: Putar audio ber-id (background, tanpa tampilan). Bisa jalan bareng "
-      + "(satu id = satu audio). path file (/Download/..., absolut apa adanya), "
-      + "file:/// absolut, atau http(s) URL (streaming). id dari CreateAudioId / "
-      + "Tools_Base CreateUniqueId (reservasi diadopsi). "
-      + "Tampilan (Slider/Label) bikin sendiri dari AudioStarted/ProgressChanged/Finished. "
-      + "Sukses menembak AudioStarted; gagal via ErrorOccurred.")
-  public void CallPlayAudio(String path, int id) {
+      + "(satu id = satu audio). path file (/Download/... atau absolut apa adanya), "
+      + "file:/// absolut, atau http(s) URL (streaming, izin INTERNET otomatis dibawa). "
+      + "id dari CreateAudioId atau CreateUniqueId Tools_Base (reservasi diadopsi). "
+      + "Id yang masih bunyi tidak bisa dipakai ulang (Stop/Pause dulu). Stop lalu Play "
+      + "= mulai dari awal. Tampilan (Slider/Label) bikin sendiri dari "
+      + "AudioStarted/ProgressChanged/Finished. Sukses menembak AudioStarted; gagal via "
+      + "ErrorOccurred.")
+  public void CallPlayAudio(final String path, final int id) {
     audio.CallPlayAudio(path, id);
   }
 
-  @SimpleFunction(description = "SET: jeda audio yang sedang bunyi (per id). Tanpa feedback.")
+  @SimpleFunction(description = "SET: Jeda audio yang sedang bunyi. Tanpa feedback. "
+      + "Cek status via IsAudioPaused.")
   public void SetPauseAudio(int id) {
     audio.SetPauseAudio(id);
   }
 
-  @SimpleFunction(description = "SET: lanjutkan audio yang dijeda (per id). Tanpa feedback.")
+  @SimpleFunction(description = "SET: Lanjutkan audio yang dijeda. Tanpa feedback. "
+      + "Cek status via IsAudioPaused.")
   public void SetResumeAudio(int id) {
     audio.SetResumeAudio(id);
   }
 
-  @SimpleFunction(description = "SET: Hentikan audio (per id). Putar lagi via CallPlayAudio.")
+  @SimpleFunction(description = "SET: Hentikan audio (posisi kembali ke 0, tanpa event). "
+      + "Putar lagi via CallPlayAudio (mulai dari awal). Cek via IsAudioIdActive.")
   public void SetStopAudio(int id) {
     audio.SetStopAudio(id);
   }
 
-  @SimpleFunction(description = "SET: Lompat audio ke posisi (ms). Bisa dipasang ke Slider. (per id)")
+  @SimpleFunction(description = "SET: Lompat audio ke posisi milidetik. Bisa dipasang ke "
+      + "Slider. Tanpa feedback.")
   public void SetSeekAudio(int id, int position) {
     audio.SetSeekAudio(id, position);
   }
 
-  @SimpleFunction(description = "SET: Maju audio sejauh SkipSeconds detik. (per id)")
+  @SimpleFunction(description = "SET: Maju audio sejauh SkipSeconds DETIK. "
+      + "Tanpa feedback.")
   public void SetForwardAudio(int id) {
     audio.SetForwardAudio(id);
   }
 
-  @SimpleFunction(description = "SET: Mundur audio sejauh SkipSeconds detik. (per id)")
+  @SimpleFunction(description = "SET: Maju audio sejauh seconds DETIK "
+      + "(tanpa ubah SkipSeconds). Tanpa feedback.")
+  public void SetForwardAudioBy(int id, int seconds) {
+    audio.SetForwardAudioBy(id, seconds);
+  }
+
+  @SimpleFunction(description = "SET: Mundur audio sejauh SkipSeconds DETIK. "
+      + "Tanpa feedback.")
   public void SetBackwardAudio(int id) {
     audio.SetBackwardAudio(id);
   }
 
-  @SimpleFunction(description = "Posisi audio sekarang (ms). (per id)")
+  @SimpleFunction(description = "SET: Mundur audio sejauh seconds DETIK "
+      + "(tanpa ubah SkipSeconds). Tanpa feedback.")
+  public void SetBackwardAudioBy(int id, int seconds) {
+    audio.SetBackwardAudioBy(id, seconds);
+  }
+
+  @SimpleFunction(description = "Posisi audio sekarang dalam milidetik. 0 bila belum siap.")
   public int GetAudioPosition(int id) {
     return audio.GetAudioPosition(id);
   }
 
-  @SimpleFunction(description = "Durasi audio (ms). 0 bila belum siap. (per id)")
+  @SimpleFunction(description = "Durasi audio dalam milidetik. 0 bila belum siap.")
   public int GetAudioDuration(int id) {
     return audio.GetAudioDuration(id);
-  }
-
-  @SimpleFunction(description = "True bila audio id ini sedang bunyi.")
-  public boolean IsAudioPlaying(int id) {
-    return audio.IsAudioPlaying(id);
   }
 
   @SimpleFunction(description = "Buat id audio unik baru (Number, siap pakai ke CallPlayAudio).")
@@ -122,55 +165,157 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     return audio.CreateAudioId();
   }
 
-  @SimpleFunction(description = "Semua id audio (URUT PEMBUATAN, index 1 = pertama dibuat).")
+  @SimpleFunction(description = "Semua id audio yang dipegang (URUT PEMBUATAN, "
+      + "index 1 = pertama dibuat).")
   public List<Integer> GetAudioIds() {
-    return base.GetAudioIds();
+    return audio.GetAudioIds();
   }
 
-  @SimpleFunction(description = "Id audio yang sedang bunyi (URUT PEMBUATAN).")
+  @SimpleFunction(description = "Id audio yang sedang bunyi (URUT PEMBUATAN). "
+      + "Yang dijeda/berhenti TIDAK masuk sini.")
   public List<Integer> GetActiveAudioIds() {
-    return base.GetActiveAudioIds();
+    return audio.GetActiveAudioIds();
   }
 
-  @SimpleFunction(description = "Id audio terakhir dibuat/di-start. -1 bila kosong.")
+  @SimpleFunction(description = "Id audio yang terakhir disentuh (dibuat atau di-start). "
+      + "-1 bila kosong. Beda dengan GetLastAudioId (terakhir dibuat).")
   public int CurrentAudioId() {
-    return base.CurrentAudioId();
+    return audio.CurrentAudioId();
   }
 
-  @SimpleFunction(description = "Id audio index 1 = PERTAMA DIBUAT. -1 bila kosong.")
+  @SimpleFunction(description = "Id index 1 = PERTAMA DIBUAT. -1 bila kosong.")
   public int GetFirstAudioId() {
-    return base.GetFirstAudioId();
+    return audio.GetFirstAudioId();
   }
 
-  @SimpleFunction(description = "Id audio TERAKHIR DIBUAT. -1 bila kosong.")
+  @SimpleFunction(description = "Id audio TERAKHIR DIBUAT. -1 bila kosong. Beda dengan "
+      + "CurrentAudioId (terakhir disentuh).")
   public int GetLastAudioId() {
-    return base.GetLastAudioId();
+    return audio.GetLastAudioId();
   }
 
-  @SimpleFunction(description = "Id audio yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
+  @SimpleFunction(description = "Id yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
   public int GetPreviousAudioId(int id) {
-    return base.GetPreviousAudioId(id);
+    return audio.GetPreviousAudioId(id);
   }
 
-  @SimpleFunction(description = "True bila id audio ini sedang bunyi.")
+  @SimpleFunction(description = "True bila id audio ini sedang bunyi. False = jeda, "
+      + "berhenti, atau belum ada (bedakan jeda vs berhenti via IsAudioPaused).")
   public boolean IsAudioIdActive(int id) {
-    return base.IsAudioIdActive(id);
+    return audio.IsAudioIdActive(id);
   }
 
-  @SimpleFunction(description = "Hapus id audio: hentikan bila bunyi + lepas id.")
+  @SimpleFunction(description = "True bila id audio ini sedang dijeda (Pause tapi "
+      + "belum Stop/selesai). False = bunyi/berhenti/belum ada.")
+  public boolean IsAudioPaused(int id) {
+    return audio.IsAudioPaused(id);
+  }
+
+  @SimpleFunction(description = "Volume khusus satu id (0-100). = volume global "
+      + "bila belum diatur via SetAudioVolume.")
+  public int GetAudioVolume(int id) {
+    return audio.GetAudioVolume(id);
+  }
+
+  @SimpleFunction(description = "SET: Volume khusus satu id (0-100). Menimpa "
+      + "volume global untuk id ini. Tanpa feedback.")
+  public void SetAudioVolume(int id, int volume) {
+    audio.SetAudioVolume(id, volume);
+  }
+
+  @SimpleFunction(description = "Loop khusus satu id. = loop global bila belum "
+      + "diatur via SetAudioLooping.")
+  public boolean GetAudioLooping(int id) {
+    return audio.GetAudioLooping(id);
+  }
+
+  @SimpleFunction(description = "SET: Loop khusus satu id (true = mengulang bila "
+      + "selesai). Menimpa loop global untuk id ini. Tanpa feedback.")
+  public void SetAudioLooping(int id, boolean loop) {
+    audio.SetAudioLooping(id, loop);
+  }
+
+  @SimpleFunction(description = "Kecepatan id ini (1.0 = normal). 1.0 bila belum "
+      + "diatur via SetAudioSpeed.")
+  public float GetAudioSpeed(int id) {
+    return audio.GetAudioSpeed(id);
+  }
+
+  @SimpleFunction(description = "SET: Kecepatan khusus satu id (1.0 = normal, "
+      + "0.5 = setengah, 2.0 = ganda). Butuh Android 6+. Tanpa feedback.")
+  public void SetAudioSpeed(int id, float speed) {
+    audio.SetAudioSpeed(id, speed);
+  }
+
+  @SimpleFunction(description = "Hapus id audio: hentikan bila bunyi + lepas id "
+      + "(otomatis beres-beres).")
   public void RemoveAudioId(int id) {
-    base.RemoveAudioId(id);
+    audio.RemoveAudioId(id);
   }
 
-  @SimpleProperty(description = "Audio mengulang otomatis bila selesai. Default false.",
+  @SimpleFunction(description = "SET: Hentikan SEMUA audio + buang semua id. "
+      + "Tanpa feedback.")
+  public void SetClearAudios() {
+    audio.SetClearAudios();
+  }
+
+  @SimpleProperty(description = "Jeda event AudioProgressChanged dalam milidetik (default 500). "
+      + "Lagu 3 menit = 360 event; HP kentang naikkan ke 1000.",
+      category = PropertyCategory.BEHAVIOR)
+  public int ProgressInterval() {
+    return audio.ProgressInterval();
+  }
+
+  @DesignerProperty(editorType = PropertyTypeConstants.PROPERTY_TYPE_INTEGER,
+      defaultValue = "500")
+  @SimpleProperty(category = PropertyCategory.BEHAVIOR)
+  public void ProgressInterval(int interval) {
+    audio.ProgressInterval(interval);
+    video.ProgressInterval(interval);
+  }
+
+  @SimpleProperty(description = "Lompatan Maju/Mundur dalam DETIK (bukan ms). Default 10. "
+      + "Untuk lompatan sekali-sekali pakai SetForwardAudioBy/SetBackwardAudioBy.",
+      category = PropertyCategory.BEHAVIOR)
+  public int SkipSeconds() {
+    return audio.SkipSeconds();
+  }
+
+  @DesignerProperty(editorType = PropertyTypeConstants.PROPERTY_TYPE_INTEGER,
+      defaultValue = "10")
+  @SimpleProperty(category = PropertyCategory.BEHAVIOR)
+  public void SkipSeconds(int seconds) {
+    audio.SkipSeconds(seconds);
+    video.SkipSeconds(seconds);
+  }
+
+  @SimpleProperty(description = "Loop global (default false). Id yang sudah diatur via "
+      + "SetAudioLooping memakai nilainya sendiri.",
       category = PropertyCategory.BEHAVIOR)
   public boolean AudioLooping() {
     return audio.AudioLooping();
   }
 
+  @DesignerProperty(editorType = PropertyTypeConstants.PROPERTY_TYPE_BOOLEAN,
+      defaultValue = "False")
   @SimpleProperty(category = PropertyCategory.BEHAVIOR)
   public void AudioLooping(boolean loop) {
     audio.AudioLooping(loop);
+  }
+
+  @SimpleProperty(description = "Volume global 0-100 (default 100, awal semua id). Id yang "
+      + "sudah diatur via SetAudioVolume memakai nilainya sendiri.",
+      category = PropertyCategory.BEHAVIOR)
+  public int MediaVolume() {
+    return audio.MediaVolume();
+  }
+
+  @DesignerProperty(editorType = PropertyTypeConstants.PROPERTY_TYPE_INTEGER,
+      defaultValue = "100")
+  @SimpleProperty(category = PropertyCategory.BEHAVIOR)
+  public void MediaVolume(int volume) {
+    audio.MediaVolume(volume);
+    video.MediaVolume(volume);
   }
 
   @SimpleEvent(description = "Audio mulai bunyi: id + durasi (ms) diketahui.")
@@ -188,32 +333,46 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     EventDispatcher.dispatchEvent(this, "AudioFinished", id);
   }
 
-  @SimpleEvent(description = "SATU-SATUNYA error Tools_Audio.")
+  @SimpleEvent(description = "SATU-SATUNYA error gabungan 12 pemilik. "
+      + "component = nama operasi (isi dengan blok kuning OpAudio/OpJson/OpId/OpZip .../"
+      + "component = nama operasi (isi dengan blok kuning .../OpUnzip/OpCore/OpDownload/OpDirectory .../"
+      + "component = nama operasi (isi dengan blok kuning .../OpFile/OpRead/OpBase64/OpCopyOrMove .../"
+      + "component = nama operasi (isi dengan blok kuning .../OpPick/OpOpen/OpPermission/OpSlider .../"
+      + "component = nama operasi (isi dengan blok kuning .../OpImage/OpLayout/OpSheet/OpToast .../"
+      + "component = nama operasi (isi dengan blok kuning .../OpNotification/OpStyle/OpTask/OpAlarm .../"
+      + "component = nama operasi (isi dengan blok kuning .../OpVar/OpVideo untuk if). "
+      + "Contoh: jika component = OpAudio maka tampilkan message. id = id terkait (0 bila statis). "
   public void ErrorOccurred(String component, int id, String message) {
     EventDispatcher.dispatchEvent(this, "ErrorOccurred", component, id, message);
   }
 
-  @SimpleProperty(description = "Nama operasi Audio (untuk if di ErrorOccurred).",
+  @SimpleProperty(description = "Nama operasi Audio untuk if di ErrorOccurred. Contoh: "
+      + "colok ke perbandingan = dengan component dari event ErrorOccurred.",
       category = PropertyCategory.BEHAVIOR)
   public String OpAudio() {
     return audio.OpAudio();
   }
 
-  @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred: "
-      + "pesan error terakhir operasi ini (Id/Json/Tag, kosong bila belum ada).")
+  @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred: pesan error "
+      + "terakhir operasi ini (teks kosong bila belum ada). Isi operation dengan blok "
+      + "kuning (mis. OpAudio).")
   public String LastError(String operation) {
-    return base.LastError(operation);
+    return Shared.lastError(operation);
   }
 
-  @SimpleFunction(description = "Buat id unik global baru (Number). Reservasi otomatis, "
-      + "siap pakai ke CallDownload / CallShowImage / CallPlayAudio / CallPlayVideoIn "
-      + "(reservasi otomatis diadopsi). Urutan pembuatan = urutan list.")
+  // ================= Base =================
+
+  @SimpleFunction(description = "Buat id unik global baru (Number, reservasi otomatis). "
+      + "Siap pakai ke blok Call... pemiliknya (Download/Image/Audio/Video/dll; "
+      + "reservasi otomatis diadopsi). Urutan pembuatan = urutan list.")
   public int CreateUniqueId() {
     return base.CreateUniqueId();
   }
 
-  @SimpleFunction(description = "Id yang disarankan: angka terkecil >= 1 yang belum dipakai "
-      + "siapa pun (tidak di-reservasi, langsung pakai).")
+  @SimpleFunction(description = "BAHAYA: angka terkecil >= 1 yang belum dipakai siapa "
+      + "pun, TAPI tidak di-reservasi (tidak dibooking). Dua pemanggil bisa "
+      + "dapat angka SAMA = tabrakan. JANGAN dipakai dua tempat bersamaan; "
+      + "kalau ragu pakai CreateUniqueId (reservasi otomatis).")
   public int SuggestId() {
     return base.SuggestId();
   }
@@ -229,359 +388,40 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     return base.BusyIds();
   }
 
-  @SimpleFunction(description = "Lepas paksa id yang macet. Jangan dipakai saat operasinya "
-      + "masih jalan (pakai Cancel/Stop/Remove dulu).")
-  public void ReleaseId(int id) {
-    base.ReleaseId(id);
-  }
-
-  @SimpleFunction(description = "Semua id unduhan (URUT PEMBUATAN, index 1 = pertama dibuat).")
-  public List<Integer> GetDownloadIds() {
-    return base.GetDownloadIds();
-  }
-
-  @SimpleFunction(description = "Id unduhan yang sedang jalan (URUT PEMBUATAN). "
-      + "Yang dijeda TIDAK masuk sini.")
-  public List<Integer> GetActiveDownloadIds() {
-    return base.GetActiveDownloadIds();
-  }
-
-  @SimpleFunction(description = "Id unduhan terakhir dibuat/di-start. -1 bila kosong.")
-  public int CurrentDownloadId() {
-    return base.CurrentDownloadId();
-  }
-
-  @SimpleFunction(description = "Id unduhan index 1 = PERTAMA DIBUAT. -1 bila kosong.")
-  public int GetFirstDownloadId() {
-    return base.GetFirstDownloadId();
-  }
-
-  @SimpleFunction(description = "Id unduhan TERAKHIR DIBUAT. -1 bila kosong.")
-  public int GetLastDownloadId() {
-    return base.GetLastDownloadId();
-  }
-
-  @SimpleFunction(description = "Id unduhan yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
-  public int GetPreviousDownloadId(int id) {
-    return base.GetPreviousDownloadId(id);
-  }
-
-  @SimpleFunction(description = "True bila id unduhan ini sedang jalan.")
-  public boolean IsDownloadIdActive(int id) {
-    return base.IsDownloadIdActive(id);
-  }
-
-  @SimpleFunction(description = "Hapus id unduhan: batalkan bila jalan + lepas id.")
-  public void RemoveDownloadId(int id) {
-    base.RemoveDownloadId(id);
-  }
-
-  @SimpleFunction(description = "Semua id gambar (URUT PEMBUATAN, index 1 = pertama dibuat).")
-  public List<Integer> GetImageIds() {
-    return base.GetImageIds();
-  }
-
-  @SimpleFunction(description = "Id gambar yang sedang tampil/loading (URUT PEMBUATAN).")
-  public List<Integer> GetActiveImageIds() {
-    return base.GetActiveImageIds();
-  }
-
-  @SimpleFunction(description = "Id gambar terakhir dibuat/di-start. -1 bila kosong.")
-  public int CurrentImageId() {
-    return base.CurrentImageId();
-  }
-
-  @SimpleFunction(description = "Id gambar index 1 = PERTAMA DIBUAT. -1 bila kosong.")
-  public int GetFirstImageId() {
-    return base.GetFirstImageId();
-  }
-
-  @SimpleFunction(description = "Id gambar TERAKHIR DIBUAT. -1 bila kosong.")
-  public int GetLastImageId() {
-    return base.GetLastImageId();
-  }
-
-  @SimpleFunction(description = "Id gambar yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
-  public int GetPreviousImageId(int id) {
-    return base.GetPreviousImageId(id);
-  }
-
-  @SimpleFunction(description = "True bila id gambar ini sedang tampil/loading.")
-  public boolean IsImageIdActive(int id) {
-    return base.IsImageIdActive(id);
-  }
-
-  @SimpleFunction(description = "Hapus id gambar: lepas dari layout + lepas id.")
-  public void RemoveImageId(int id) {
-    base.RemoveImageId(id);
-  }
-
-  @SimpleFunction(description = "Semua id video (URUT PEMBUATAN, index 1 = pertama dibuat).")
-  public List<Integer> GetVideoIds() {
-    return base.GetVideoIds();
-  }
-
-  @SimpleFunction(description = "Id video yang sedang main (URUT PEMBUATAN).")
-  public List<Integer> GetActiveVideoIds() {
-    return base.GetActiveVideoIds();
-  }
-
-  @SimpleFunction(description = "Id video terakhir dibuat/di-start. -1 bila kosong.")
-  public int CurrentVideoId() {
-    return base.CurrentVideoId();
-  }
-
-  @SimpleFunction(description = "Id video index 1 = PERTAMA DIBUAT. -1 bila kosong.")
-  public int GetFirstVideoId() {
-    return base.GetFirstVideoId();
-  }
-
-  @SimpleFunction(description = "Id video TERAKHIR DIBUAT. -1 bila kosong.")
-  public int GetLastVideoId() {
-    return base.GetLastVideoId();
-  }
-
-  @SimpleFunction(description = "Id video yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
-  public int GetPreviousVideoId(int id) {
-    return base.GetPreviousVideoId(id);
-  }
-
-  @SimpleFunction(description = "True bila id video ini sedang main.")
-  public boolean IsVideoIdActive(int id) {
-    return base.IsVideoIdActive(id);
-  }
-
-  @SimpleFunction(description = "Hapus id video: hentikan + lepas layout + lepas id.")
-  public void RemoveVideoId(int id) {
-    base.RemoveVideoId(id);
-  }
-
-  @SimpleFunction(description = "Semua id dinamis Tools_Core (URUT PEMBUATAN, "
-      + "index 1 = pertama dibuat).")
-  public List<Integer> GetDynamicIds() {
-    return base.GetDynamicIds();
-  }
-
-  @SimpleFunction(description = "Id dinamis yang aktif (URUT PEMBUATAN).")
-  public List<Integer> GetActiveDynamicIds() {
-    return base.GetActiveDynamicIds();
-  }
-
-  @SimpleFunction(description = "Id dinamis terakhir dibuat. -1 bila kosong.")
-  public int CurrentDynamicId() {
-    return base.CurrentDynamicId();
-  }
-
-  @SimpleFunction(description = "Id dinamis index 1 = PERTAMA DIBUAT. -1 bila kosong.")
-  public int GetFirstDynamicId() {
-    return base.GetFirstDynamicId();
-  }
-
-  @SimpleFunction(description = "Id dinamis TERAKHIR DIBUAT. -1 bila kosong.")
-  public int GetLastDynamicId() {
-    return base.GetLastDynamicId();
-  }
-
-  @SimpleFunction(description = "Id dinamis yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
-  public int GetPreviousDynamicId(int id) {
-    return base.GetPreviousDynamicId(id);
-  }
-
-  @SimpleFunction(description = "True bila id dinamis ini masih ada.")
-  public boolean IsDynamicIdActive(int id) {
-    return base.IsDynamicIdActive(id);
-  }
-
-  @SimpleFunction(description = "Hapus id dinamis: lepas view + lepas id.")
-  public void RemoveDynamicId(int id) {
-    base.RemoveDynamicId(id);
-  }
-
-  @SimpleFunction(description = "Semua id layout Tools_Layout (URUT PEMBUATAN, "
-      + "index 1 = pertama dibuat).")
-  public List<Integer> GetLayoutIds() {
-    return base.GetLayoutIds();
-  }
-
-  @SimpleFunction(description = "Id layout yang aktif (URUT PEMBUATAN).")
-  public List<Integer> GetActiveLayoutIds() {
-    return base.GetActiveLayoutIds();
-  }
-
-  @SimpleFunction(description = "Id layout terakhir dibuat. -1 bila kosong.")
-  public int CurrentLayoutId() {
-    return base.CurrentLayoutId();
-  }
-
-  @SimpleFunction(description = "Id layout index 1 = PERTAMA DIBUAT. -1 bila kosong.")
-  public int GetFirstLayoutId() {
-    return base.GetFirstLayoutId();
-  }
-
-  @SimpleFunction(description = "Id layout TERAKHIR DIBUAT. -1 bila kosong.")
-  public int GetLastLayoutId() {
-    return base.GetLastLayoutId();
-  }
-
-  @SimpleFunction(description = "Id layout yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
-  public int GetPreviousLayoutId(int id) {
-    return base.GetPreviousLayoutId(id);
-  }
-
-  @SimpleFunction(description = "True bila id layout ini masih ada.")
-  public boolean IsLayoutIdActive(int id) {
-    return base.IsLayoutIdActive(id);
-  }
-
-  @SimpleFunction(description = "Hapus id layout: lepas dari induk (anak dinamis "
-      + "di dalamnya ikut beres) + lepas id.")
-  public void RemoveLayoutId(int id) {
-    base.RemoveLayoutId(id);
-  }
-
-  @SimpleFunction(description = "Semua id sheet Tools_Sheet (URUT PEMBUATAN, "
-      + "index 1 = pertama dibuat).")
-  public List<Integer> GetSheetIds() {
-    return base.GetSheetIds();
-  }
-
-  @SimpleFunction(description = "Id sheet yang aktif (URUT PEMBUATAN).")
-  public List<Integer> GetActiveSheetIds() {
-    return base.GetActiveSheetIds();
-  }
-
-  @SimpleFunction(description = "Id sheet terakhir dibuat. -1 bila kosong.")
-  public int CurrentSheetId() {
-    return base.CurrentSheetId();
-  }
-
-  @SimpleFunction(description = "Id sheet index 1 = PERTAMA DIBUAT. -1 bila kosong.")
-  public int GetFirstSheetId() {
-    return base.GetFirstSheetId();
-  }
-
-  @SimpleFunction(description = "Id sheet TERAKHIR DIBUAT. -1 bila kosong.")
-  public int GetLastSheetId() {
-    return base.GetLastSheetId();
-  }
-
-  @SimpleFunction(description = "Id sheet yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
-  public int GetPreviousSheetId(int id) {
-    return base.GetPreviousSheetId(id);
-  }
-
-  @SimpleFunction(description = "True bila id sheet ini masih terdaftar.")
-  public boolean IsSheetIdActive(int id) {
-    return base.IsSheetIdActive(id);
-  }
-
-  @SimpleFunction(description = "Hapus id sheet: tutup diam-diam + lepas id.")
-  public void RemoveSheetId(int id) {
-    base.RemoveSheetId(id);
-  }
-
-  @SimpleFunction(description = "Semua id slider Tools_Image (URUT PEMBUATAN, "
-      + "index 1 = pertama dibuat).")
-  public List<Integer> GetSliderIds() {
-    return base.GetSliderIds();
-  }
-
-  @SimpleFunction(description = "Id slider yang aktif (URUT PEMBUATAN).")
-  public List<Integer> GetActiveSliderIds() {
-    return base.GetActiveSliderIds();
-  }
-
-  @SimpleFunction(description = "Id slider terakhir dibuat. -1 bila kosong.")
-  public int CurrentSliderId() {
-    return base.CurrentSliderId();
-  }
-
-  @SimpleFunction(description = "Id slider index 1 = PERTAMA DIBUAT. -1 bila kosong.")
-  public int GetFirstSliderId() {
-    return base.GetFirstSliderId();
-  }
-
-  @SimpleFunction(description = "Id slider TERAKHIR DIBUAT. -1 bila kosong.")
-  public int GetLastSliderId() {
-    return base.GetLastSliderId();
-  }
-
-  @SimpleFunction(description = "Id slider yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
-  public int GetPreviousSliderId(int id) {
-    return base.GetPreviousSliderId(id);
-  }
-
-  @SimpleFunction(description = "True bila id slider ini masih ada.")
-  public boolean IsSliderIdActive(int id) {
-    return base.IsSliderIdActive(id);
-  }
-
-  @SimpleFunction(description = "Hapus id slider: lepas dari layout (autoplay "
-      + "mati) + lepas id.")
-  public void RemoveSliderId(int id) {
-    base.RemoveSliderId(id);
-  }
-
-  @SimpleFunction(description = "Semua id tugas/alarm Tools_Task (URUT PEMBUATAN, "
-      + "index 1 = pertama dibuat).")
-  public List<Integer> GetTaskIds() {
-    return base.GetTaskIds();
-  }
-
-  @SimpleFunction(description = "Id tugas/alarm yang aktif (URUT PEMBUATAN).")
-  public List<Integer> GetActiveTaskIds() {
-    return base.GetActiveTaskIds();
-  }
-
-  @SimpleFunction(description = "Id tugas terakhir dibuat. -1 bila kosong.")
-  public int CurrentTaskId() {
-    return base.CurrentTaskId();
-  }
-
-  @SimpleFunction(description = "Id tugas index 1 = PERTAMA DIBUAT. -1 bila kosong.")
-  public int GetFirstTaskId() {
-    return base.GetFirstTaskId();
-  }
-
-  @SimpleFunction(description = "Id tugas TERAKHIR DIBUAT. -1 bila kosong.")
-  public int GetLastTaskId() {
-    return base.GetLastTaskId();
-  }
-
-  @SimpleFunction(description = "Id tugas yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
-  public int GetPreviousTaskId(int id) {
-    return base.GetPreviousTaskId(id);
-  }
-
-  @SimpleFunction(description = "True bila id tugas ini aktif (jalan/jeda/alarm terpasang).")
-  public boolean IsTaskIdActive(int id) {
-    return base.IsTaskIdActive(id);
-  }
-
-  @SimpleFunction(description = "Hapus id tugas: batalkan jadwal + cabut alarm "
-      + "sistem + lepas id.")
-  public void RemoveTaskId(int id) {
-    base.RemoveTaskId(id);
+  @SimpleFunction(description = "SET: lepas paksa id yang macet (ruang UGD). "
+      + "Resep urut: Cancel/Stop/Remove pemiliknya DULU, SetForceReleaseId "
+      + "TERAKHIR. Id macet bila cancel tidak melepas / crash di tengah. "
+      + "Tanpa feedback.")
+  public void SetForceReleaseId(int id) {
+    base.SetForceReleaseId(id);
   }
 
   @SimpleFunction(description = "Buat id unik baru di tag ini (Number, angka terkecil yang belum "
       + "dipakai, langsung di-reservasi). Untuk saat kamulah yang menentukan id-nya "
-      + "(mis. bikin tab sendiri). Beda dengan SaveTagId yang mencatat id dari luar.")
+      + "(mis. bikin tab sendiri). Beda dengan RegisterTagId yang mencatat id dari luar.")
   public int CreateTagId(String tag) {
     return base.CreateTagId(tag);
   }
 
-  @SimpleFunction(description = "Simpan id komponen LUAR ke tag (mis. WebView pihak ketiga). "
+  @SimpleFunction(description = "Catat id komponen LUAR ke tag (mis. WebView pihak ketiga). "
       + "id boleh Number ATAU teks angka (\"5\" = 5, otomatis dikonversi). "
-      + "Id dobel = tetap satu. Gagal (tag kosong / bukan angka) via ErrorOccurred.")
-  public void SaveTagId(Object id, String tag) {
-    base.SaveTagId(id, tag);
+      + "Beda dengan CreateTagId yang MEMBUATKAN id baru. Id dobel = tetap "
+      + "satu (idempoten). Gagal (tag kosong / bukan angka) via ErrorOccurred.")
+  public void RegisterTagId(Object id, String tag) {
+    base.RegisterTagId(id, tag);
   }
 
   @SimpleFunction(description = "Semua id di tag ini (Number semua, URUT MENYIMPAN, "
       + "index 1 = pertama disimpan).")
   public List<Integer> GetTagIds(String tag) {
     return base.GetTagIds(tag);
+  }
+
+  @SimpleFunction(description = "Id pada nomor urut index di tag ini "
+      + "(1 = pertama disimpan). -1 bila tag kosong / index di luar. "
+      + "Cth: GetTagIds lalu GetTagIdAt(tag, 2) = id kedua.")
+  public int GetTagIdAt(String tag, int index) {
+    return base.GetTagIdAt(tag, index);
   }
 
   @SimpleFunction(description = "Id index 1 = PERTAMA DISIMPAN di tag ini. -1 bila kosong.")
@@ -618,14 +458,16 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "Hapus satu id dari tag (hanya lepas catatan, komponen luar "
-      + "tidak diusik). Tag yang kosong ikut dibuang. Tidak tercatat via ErrorOccurred.")
+      + "tidak diusik). Tag yang kosong ikut dibuang. Id yang memang tidak "
+      + "tercatat = idempoten, TAPI tetap lapor via ErrorOccurred (\"tidak tercatat\") "
+      + "agar salah ketik tag ketahuan; bukan diam.")
   public void RemoveTagId(Object id, String tag) {
     base.RemoveTagId(id, tag);
   }
 
-  @SimpleFunction(description = "Buang SELURUH isi satu tag.")
-  public void ClearTag(String tag) {
-    base.ClearTag(tag);
+  @SimpleFunction(description = "SET: hapus SELURUH isi satu tag. Tanpa feedback.")
+  public void SetClearTag(String tag) {
+    base.SetClearTag(tag);
   }
 
   @SimpleFunction(description = "Semua nama tag yang masih punya isi (URUT DIBUAT).")
@@ -633,12 +475,13 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     return base.GetAllTags();
   }
 
-  @SimpleFunction(description = "Encode list/dictionary/teks jadi JSON.")
+  @SimpleFunction(description = "Encode list/dictionary/teks/angka/boolean jadi JSON.")
   public String JsonEncode(Object value) {
     return base.JsonEncode(value);
   }
 
-  @SimpleFunction(description = "Decode teks JSON jadi dictionary/list. Gagal = \"\" + error.")
+  @SimpleFunction(description = "Decode teks JSON jadi dictionary/list. "
+      + "Gagal = \"\" + error (cek LastError(\"Json\"); pola guard: if hasil = \"\" berarti gagal).")
   public Object JsonDecode(String json) {
     return base.JsonDecode(json);
   }
@@ -668,7 +511,8 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     return base.GetMimeType(fileName);
   }
 
-  @SimpleFunction(description = "Versi paket Tools (sama untuk semua Tools_* dalam satu .aix).")
+  @SimpleFunction(description = "Versi paket Tools (sama untuk semua Tools_* dalam satu .aix: "
+      + "wajib SAMA semua per rilis; beda = bug kemasan).")
   public int ToolsVersion() {
     return base.ToolsVersion();
   }
@@ -691,32 +535,44 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     return base.OpId();
   }
 
+  // ================= Compress =================
+
   @SimpleFunction(description = "Deteksi jenis file dari ISINYA (bukan ekstensi). Kembali: zip, "
       + "rar, 7z, gz, bz2, xz, tar, apk, pdf, png, jpg, gif, mp3, mp4, atau unknown. "
-      + "Instan, tanpa id.")
+      + "Instan, tanpa id. Pasangan GetZipEntries: hasil \"kosong\" + Detect = bukan-ZIP "
+      + "berarti zip-nya kosong (bukan rusak).")
   public String DetectArchiveType(String path) {
     return compress.DetectArchiveType(path);
   }
 
-  @SimpleFunction(description = "Daftar isi ZIP (nama entri). Instan. Kosong bila bukan ZIP.")
-  public List<String> ListZipContents(String zipPath) {
-    return compress.ListZipContents(zipPath);
+  @SimpleFunction(description = "Daftar isi ZIP (nama entri). Instan. Kosong = bukan ZIP "
+      + "ATAU zip kosong (bedakan via DetectArchiveType dulu).")
+  public List<String> GetZipEntries(String zipPath) {
+    return compress.GetZipEntries(zipPath);
   }
 
   @SimpleFunction(description = "CALL: bikin ZIP dari BANYAK file sekaligus (tanpa loop). paths = "
-      + "list path sumber. destZip = path file zip tujuan. Mulai = menembak Started; gagal via ErrorOccurred. "
+      + "list path FILE (folder dilewati, tidak rekursif; list kosong = Finished gagal "
+      + "\"list kosong\"). destZip = path file zip tujuan (sudah ada = DITIMPA). "
+      + "Mulai = menembak Started; gagal via ErrorOccurred. "
       + "Pantau via ZipStarted/ProgressChanged/Finished. Satu proses ZIP per saat.")
   public void CallZipFiles(Object paths, String destZip) {
     compress.CallZipFiles(paths, destZip);
   }
 
   @SimpleFunction(description = "CALL: ekstrak ZIP ke folder. Struktur folder di dalam ZIP dijaga. "
-      + "Batalkan via SetCancelZip. Pantau via UnzipStarted/ProgressChanged/Finished.")
+      + "destFolder sudah ada = DIGABUNG (file sama nama ditimpa). Bukan ZIP valid = "
+      + "Finished gagal \"ekstrak gagal (bukan ZIP valid?)\". Batalkan via SetCancelZip "
+      + "(file yang sudah terekstrak tetap ada). Pantau via "
+      + "UnzipStarted/ProgressChanged/Finished.")
   public void CallUnzip(String zipPath, String destFolder) {
     compress.CallUnzip(zipPath, destFolder);
   }
 
-  @SimpleFunction(description = "SET: batalkan proses ZIP/Unzip berjalan. Tanpa feedback.")
+  @SimpleFunction(description = "SET: batalkan proses ZIP/Unzip berjalan. Tanpa feedback "
+      + "(tidak ada event Cancelled: cancel = Set yang pasti). Efek: berhenti; file ZIP "
+      + "sebagian DIHAPUS, file yang sudah terekstrak tetap ada. Verifikasi via IsZipBusy "
+      + "(false = sudah berhenti) lalu coba-lagi.")
   public void SetCancelZip() {
     compress.SetCancelZip();
   }
@@ -731,9 +587,9 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     EventDispatcher.dispatchEvent(this, "ZipStarted", total, zipPath);
   }
 
-  @SimpleEvent(description = "Progres bikin ZIP berubah: index/total + nama file + persen.")
-  public void ZipProgressChanged(int index, int total, String fileName, int filePercent) {
-    EventDispatcher.dispatchEvent(this, "ZipProgressChanged", index, total, fileName, filePercent);
+  @SimpleEvent(description = "Progres bikin ZIP berubah: index/total + nama file + percent (0-100).")
+  public void ZipProgressChanged(int index, int total, String fileName, int percent) {
+    EventDispatcher.dispatchEvent(this, "ZipProgressChanged", index, total, fileName, percent);
   }
 
   @SimpleEvent(description = "Bikin ZIP selesai: success + path ZIP + fileName + "
@@ -747,9 +603,9 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     EventDispatcher.dispatchEvent(this, "UnzipStarted", zipName, total, destFolder);
   }
 
-  @SimpleEvent(description = "Progres ekstrak berubah: index/total + nama entri + persen.")
-  public void UnzipProgressChanged(int index, int total, String entryName, int entryPercent) {
-    EventDispatcher.dispatchEvent(this, "UnzipProgressChanged", index, total, entryName, entryPercent);
+  @SimpleEvent(description = "Progres ekstrak berubah: index/total + nama entri + percent (0-100).")
+  public void UnzipProgressChanged(int index, int total, String entryName, int percent) {
+    EventDispatcher.dispatchEvent(this, "UnzipProgressChanged", index, total, entryName, percent);
   }
 
   @SimpleEvent(description = "Ekstrak selesai: success + folder + jumlah ok/gagal.")
@@ -757,39 +613,46 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     EventDispatcher.dispatchEvent(this, "UnzipFinished", success, destFolder, doneCount, failCount, message);
   }
 
-  @SimpleProperty(description = "Nama operasi Zip (untuk if di ErrorOccurred).",
+  @SimpleProperty(description = "Nama operasi Zip (untuk if di ErrorOccurred: "
+      + "cth if component = OpZip berarti error bikin-ZIP).",
       category = PropertyCategory.BEHAVIOR)
   public String OpZip() {
     return compress.OpZip();
   }
 
-  @SimpleProperty(description = "Nama operasi Unzip (untuk if di ErrorOccurred).",
+  @SimpleProperty(description = "Nama operasi Unzip (untuk if di ErrorOccurred: "
+      + "cth if component = OpUnzip berarti error ekstrak).",
       category = PropertyCategory.BEHAVIOR)
   public String OpUnzip() {
     return compress.OpUnzip();
   }
 
+  // ================= Core =================
+
   @SimpleFunction(description = "Bikin komponen MIT dinamis ber-id ke dalam layout "
       + "(Arrangement MIT / dinamis). typeName: Button, Label, TextBox, Image, "
-      + "CheckBox, Switch, Slider, Spinner, ListView, DatePicker, TimePicker, "
+      + "CheckBox, Switch, Slider, Spinner, ListView, DatePicker, TimePicker, Space, "
       + "HorizontalArrangement, VerticalArrangement, HorizontalScrollArrangement, "
-      + "VerticalScrollArrangement. id = penanda (minta ke CreateDynamicId, "
+      + "VerticalScrollArrangement (tidak case-sensitive; salah = ErrorOccurred + "
+      + "daftar valid). id = penanda (minta ke CreateDynamicId, "
       + "reservasi otomatis diadopsi). Sukses menembak ComponentCreated; "
       + "klik/longklik menembak CoreClicked/CoreLongClicked; gagal via "
-      + "ErrorOccurred.")
-  public void CallCreateDynamicComponent(String typeName, AndroidViewComponent container, int id) {
+      + "ErrorOccurred. Pemula mulai dari sini + Set satu-satu.")
+  public void CallCreateDynamicComponent(String typeName, AndroidViewComponent container, final int id) {
     core.CallCreateDynamicComponent(typeName, container, id);
   }
 
-  @SimpleFunction(description = "Ambil komponen dinamis ber-id (untuk blok Any "
-      + "generik MIT / blok yang butuh soket komponen). null bila tidak ada.")
+  @SimpleFunction(description = "Ambil komponen dinamis ber-id (untuk dicolok ke "
+      + "soket komponen / blok Any generik MIT saat SET/GET properti). null bila "
+      + "tidak ada. Batas Any: Any untuk SET/GET boleh (colok hasil sini); Any "
+      + "untuk EVENT klik TIDAK menyala pada komponen dinamis (pakai CoreClicked).")
   public Object GetDynamicComponent(int id) {
     return core.GetDynamicComponent(id);
   }
 
   @SimpleFunction(description = "SET: Set properti komponen dinamis ber-id "
       + "(nama properti MIT, mis. Text, BackgroundColor, FontSize). "
-      + "Gagal via ErrorOccurred.")
+      + "Sukses diam; gagal via ErrorOccurred.")
   public void SetDynamicProperty(int id, String name, Object value) {
     core.SetDynamicProperty(id, name, value);
   }
@@ -797,21 +660,24 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   @SimpleFunction(description = "CALL: Jalan pintas: bikin Button dinamis ber-id "
       + "lengkap dengan teks, warna, ukuran font, tebal, visibilitas, "
       + "LEBAR + TINGGI (angka MIT: -2 isi, -1 otomatis, positif pixel). "
-      + "Sama seperti Create + Set berulang, tapi satu blok.")
+      + "Sama seperti Create + Set berulang, tapi satu blok. Hanya bila sudah "
+      + "pede butuh sekaligus; pemula pakai Create + Set satu-satu.")
   public void CallCreateDynamicButton(AndroidViewComponent container, int id, String text, int textColor, int backgroundColor, float fontSize, boolean bold, boolean visible, int width, int height) {
     core.CallCreateDynamicButton(container, id, text, textColor, backgroundColor, fontSize, bold, visible, width, height);
   }
 
   @SimpleFunction(description = "CALL: Jalan pintas: bikin Label dinamis ber-id "
       + "lengkap dengan teks, warna, ukuran font, tebal, visibilitas, "
-      + "LEBAR + TINGGI (angka MIT).")
+      + "LEBAR + TINGGI (angka MIT). Hanya bila sudah pede butuh sekaligus; "
+      + "pemula pakai Create + Set satu-satu.")
   public void CallCreateDynamicLabel(AndroidViewComponent container, int id, String text, int textColor, int backgroundColor, float fontSize, boolean bold, boolean visible, int width, int height) {
     core.CallCreateDynamicLabel(container, id, text, textColor, backgroundColor, fontSize, bold, visible, width, height);
   }
 
   @SimpleFunction(description = "CALL: Jalan pintas: bikin TextBox dinamis ber-id "
       + "lengkap dengan hint, warna, ukuran font, tebal, visibilitas, "
-      + "LEBAR + TINGGI (angka MIT).")
+      + "LEBAR + TINGGI (angka MIT). Hanya bila sudah pede butuh sekaligus; "
+      + "pemula pakai Create + Set satu-satu.")
   public void CallCreateDynamicTextBox(AndroidViewComponent container, int id, String hint, int textColor, int backgroundColor, float fontSize, boolean bold, boolean visible, int width, int height) {
     core.CallCreateDynamicTextBox(container, id, hint, textColor, backgroundColor, fontSize, bold, visible, width, height);
   }
@@ -819,56 +685,180 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   @SimpleFunction(description = "CALL: Jalan pintas: bikin Image (gambar MIT) "
       + "dinamis ber-id dengan picture + visibilitas + LEBAR + TINGGI "
       + "(angka MIT). Isi picture seperti Image.Picture biasa "
-      + "(path/asset/URL).")
+      + "(path/asset/URL). Hanya bila sudah pede butuh sekaligus; "
+      + "pemula pakai Create + Set satu-satu.")
   public void CallCreateDynamicImage(AndroidViewComponent container, int id, String picturePath, boolean visible, int width, int height) {
     core.CallCreateDynamicImage(container, id, picturePath, visible, width, height);
   }
 
-  @SimpleFunction(description = "Baca properti komponen dinamis ber-id "
-      + "(teks). Kosong bila tidak ada/gagal (lihat ErrorOccurred).")
+  @SimpleFunction(description = "Baca properti komponen dinamis ber-id. SELALU teks "
+      + "(angka pun jadi teks: FontSize = \"14.0\"; untuk hitung, konversi dulu). "
+      + "Kosong bila tidak ada/gagal (lihat ErrorOccurred).")
   public String GetDynamicProperty(int id, String name) {
     return core.GetDynamicProperty(id, name);
   }
 
-  @SimpleFunction(description = "Panggil fungsi komponen dinamis ber-id "
-      + "(nama fungsi MIT + list argumen). Sinkron: hasil langsung dikembalikan "
-      + "sebagai teks (kosong bila void/gagal; gagal via ErrorOccurred).")
-  public String InvokeDynamic(int id, String name, YailList args) {
-    return core.InvokeDynamic(id, name, args);
+  @SimpleFunction(description = "CALL sinkron (pengecualian resmi keluarga Call): "
+      + "panggil fungsi komponen dinamis ber-id, hasil LANGSUNG via return "
+      + "(bukan event). name = nama fungsi MIT (tidak case-sensitive; cth: "
+      + "RequestFocus untuk TextBox, Clear untuk TextBox/ListView; kosong bila "
+      + "void/gagal; gagal via ErrorOccurred). args = list argumen (kosong bila "
+      + "tanpa argumen).")
+  public String CallInvokeDynamic(int id, String name, YailList args) {
+    return core.CallInvokeDynamic(id, name, args);
   }
 
   @SimpleFunction(description = "SET: atur lebar + tinggi komponen dinamis ber-id "
       + "(semua tipe: Button/Label/TextBox/Image/dll). Angka SAMA seperti blok "
       + "bawaan MIT: -2 = isi penuh, -1 = otomatis, positif = pixel. "
-      + "Tanpa feedback.")
+      + "Sukses diam; gagal via ErrorOccurred.")
   public void SetDynamicSize(int id, int width, int height) {
     core.SetDynamicSize(id, width, height);
   }
 
   @SimpleFunction(description = "SET: tampil/sembunyi komponen dinamis ber-id. "
-      + "false = GONE (hilang total). Tanpa feedback.")
+      + "false = GONE (hilang total). Sukses diam; gagal via ErrorOccurred.")
   public void SetDynamicVisible(int id, boolean visible) {
     core.SetDynamicVisible(id, visible);
   }
 
   @SimpleFunction(description = "SET: teks komponen dinamis ber-id "
-      + "(Button/Label/TextBox/Hint). Diam bila tipe tak punya teks. "
-      + "Tanpa feedback.")
+      + "(Button/Label/TextBox/Hint). Tipe tak punya teks = ErrorOccurred "
+      + "(TIDAK diam). Sukses diam.")
   public void SetDynamicText(int id, String text) {
     core.SetDynamicText(id, text);
   }
 
   @SimpleFunction(description = "SET: warna teks komponen dinamis ber-id. "
-      + "Colok blok warna MIT. Diam bila tipe tak punya warna teks. "
-      + "Tanpa feedback.")
+      + "Colok blok warna MIT. Tipe tak punya warna teks = ErrorOccurred "
+      + "(TIDAK diam). Sukses diam.")
   public void SetDynamicTextColor(int id, int color) {
     core.SetDynamicTextColor(id, color);
   }
 
   @SimpleFunction(description = "SET: warna latar komponen dinamis ber-id. "
-      + "Colok blok warna MIT. Tanpa feedback.")
+      + "Colok blok warna MIT. Sukses diam; gagal via ErrorOccurred.")
   public void SetDynamicBackgroundColor(int id, int color) {
     core.SetDynamicBackgroundColor(id, color);
+  }
+
+  @SimpleFunction(description = "True bila komponen dinamis ber-id sedang tampil "
+      + "(Visible). False = sembunyi ATAU id tidak ada (ragu? cek IsDynamicIdActive).")
+  public boolean IsDynamicVisible(int id) {
+    return core.IsDynamicVisible(id);
+  }
+
+  @SimpleFunction(description = "Tipe komponen dinamis ber-id (\"Button\" dkk, "
+      + "sama dengan typeName di ComponentCreated). Bandingkan dengan blok "
+      + "TypeButton/TypeLabel/dll. Kosong bila id tidak ada.")
+  public String GetDynamicType(int id) {
+    return core.GetDynamicType(id);
+  }
+
+  @SimpleProperty(description = "Pembanding read-only: tipe Button. "
+      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan "
+      + "(cth: if GetDynamicType = TypeButton).",
+      category = PropertyCategory.BEHAVIOR)
+  public String TypeButton() {
+    return core.TypeButton();
+  }
+
+  @SimpleProperty(description = "Pembanding read-only: tipe Label. "
+      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      category = PropertyCategory.BEHAVIOR)
+  public String TypeLabel() {
+    return core.TypeLabel();
+  }
+
+  @SimpleProperty(description = "Pembanding read-only: tipe TextBox. "
+      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      category = PropertyCategory.BEHAVIOR)
+  public String TypeTextBox() {
+    return core.TypeTextBox();
+  }
+
+  @SimpleProperty(description = "Pembanding read-only: tipe CheckBox. "
+      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      category = PropertyCategory.BEHAVIOR)
+  public String TypeCheckBox() {
+    return core.TypeCheckBox();
+  }
+
+  @SimpleProperty(description = "Pembanding read-only: tipe Switch. "
+      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      category = PropertyCategory.BEHAVIOR)
+  public String TypeSwitch() {
+    return core.TypeSwitch();
+  }
+
+  @SimpleProperty(description = "Pembanding read-only: tipe Slider. "
+      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      category = PropertyCategory.BEHAVIOR)
+  public String TypeSlider() {
+    return core.TypeSlider();
+  }
+
+  @SimpleProperty(description = "Pembanding read-only: tipe Spinner. "
+      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      category = PropertyCategory.BEHAVIOR)
+  public String TypeSpinner() {
+    return core.TypeSpinner();
+  }
+
+  @SimpleProperty(description = "Pembanding read-only: tipe ListView. "
+      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      category = PropertyCategory.BEHAVIOR)
+  public String TypeListView() {
+    return core.TypeListView();
+  }
+
+  @SimpleProperty(description = "Pembanding read-only: tipe DatePicker. "
+      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      category = PropertyCategory.BEHAVIOR)
+  public String TypeDatePicker() {
+    return core.TypeDatePicker();
+  }
+
+  @SimpleProperty(description = "Pembanding read-only: tipe TimePicker. "
+      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      category = PropertyCategory.BEHAVIOR)
+  public String TypeTimePicker() {
+    return core.TypeTimePicker();
+  }
+
+  @SimpleProperty(description = "Pembanding read-only: tipe Space. "
+      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      category = PropertyCategory.BEHAVIOR)
+  public String TypeSpace() {
+    return core.TypeSpace();
+  }
+
+  @SimpleProperty(description = "Pembanding read-only: tipe HorizontalArrangement. "
+      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      category = PropertyCategory.BEHAVIOR)
+  public String TypeHorizontalArrangement() {
+    return core.TypeHorizontalArrangement();
+  }
+
+  @SimpleProperty(description = "Pembanding read-only: tipe VerticalArrangement. "
+      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      category = PropertyCategory.BEHAVIOR)
+  public String TypeVerticalArrangement() {
+    return core.TypeVerticalArrangement();
+  }
+
+  @SimpleProperty(description = "Pembanding read-only: tipe HorizontalScrollArrangement. "
+      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      category = PropertyCategory.BEHAVIOR)
+  public String TypeHorizontalScrollArrangement() {
+    return core.TypeHorizontalScrollArrangement();
+  }
+
+  @SimpleProperty(description = "Pembanding read-only: tipe VerticalScrollArrangement. "
+      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      category = PropertyCategory.BEHAVIOR)
+  public String TypeVerticalScrollArrangement() {
+    return core.TypeVerticalScrollArrangement();
   }
 
   @SimpleFunction(description = "Lebar komponen dinamis ber-id (angka MIT: "
@@ -889,6 +879,49 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     return core.CreateDynamicId();
   }
 
+  @SimpleFunction(description = "Semua id dinamis (URUT PEMBUATAN, "
+      + "index 1 = pertama dibuat).")
+  public List<Integer> GetDynamicIds() {
+    return core.GetDynamicIds();
+  }
+
+  @SimpleFunction(description = "Id dinamis yang aktif (URUT PEMBUATAN).")
+  public List<Integer> GetActiveDynamicIds() {
+    return core.GetActiveDynamicIds();
+  }
+
+  @SimpleFunction(description = "Id dinamis terakhir dibuat. -1 bila kosong.")
+  public int CurrentDynamicId() {
+    return core.CurrentDynamicId();
+  }
+
+  @SimpleFunction(description = "Id index 1 = PERTAMA DIBUAT. -1 bila kosong.")
+  public int GetFirstDynamicId() {
+    return core.GetFirstDynamicId();
+  }
+
+  @SimpleFunction(description = "Id TERAKHIR DIBUAT. -1 bila kosong.")
+  public int GetLastDynamicId() {
+    return core.GetLastDynamicId();
+  }
+
+  @SimpleFunction(description = "Id yang dibuat TEPAT SEBELUM id ini. "
+      + "-1 bila tidak ada.")
+  public int GetPreviousDynamicId(int id) {
+    return core.GetPreviousDynamicId(id);
+  }
+
+  @SimpleFunction(description = "True bila id dinamis ini masih ada.")
+  public boolean IsDynamicIdActive(int id) {
+    return core.IsDynamicIdActive(id);
+  }
+
+  @SimpleFunction(description = "Hapus komponen dinamis: lepas view dari layout "
+      + "+ lepas id (otomatis beres-beres).")
+  public void RemoveDynamicId(int id) {
+    core.RemoveDynamicId(id);
+  }
+
   @SimpleFunction(description = "SET: Hapus SEMUA komponen dinamis Tools_Core "
       + "(id ikut dilepas).")
   public void SetClearDynamicComponents() {
@@ -900,7 +933,8 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     EventDispatcher.dispatchEvent(this, "ComponentCreated", id, typeName);
   }
 
-  @SimpleEvent(description = "Komponen dinamis di-klik: id.")
+  @SimpleEvent(description = "Komponen dinamis di-klik: id. Resep daftar: "
+      + "CoreClicked + GetDynamicProperty(id, \"Text\") = teks baris yang diklik.")
   public void CoreClicked(int id) {
     EventDispatcher.dispatchEvent(this, "CoreClicked", id);
   }
@@ -915,47 +949,107 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     EventDispatcher.dispatchEvent(this, "CoreDoubleClicked", id);
   }
 
-  @SimpleProperty(description = "Nama operasi Core (untuk if di ErrorOccurred).",
+  @SimpleProperty(description = "Nama operasi Core (untuk if di ErrorOccurred: "
+      + "cth if component = OpCore berarti error Core).",
       category = PropertyCategory.BEHAVIOR)
   public String OpCore() {
     return core.OpCore();
   }
 
-  @SimpleFunction(description = "CALL: unduh ke folder (otomatis di-root "
-      + "/storage/emulated/0; absolut apa adanya). url = http(s) ATAU data:URL "
+  // ================= Downloader =================
+
+  @SimpleFunction(description = "CALL: unduh ke folder. url = http(s) ATAU data:URL "
       + "(base64/url-encoded, mis. data:image/png;base64,...) ATAU content: URI "
       + "Android (dari file picker) ATAU file: URL / path lokal (disalin). "
-      + "blob: TIDAK didukung (itu objek browser; "
-      + "ubah dulu jadi base64 via JavaScript, lalu kirim sebagai data:URL "
-      + "atau ke CallSaveBase64ToFile). fileName kosong = nama otomatis. "
-      + "id = angka bebas yang belum dipakai (minta ke Tools_Base "
-      + "CreateUniqueId atau CreateDownloadId). Hasil lewat DownloadStarted/"
-      + "ProgressChanged/Finished (bawa id).")
+      + "blob: TIDAK didukung (itu objek browser; ubah dulu jadi base64 via JavaScript, "
+      + "lalu kirim sebagai data:URL atau ke CallSaveBase64ToFile Tools_File). "
+      + "fileName kosong = nama otomatis (seperti CallGuessFileName). folder: boleh nama "
+      + "relatif (Download/ = aman tanpa izin khusus); folder di luar itu butuh izin "
+      + "MANAGE_EXTERNAL_STORAGE. Contoh aman: Download/. id dari CreateDownloadId atau "
+      + "CreateUniqueId Tools_Base. Hasil lewat DownloadStarted/ProgressChanged/Finished "
+      + "(bawa id). Gagal mulai (URL/id/folder salah) = Finished(success=false) + "
+      + "ErrorOccurred.")
   public void CallDownload(String url, String fileName, String folder, int id) {
     downloader.CallDownload(url, fileName, folder, id);
   }
 
-  @SimpleFunction(description = "CALL: unduh BANYAK URL sekaligus (tanpa loop manual). fileNames "
-      + "boleh kosong (= otomatis semua). folder seperti CallDownload. Tanpa return: "
-      + "pantau tiap id lewat DownloadStarted/DownloadProgressChanged/DownloadFinished. "
-      + "Ringkasan lewat DownloadBatchFinished. Satu batch per saat.")
+  @SimpleFunction(description = "CALL: unduh BANYAK URL sekaligus (tanpa loop manual). "
+      + "urls = list teks URL (atau satu teks URL); fileNames = list nama (atau satu teks; "
+      + "boleh kosong = otomatis semua; yang kurang dari jumlah URL = otomatis). "
+      + "Contoh: urls = [url1, url2], fileNames = kosongkan. folder seperti CallDownload. "
+      + "Tanpa return: id tiap URL ketahuan saat DownloadStarted menyala (cocokkan via "
+      + "fileName/savePath yang dibawanya). Pantau tiap id lewat "
+      + "DownloadStarted/DownloadProgressChanged/DownloadFinished. Ringkasan lewat "
+      + "DownloadBatchFinished. Satu batch per saat. Tiap id batch bisa dipasang "
+      + "SetDownloadNotification satu-satu (notif per file).")
   public void CallDownloadList(Object urls, Object fileNames, String folder) {
     downloader.CallDownloadList(urls, fileNames, folder);
   }
 
-  @SimpleFunction(description = "SET: batalkan unduhan berjalan (per id). File sebagian dihapus. Tanpa feedback.")
+  @SimpleFunction(description = "SET: Batalkan unduhan berjalan. File sebagian dihapus. "
+      + "Umpan balik via DownloadFinished(success=false). Tanpa event sendiri.")
   public void SetCancelDownload(int id) {
     downloader.SetCancelDownload(id);
   }
 
-  @SimpleFunction(description = "SET: jeda unduhan berjalan (per id). Lanjut via SetResumeDownload. Tanpa feedback.")
+  @SimpleFunction(description = "SET: Jeda unduhan berjalan. Unduhan berhenti menulis, "
+      + "lanjut dari posisi sama saat Resume (BUKAN ulang dari 0). Verifikasi via "
+      + "IsDownloadPaused / GetDownloadStatus (status jadi jeda). Tanpa feedback.")
   public void SetPauseDownload(int id) {
     downloader.SetPauseDownload(id);
   }
 
-  @SimpleFunction(description = "SET: lanjutkan unduhan yang dijeda (per id). Tanpa feedback.")
+  @SimpleFunction(description = "SET: Lanjutkan unduhan yang dijeda (lanjut dari posisi "
+      + "jeda, tanpa unduh ulang). Verifikasi via IsDownloadPaused / GetDownloadStatus "
+      + "(status kembali jalan). Tanpa feedback.")
   public void SetResumeDownload(int id) {
     downloader.SetResumeDownload(id);
+  }
+
+  @SimpleFunction(description = "True bila id unduhan ini sedang dijeda (Pause tapi "
+      + "belum Cancel/selesai). False = jalan/selesai/gagal/batal/belum ada.")
+  public boolean IsDownloadPaused(int id) {
+    return downloader.IsDownloadPaused(id);
+  }
+
+  @SimpleFunction(description = "Persen unduhan id ini (0-100). = index 1 dari "
+      + "GetDownloadProgress.")
+  public int GetDownloadPercent(int id) {
+    return downloader.GetDownloadPercent(id);
+  }
+
+  @SimpleFunction(description = "Path file tujuan id ini (kosong bila belum mulai). "
+      + "= index 2 dari GetDownloadResult.")
+  public String GetDownloadSavePath(int id) {
+    return downloader.GetDownloadSavePath(id);
+  }
+
+  @SimpleFunction(description = "Nama file id ini (kosong bila belum mulai). "
+      + "= index 3 dari GetDownloadResult.")
+  public String GetDownloadFileName(int id) {
+    return downloader.GetDownloadFileName(id);
+  }
+
+  @SimpleFunction(description = "CALL: Unduh ulang id ini dari awal (byte dihitung ulang "
+      + "dari 0). Untuk id yang gagal/dibatalkan/selesai. Id yang masih jalan harus "
+      + "di-Cancel dulu. Hasil lewat DownloadFinished seperti biasa.")
+  public void CallRetryDownload(int id) {
+    downloader.CallRetryDownload(id);
+  }
+
+  @SimpleFunction(description = "Total URL batch yang sedang jalan (0 bila tidak ada batch).")
+  public int GetBatchTotal() {
+    return downloader.GetBatchTotal();
+  }
+
+  @SimpleFunction(description = "Jumlah URL batch yang sudah selesai (sukses/gagal).")
+  public int GetBatchDone() {
+    return downloader.GetBatchDone();
+  }
+
+  @SimpleFunction(description = "Jumlah URL batch yang sukses.")
+  public int GetBatchOk() {
+    return downloader.GetBatchOk();
   }
 
   @SimpleFunction(description = "Buat id unduhan unik baru (Number, siap pakai ke CallDownload). "
@@ -964,15 +1058,60 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     return downloader.CreateDownloadId();
   }
 
+  @SimpleFunction(description = "Semua id unduhan yang dipegang (URUT PEMBUATAN, "
+      + "index 1 = pertama dibuat). Termasuk yang dijeda.")
+  public List<Integer> GetDownloadIds() {
+    return downloader.GetDownloadIds();
+  }
+
+  @SimpleFunction(description = "Id unduhan yang sedang jalan (URUT PEMBUATAN). "
+      + "Yang dijeda TIDAK masuk sini.")
+  public List<Integer> GetActiveDownloadIds() {
+    return downloader.GetActiveDownloadIds();
+  }
+
+  @SimpleFunction(description = "Id unduhan yang terakhir disentuh (dibuat atau di-start). "
+      + "-1 bila kosong. Beda dengan GetLastDownloadId (terakhir dibuat).")
+  public int CurrentDownloadId() {
+    return downloader.CurrentDownloadId();
+  }
+
+  @SimpleFunction(description = "Id index 1 = PERTAMA DIBUAT. -1 bila kosong.")
+  public int GetFirstDownloadId() {
+    return downloader.GetFirstDownloadId();
+  }
+
+  @SimpleFunction(description = "Id unduhan TERAKHIR DIBUAT. -1 bila kosong. Beda dengan "
+      + "CurrentDownloadId (terakhir disentuh).")
+  public int GetLastDownloadId() {
+    return downloader.GetLastDownloadId();
+  }
+
+  @SimpleFunction(description = "Id yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
+  public int GetPreviousDownloadId(int id) {
+    return downloader.GetPreviousDownloadId(id);
+  }
+
+  @SimpleFunction(description = "True bila id unduhan ini sedang jalan (tidak dijeda). "
+      + "Bedakan jeda vs berhenti via IsDownloadPaused.")
+  public boolean IsDownloadIdActive(int id) {
+    return downloader.IsDownloadIdActive(id);
+  }
+
+  @SimpleFunction(description = "Hapus id unduhan: batalkan bila jalan + lepas id "
+      + "(otomatis beres-beres).")
+  public void RemoveDownloadId(int id) {
+    downloader.RemoveDownloadId(id);
+  }
+
   @SimpleFunction(description = "SET: tampilkan progres unduhan di bar notifikasi "
-      + "Android (per id, otomatis: nama file + persen). show=true = tampil + update "
+      + "Android (otomatis: nama file + persen). show=true = tampil + update "
       + "tiap Started/Progress/Finished; show=false = matikan + hapus notif id itu. "
       + "Pasang sesudah CallDownload, atau di dalam event DownloadStarted/"
       + "ProgressChanged (id sudah terdaftar; di Finished kurang relevan). "
-      + "Tiap id hasil CallDownloadList bisa dipasang satu-satu, agar sistem bisa "
-      + "bedakan Download vs DownloadList. Android 13+ butuh izin "
-      + "POST_NOTIFICATIONS (minta via blok GetPermission Tools_File). "
-      + "Tanpa feedback.")
+      + "Tiap id hasil CallDownloadList bisa dipasang satu-satu (notif per file). "
+      + "Android 13+ butuh izin POST_NOTIFICATIONS (minta via blok CallRequestPermission "
+      + "Tools_File). Tanpa feedback.")
   public void SetDownloadNotification(int id, boolean show) {
     downloader.SetDownloadNotification(id, show);
   }
@@ -985,30 +1124,35 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "Fallback polling untuk event "
-      + "DownloadProgressChanged: list [persen 0-100, byte diterima, byte total].")
+      + "DownloadProgressChanged: list [persen 0-100, byte diterima, byte total]. "
+      + "Contoh ambil persen: select list item (hasil blok ini) index 1. "
+      + "Jalan pintas: pakai GetDownloadPercent.")
   public List<Object> GetDownloadProgress(int id) {
     return downloader.GetDownloadProgress(id);
   }
 
   @SimpleFunction(description = "Fallback polling untuk event DownloadFinished: "
-      + "list [success, savePath, fileName, message]. Tetap ada setelah selesai "
-      + "sampai RemoveDownloadId.")
+      + "list [success, savePath, fileName, message]. Contoh ambil nama: select list item "
+      + "(hasil blok ini) index 3. Jalan pintas: GetDownloadSavePath/GetDownloadFileName. "
+      + "Tetap ada setelah selesai sampai RemoveDownloadId.")
   public List<Object> GetDownloadResult(int id) {
     return downloader.GetDownloadResult(id);
   }
 
   @SimpleFunction(description = "Fallback polling untuk event batch: list "
-      + "[batchJalan, total, selesai, ok].")
+      + "[batchJalan, total, selesai, ok]. Contoh ambil total: select list item "
+      + "(hasil blok ini) index 2. Jalan pintas: GetBatchTotal/GetBatchDone/GetBatchOk.")
   public List<Object> GetBatchProgress() {
     return downloader.GetBatchProgress();
   }
 
-  @SimpleFunction(description = "CALL: tebak nama file dari URL saja (1 input, "
+  @SimpleFunction(description = "CALL: Tebak nama file dari URL saja (1 input, "
       + "mandiri — bisa disandingkan komponen lain, mis. Web bawaan MIT untuk "
       + "rename). http(s) = ambil header asli server (ikuti redirect); "
       + "data:/content:/file:/path = tebak lokal tanpa internet. Hasil lewat "
-      + "FileNameGuessed (url + fileName + mimeType).")
-  public void CallGuessFileName(String url) {
+      + "FileNameGuessed (url + fileName + mimeType). Butuh potong path jadi nama? "
+      + "pakai GetFileName Tools_File.")
+  public void CallGuessFileName(final String url) {
     downloader.CallGuessFileName(url);
   }
 
@@ -1016,12 +1160,6 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
       + "tebakan + mimeType (kosong bila tak diketahui).")
   public void FileNameGuessed(String url, String fileName, String mimeType) {
     EventDispatcher.dispatchEvent(this, "FileNameGuessed", url, fileName, mimeType);
-  }
-
-  @SimpleFunction(description = "GET: nama file dari URL, mime, dan content-disposition "
-      + "(dipakai otomatis bila fileName CallDownload dikosongkan).")
-  public String GetFileName(String url, String mimeType, String contentDisposition) {
-    return downloader.GetFileName(url, mimeType, contentDisposition);
   }
 
   @SimpleEvent(description = "Unduhan dimulai: siapkan tampilan (nama + path tujuan).")
@@ -1050,11 +1188,14 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     EventDispatcher.dispatchEvent(this, "DownloadBatchFinished", total, okCount, folder);
   }
 
-  @SimpleProperty(description = "Nama operasi Download (untuk if di ErrorOccurred).",
+  @SimpleProperty(description = "Nama operasi Download untuk if di ErrorOccurred. Contoh: "
+      + "colok ke perbandingan = dengan component dari event ErrorOccurred.",
       category = PropertyCategory.BEHAVIOR)
   public String OpDownload() {
     return downloader.OpDownload();
   }
+
+  // ================= File =================
 
   @SimpleFunction(description = "Apakah file ATAU folder ada di jalur "
       + "(otomatis di-root /storage/emulated/0; absolut apa adanya). "
@@ -1076,77 +1217,85 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     return file.IsHiddenDirectory(directory);
   }
 
-  @SimpleFunction(description = "True bila ada salinan/pindahan "
-      + "CallCopyOrMoveFile yang masih berjalan.")
-  public boolean IsBusy() {
-    return file.IsBusy();
+  @SimpleFunction(description = "True bila salinan/pindahan CallCopyOrMoveFile "
+      + "yang masih berjalan. Khusus operasi itu (slot copyormove).")
+  public boolean IsCopyOrMoveBusy() {
+    return file.IsCopyOrMoveBusy();
   }
 
   @SimpleFunction(description = "CALL: jadikan directory hidden (nama jadi "
       + ".nama). Sudah hidden = success. Hasil lewat DirectoryHidden.")
-  public void CallSetHiddenDirectory(String directory) {
+  public void CallSetHiddenDirectory(final String directory) {
     file.CallSetHiddenDirectory(directory);
   }
 
   @SimpleFunction(description = "CALL: buat file .nomedia di dalam folder "
       + "(sembunyikan dari galeri/musik). Hasil lewat NomediaFileCreated.")
-  public void CallMakeNomediaFile(String folder) {
+  public void CallMakeNomediaFile(final String folder) {
     file.CallMakeNomediaFile(folder);
   }
 
   @SimpleFunction(description = "CALL: hapus file .nomedia di folder. "
       + "Tidak ada = success. Hasil lewat NomediaFileDeleted.")
-  public void CallDeleteNomediaFile(String folder) {
+  public void CallDeleteNomediaFile(final String folder) {
     file.CallDeleteNomediaFile(folder);
   }
 
   @SimpleFunction(description = "CALL: buat folder (termasuk induknya). "
       + "Sudah ada = success. Hasil lewat DirectoryCreated.")
-  public void CallMakeDirectory(String folder) {
+  public void CallMakeDirectory(final String folder) {
     file.CallMakeDirectory(folder);
   }
 
   @SimpleFunction(description = "CALL: hapus file/folder (folder rekursif). "
       + "Tidak ada = success. Hasil lewat FileDeleted.")
-  public void CallDeleteFile(String path) {
+  public void CallDeleteFile(final String path) {
     file.CallDeleteFile(path);
   }
 
   @SimpleFunction(description = "CALL: hapus BANYAK path sekaligus (tanpa loop "
-      + "manual). paths = list / teks koma. Hasil lewat FileListDeleted "
-      + "(total + terhapus).")
-  public void CallDeleteList(Object paths) {
+      + "manual). paths = list, atau teks pisah koma (\"/a.jpg, /b.jpg\"; koma "
+      + "boleh spasi). Hasil lewat FileListDeleted (total + terhapus).")
+  public void CallDeleteList(final Object paths) {
     file.CallDeleteList(paths);
   }
 
   @SimpleFunction(description = "CALL: ganti nama FILE (tanpa pindah folder). "
       + "newName = nama saja. Hasil lewat FileRenamed (path = nama baru).")
-  public void CallRenameFile(String path, String newName) {
+  public void CallRenameFile(final String path, final String newName) {
     file.CallRenameFile(path, newName);
   }
 
   @SimpleFunction(description = "CALL: ganti nama FOLDER (tanpa pindah). "
       + "newName = nama saja. Hasil lewat FolderRenamed.")
-  public void CallRenameFolder(String path, String newName) {
+  public void CallRenameFolder(final String path, final String newName) {
     file.CallRenameFolder(path, newName);
   }
 
   @SimpleFunction(description = "CALL: buat file kosong (folder induk dibuat "
       + "otomatis). Sudah ada = success. Hasil lewat EmptyFileCreated.")
-  public void CallCreateEmptyFile(String path) {
+  public void CallCreateEmptyFile(final String path) {
     file.CallCreateEmptyFile(path);
   }
 
-  @SimpleFunction(description = "CALL: tulis teks ke file (UTF-8). "
-      + "append=true = sambung di akhir. Hasil lewat FileSaved.")
-  public void CallSaveFile(String path, String content, boolean append) {
+  @SimpleFunction(description = "CALL: tulis teks ke file (UTF-8; timpa isi "
+      + "lama). append=true = sambung di akhir (sama seperti CallAppendFile). "
+      + "Hanya untuk teks; file biner rusak bila lewat sini. Hasil lewat FileSaved.")
+  public void CallSaveFile(final String path, final String content, final boolean append) {
     file.CallSaveFile(path, content, append);
+  }
+
+  @SimpleFunction(description = "CALL: sambung teks di AKHIR file (UTF-8; "
+      + "tidak menimpa isi lama). Sama seperti CallSaveFile(append=true). "
+      + "File belum ada = dibuat baru. Hasil lewat FileSaved.")
+  public void CallAppendFile(final String path, final String content) {
+    file.CallAppendFile(path, content);
   }
 
   @SimpleFunction(description = "CALL: simpan base64 LANGSUNG ke storage "
       + "(tanpa validasi gambar, lebih cepat). Hasil lewat Base64FileSaved. "
       + "Polling: GetLastBase64FilePath.")
-  public void CallSaveBase64ToFile(String base64, String path) {
+  public void CallSaveBase64ToFile(final String base64, final String path) {
     file.CallSaveBase64ToFile(base64, path);
   }
 
@@ -1157,22 +1306,42 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "CALL: baca file teks (UTF-8) di background. "
-      + "Hasil lewat GotText (content = isi file). Mulai lewat ReadStarted.")
-  public void CallReadText(String path) {
+      + "Hanya untuk teks UTF-8; file biner/encoding lain isinya bisa kacau "
+      + "(biner = baca via base64/pustaka lain). Hasil lewat GotText "
+      + "(content = isi file). Mulai lewat ReadStarted.")
+  public void CallReadText(final String path) {
     file.CallReadText(path);
   }
 
-  @SimpleFunction(description = "CALL: salin ATAU pindah file (isMove=true = "
-      + "pindah). Path otomatis di-root /storage/emulated/0. Nama tujuan boleh beda. "
-      + "Bila tujuan SUDAH ADA: tidak disalin, Finished(success=true, "
-      + "isDuplicated=true) -> rename manual ala contoh. Asset hanya bisa "
-      + "jadi sumber. Satu job per saat.")
-  public void CallCopyOrMoveFile(String fromFileName, String toFileName, boolean isMove) {
+  @SimpleFunction(description = "CALL: Salin ATAU pindah file (isMove=true = "
+      + "pindah; salah centang = file pindah padahal mau salin — untuk aman pakai "
+      + "CallCopyFile/CallMoveFile bila ragu). Path otomatis di-root "
+      + "/storage/emulated/0. Nama tujuan boleh beda. Bila tujuan SUDAH ADA: tidak "
+      + "disalin, Finished(success=false, isDuplicated=true) + ErrorOccurred. "
+      + "Asset hanya bisa jadi sumber. Satu job per saat.")
+  public void CallCopyOrMoveFile(final String fromFileName, final String toFileName, final boolean isMove) {
     file.CallCopyOrMoveFile(fromFileName, toFileName, isMove);
   }
 
+  @SimpleFunction(description = "CALL: Salin file (tidak pindah). Sama seperti "
+      + "CallCopyOrMoveFile(isMove=false), tapi tanpa risiko salah centang. "
+      + "Bila tujuan SUDAH ADA: Finished(success=false, isDuplicated=true). "
+      + "Hasil lewat CopyOrMoveFinished.")
+  public void CallCopyFile(final String fromFileName, final String toFileName) {
+    file.CallCopyFile(fromFileName, toFileName);
+  }
+
+  @SimpleFunction(description = "CALL: Pindah file (sumber ikut terhapus bila sukses). "
+      + "Sama seperti CallCopyOrMoveFile(isMove=true), tapi tanpa risiko salah "
+      + "centang. Bila tujuan SUDAH ADA: Finished(success=false, isDuplicated=true). "
+      + "Hasil lewat CopyOrMoveFinished.")
+  public void CallMoveFile(final String fromFileName, final String toFileName) {
+    file.CallMoveFile(fromFileName, toFileName);
+  }
+
   @SimpleFunction(description = "SET: batalkan salinan/pindahan berjalan. "
-      + "Tanpa feedback (file sebagian dihapus).")
+      + "Tanpa feedback (file sebagian dihapus). Rantai: CopyOrMoveFinished "
+      + "(success=false, need='dibatalkan').")
   public void SetCancelCopyOrMove() {
     file.SetCancelCopyOrMove();
   }
@@ -1196,20 +1365,37 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "Path absolut dari input (di-root ke "
-      + "/storage/emulated/0; absolut/URL/aset apa adanya).")
+      + "/storage/emulated/0; absolut/URL/aset apa adanya). Cth: "
+      + "\"/Download/a.jpg\" -> \"/storage/emulated/0/Download/a.jpg\".")
   public String GetFullPath(String path) {
     return file.GetFullPath(path);
   }
 
-  @SimpleFunction(description = "Ukuran file dalam byte. Folder = total isi "
-      + "rekursif. path seperti IsFileOrDirectoryExists.")
+  @SimpleFunction(description = "Ukuran file dalam byte (-1 bila tidak ada "
+      + "/ gagal). Folder = total isi rekursif; folder besar = bisa lambat "
+      + "(hitung rekursif, UI beku sesaat). path seperti IsFileOrDirectoryExists.")
   public long FileSize(String path) {
     return file.FileSize(path);
   }
 
+  @SimpleFunction(description = "Waktu ubah terakhir file/folder (milidetik "
+      + "epoch; 0 bila tidak ada/gagal). Bandingkan 2 file = mana yang baru. "
+      + "Ubah ke tanggal pakai blok tanggal App Inventor.")
+  public long GetLastModified(String path) {
+    return file.GetLastModified(path);
+  }
+
+  @SimpleFunction(description = "True bila path ada DAN bisa dibaca aplikasi. "
+      + "False = tidak ada, atau tidak ada izin baca (cek IsPermissionGranted "
+      + "/ aktifkan 'Akses semua file').")
+  public boolean IsFileReadable(String path) {
+    return file.IsFileReadable(path);
+  }
+
   @SimpleFunction(description = "Folder khusus aplikasi (tanpa izin tambahan, "
       + "aman Android 11+). Cth: /storage/emulated/0/Android/data/<paket>/"
-      + "files. Hasilnya bisa langsung dipakai sebagai path blok lain.")
+      + "files. Hasilnya bisa langsung dipakai sebagai path blok lain. Pakai "
+      + "ini agar TIDAK perlu izin storage sama sekali.")
   public String GetAndroidSpecificDirectory() {
     return file.GetAndroidSpecificDirectory();
   }
@@ -1240,7 +1426,7 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "Sisa ruang kosong (byte) di kartu SD "
-      + "(/storage/emulated/0).")
+      + "(/storage/emulated/0). -1 bila gagal dibaca.")
   public long FreeSpace() {
     return file.FreeSpace();
   }
@@ -1251,62 +1437,69 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     return file.TotalSpace();
   }
 
-  @SimpleFunction(description = "Daftar file (path lengkap). filter = "
+  @SimpleFunction(description = "GET: Daftar file (path lengkap). filter = "
       + "ekstensi tanpa titik (boleh koma: jpg,png; kosong = semua). "
-      + "recursive = sertakan isi subfolder. path seperti IsFileOrDirectoryExists.")
-  public List<String> ListFiles(String path, String filter, boolean recursive) {
-    return file.ListFiles(path, filter, recursive);
+      + "recursive = sertakan isi subfolder. path seperti IsFileOrDirectoryExists. "
+      + "File besar + recursive = bisa lambat (UI beku sesaat); untuk daftar besar "
+      + "pakai filter/tipe secukupnya.")
+  public List<String> GetFiles(String path, String filter, boolean recursive) {
+    return file.GetFiles(path, filter, recursive);
   }
 
-  @SimpleFunction(description = "Daftar subfolder (path lengkap, tanpa "
+  @SimpleFunction(description = "GET: Daftar subfolder (path lengkap, tanpa "
       + "rekursif). path seperti IsFileOrDirectoryExists.")
-  public List<String> ListFolders(String folder) {
-    return file.ListFolders(folder);
+  public List<String> GetFolders(String folder) {
+    return file.GetFolders(folder);
   }
 
   @SimpleFunction(description = "True bila file/folder input PUNYA DUPLIKAT "
-      + "di dalam 1 laci yang sama: ada yang namanya sama persis, atau satu "
+      + "di dalam 1 folder yang sama: ada yang namanya sama persis, atau satu "
       + "keluarga counter (mis. image.jpg dengan image_1.jpg / "
       + "image (1).jpg). Input satu saja: \"/Download/image.jpg\" = mode "
       + "file, \"/Download/\" atau path folder = mode folder. Hanya level "
-      + "laci itu, tanpa masuk subfolder. Cocok untuk validasi sebelum "
+      + "folder itu, tanpa masuk subfolder. Cocok untuk validasi sebelum "
       + "simpan/rename.")
   public boolean IsDuplicateFileOrDirectory(String fileOrDirectory) {
     return file.IsDuplicateFileOrDirectory(fileOrDirectory);
   }
 
   @SimpleFunction(description = "Berapa banyak duplikat file/folder input di "
-      + "dalam 1 laci yang sama (termasuk inputnya sendiri bila ada). 0 = "
+      + "dalam 1 folder yang sama (termasuk inputnya sendiri bila ada). 0 = "
       + "tidak ada duplikat. Keluarga nama sama seperti "
-      + "IsDuplicateFileOrDirectory; hanya level laci itu, tanpa masuk "
+      + "IsDuplicateFileOrDirectory; hanya level folder itu, tanpa masuk "
       + "subfolder.")
   public int GetManyDuplicateFileOrDirectory(String fileOrDirectory) {
     return file.GetManyDuplicateFileOrDirectory(fileOrDirectory);
   }
 
   @SimpleFunction(description = "Daftar path lengkap duplikat file/folder "
-      + "input di dalam 1 laci yang sama (termasuk inputnya sendiri bila "
+      + "input di dalam 1 folder yang sama (termasuk inputnya sendiri bila "
       + "ada). Urut abjad. Kosong = tidak ada duplikat. Keluarga nama sama "
       + "seperti IsDuplicateFileOrDirectory; tanpa masuk subfolder.")
-  public List<String> GetListDuplicateFileOrDirectory(String fileOrDirectory) {
-    return file.GetListDuplicateFileOrDirectory(fileOrDirectory);
+  public List<String> GetDuplicateFileOrDirectory(String fileOrDirectory) {
+    return file.GetDuplicateFileOrDirectory(fileOrDirectory);
   }
 
   @SimpleFunction(description = "Kategori file dari nama/path: image, audio, "
-      + "video, text, archive, document, apk, atau unknown. Berdasarkan "
-      + "ekstensi (tak peduli huruf besar). Bandingkan dengan blok "
-      + "TypeImage/dll. Olah string saja.")
+      + "video, text, archive, document, apk, atau unknown (boleh alias Indonesia "
+      + "seperti GetFilesByType). Berdasarkan ekstensi (tak peduli huruf besar). "
+      + "Bandingkan dengan blok TypeImage/dll. Olah string saja. Nama bisa dibohongi "
+      + "(jpg padahal zip) — bila akurasi penting pakai DetectArchiveType "
+      + "Tools_Compress.")
   public String FileTypeOf(String pathOrName) {
     return file.FileTypeOf(pathOrName);
   }
 
-  @SimpleFunction(description = "Daftar file (path lengkap) yang kategorinya "
-      + "cocok. type = image/audio/video/text/archive/document/apk (boleh "
-      + "alias: gambar/musik/vidio/teks/arsip/dokumen) atau salah satu blok "
-      + "TypeImage/dll. recursive = sertakan isi subfolder. "
-      + "path seperti IsFileOrDirectoryExists.")
-  public List<String> ListFilesByType(String folder, String type, boolean recursive) {
-    return file.ListFilesByType(folder, type, recursive);
+  @SimpleFunction(description = "GET: Daftar file (path lengkap) yang kategorinya "
+      + "cocok. type = image/audio/video/text/archive/document/apk (boleh alias "
+      + "Indonesia: gambar/musik/video/teks/arsip/dokumen; alias lama vidio tetap "
+      + "diterima) atau salah satu blok TypeImage/dll. recursive = sertakan isi "
+      + "subfolder. path seperti IsFileOrDirectoryExists. Pilih: nama bisa dibohongi "
+      + "(jpg padahal zip) — bila akurasi penting pakai DetectArchiveType "
+      + "Tools_Compress (baca isi); bila kecepatan penting pakai FileTypeOf "
+      + "(baca nama).")
+  public List<String> GetFilesByType(String folder, String type, boolean recursive) {
+    return file.GetFilesByType(folder, type, recursive);
   }
 
   @SimpleFunction(description = "Daftar ekstensi (tanpa titik) yang masuk "
@@ -1364,18 +1557,18 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     return file.TypeUnknown();
   }
 
-  @SimpleFunction(description = "Minta izin Android (cth: "
+  @SimpleFunction(description = "CALL: Minta izin Android (cth: "
       + "android.permission.READ_EXTERNAL_STORAGE). Hasil lewat "
       + "GotPermission. Pasang need_permission dari event lain ke sini. "
       + "Android 11+: izin storage dialihkan ke 'Akses semua file' "
       + "(pakai OpenAllFilesAccessSettings; cek IsAllFilesAccessGranted).")
-  public void GetPermission(String permission) {
-    file.GetPermission(permission);
+  public void CallRequestPermission(final String permission) {
+    file.CallRequestPermission(permission);
   }
 
   @SimpleFunction(description = "True bila aplikasi boleh tulis SEMUA file "
       + "bersama. Android 11+ = 'Akses semua file' aktif; Android 10 ke "
-      + "bawah selalu true (izin tulis biasa cukup via GetPermission).")
+      + "bawah selalu true (izin tulis biasa cukup via CallRequestPermission).")
   public boolean IsAllFilesAccessGranted() {
     return file.IsAllFilesAccessGranted();
   }
@@ -1409,7 +1602,7 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
       + "belum = OTOMATIS buka Settings + GotPermission(false + pesan); "
       + "lainnya = dialog izin + GotPermission. Tanpa return. Colok blok "
       + "Permission... ATAU teks string izinnya.")
-  public void CallEnsurePermission(String permission) {
+  public void CallEnsurePermission(final String permission) {
     file.CallEnsurePermission(permission);
   }
 
@@ -1420,15 +1613,17 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     file.CallEnsureStoragePermission();
   }
 
-  @SimpleProperty(description = "Helper read-only: izin kamera. Colok ke "
+  @SimpleProperty(description = "Helper read-only: izin kamera (CADANGAN — belum ada "
+      + "bloknya, hadir mulai v21). Colok ke "
       + "IsPermissionGranted / CallEnsurePermission (tanpa ketik string).",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionCamera() {
     return file.PermissionCamera();
   }
 
-  @SimpleProperty(description = "Helper read-only: izin mikrofon (rekam "
-      + "suara). Colok ke IsPermissionGranted / CallEnsurePermission.",
+  @SimpleProperty(description = "Helper read-only: izin mikrofon, rekam "
+      + "suara (CADANGAN — belum ada bloknya, hadir mulai v21). Colok ke "
+      + "IsPermissionGranted / CallEnsurePermission.",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionMicrophone() {
     return file.PermissionMicrophone();
@@ -1476,15 +1671,17 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     return file.PermissionReadAudio();
   }
 
-  @SimpleProperty(description = "Helper read-only: izin lokasi akurat. "
-      + "Colok ke IsPermissionGranted / CallEnsurePermission.",
+  @SimpleProperty(description = "Helper read-only: izin lokasi akurat (CADANGAN — "
+      + "belum ada bloknya, hadir mulai v21). Colok ke IsPermissionGranted / "
+      + "CallEnsurePermission.",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionLocationFine() {
     return file.PermissionLocationFine();
   }
 
-  @SimpleProperty(description = "Helper read-only: izin lokasi kasar. "
-      + "Colok ke IsPermissionGranted / CallEnsurePermission.",
+  @SimpleProperty(description = "Helper read-only: izin lokasi kasar (CADANGAN — "
+      + "belum ada bloknya, hadir mulai v21). Colok ke IsPermissionGranted / "
+      + "CallEnsurePermission.",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionLocationCoarse() {
     return file.PermissionLocationCoarse();
@@ -1504,35 +1701,35 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     file.OpenFile(path);
   }
 
-  @SimpleEvent(description = "Hasil CallSetHiddenDirectory: path + success + "
+  @SimpleEvent(description = "Hasil CallSetHiddenDirectory: success pertama, path + "
       + "message + needPermission (isi = izin yang harus diminta bila "
       + "gagal karena izin).")
-  public void DirectoryHidden(String path, boolean success, String message, String needPermission) {
-    EventDispatcher.dispatchEvent(this, "DirectoryHidden", path, success, message, needPermission);
+  public void DirectoryHidden(boolean success, String path, String message, String needPermission) {
+    EventDispatcher.dispatchEvent(this, "DirectoryHidden", success, path, message, needPermission);
   }
 
-  @SimpleEvent(description = "Hasil CallMakeNomediaFile: path + success + "
+  @SimpleEvent(description = "Hasil CallMakeNomediaFile: success pertama, path + "
       + "message + needPermission.")
-  public void NomediaFileCreated(String path, boolean success, String message, String needPermission) {
-    EventDispatcher.dispatchEvent(this, "NomediaFileCreated", path, success, message, needPermission);
+  public void NomediaFileCreated(boolean success, String path, String message, String needPermission) {
+    EventDispatcher.dispatchEvent(this, "NomediaFileCreated", success, path, message, needPermission);
   }
 
-  @SimpleEvent(description = "Hasil CallDeleteNomediaFile: path + success + "
+  @SimpleEvent(description = "Hasil CallDeleteNomediaFile: success pertama, path + "
       + "message + needPermission.")
-  public void NomediaFileDeleted(String path, boolean success, String message, String needPermission) {
-    EventDispatcher.dispatchEvent(this, "NomediaFileDeleted", path, success, message, needPermission);
+  public void NomediaFileDeleted(boolean success, String path, String message, String needPermission) {
+    EventDispatcher.dispatchEvent(this, "NomediaFileDeleted", success, path, message, needPermission);
   }
 
-  @SimpleEvent(description = "Hasil CallMakeDirectory: path + success + "
+  @SimpleEvent(description = "Hasil CallMakeDirectory: success pertama, path + "
       + "message + needPermission.")
-  public void DirectoryCreated(String path, boolean success, String message, String needPermission) {
-    EventDispatcher.dispatchEvent(this, "DirectoryCreated", path, success, message, needPermission);
+  public void DirectoryCreated(boolean success, String path, String message, String needPermission) {
+    EventDispatcher.dispatchEvent(this, "DirectoryCreated", success, path, message, needPermission);
   }
 
-  @SimpleEvent(description = "Hasil CallDeleteFile: path + success + "
+  @SimpleEvent(description = "Hasil CallDeleteFile: success pertama, path + "
       + "message + needPermission.")
-  public void FileDeleted(String path, boolean success, String message, String needPermission) {
-    EventDispatcher.dispatchEvent(this, "FileDeleted", path, success, message, needPermission);
+  public void FileDeleted(boolean success, String path, String message, String needPermission) {
+    EventDispatcher.dispatchEvent(this, "FileDeleted", success, path, message, needPermission);
   }
 
   @SimpleEvent(description = "Hasil CallDeleteList: success + total + "
@@ -1541,34 +1738,34 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     EventDispatcher.dispatchEvent(this, "FileListDeleted", success, total, deleted, message, needPermission);
   }
 
-  @SimpleEvent(description = "Hasil CallRenameFile: path (nama baru) + "
-      + "success + message + needPermission.")
-  public void FileRenamed(String path, boolean success, String message, String needPermission) {
-    EventDispatcher.dispatchEvent(this, "FileRenamed", path, success, message, needPermission);
-  }
-
-  @SimpleEvent(description = "Hasil CallRenameFolder: path (nama baru) + "
-      + "success + message + needPermission.")
-  public void FolderRenamed(String path, boolean success, String message, String needPermission) {
-    EventDispatcher.dispatchEvent(this, "FolderRenamed", path, success, message, needPermission);
-  }
-
-  @SimpleEvent(description = "Hasil CallCreateEmptyFile: path + success + "
+  @SimpleEvent(description = "Hasil CallRenameFile: success pertama, path (nama baru) + "
       + "message + needPermission.")
-  public void EmptyFileCreated(String path, boolean success, String message, String needPermission) {
-    EventDispatcher.dispatchEvent(this, "EmptyFileCreated", path, success, message, needPermission);
+  public void FileRenamed(boolean success, String path, String message, String needPermission) {
+    EventDispatcher.dispatchEvent(this, "FileRenamed", success, path, message, needPermission);
   }
 
-  @SimpleEvent(description = "Hasil CallSaveFile: path + success + "
+  @SimpleEvent(description = "Hasil CallRenameFolder: success pertama, path (nama baru) + "
       + "message + needPermission.")
-  public void FileSaved(String path, boolean success, String message, String needPermission) {
-    EventDispatcher.dispatchEvent(this, "FileSaved", path, success, message, needPermission);
+  public void FolderRenamed(boolean success, String path, String message, String needPermission) {
+    EventDispatcher.dispatchEvent(this, "FolderRenamed", success, path, message, needPermission);
   }
 
-  @SimpleEvent(description = "Hasil CallSaveBase64ToFile: path + success + "
+  @SimpleEvent(description = "Hasil CallCreateEmptyFile: success pertama, path + "
       + "message + needPermission.")
-  public void Base64FileSaved(String path, boolean success, String message, String needPermission) {
-    EventDispatcher.dispatchEvent(this, "Base64FileSaved", path, success, message, needPermission);
+  public void EmptyFileCreated(boolean success, String path, String message, String needPermission) {
+    EventDispatcher.dispatchEvent(this, "EmptyFileCreated", success, path, message, needPermission);
+  }
+
+  @SimpleEvent(description = "Hasil CallSaveFile: success pertama, path + "
+      + "message + needPermission.")
+  public void FileSaved(boolean success, String path, String message, String needPermission) {
+    EventDispatcher.dispatchEvent(this, "FileSaved", success, path, message, needPermission);
+  }
+
+  @SimpleEvent(description = "Hasil CallSaveBase64ToFile: success pertama, path + "
+      + "message + needPermission.")
+  public void Base64FileSaved(boolean success, String path, String message, String needPermission) {
+    EventDispatcher.dispatchEvent(this, "Base64FileSaved", success, path, message, needPermission);
   }
 
   @SimpleEvent(description = "Bacaan dimulai (CallReadText): persiapan "
@@ -1602,8 +1799,8 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     EventDispatcher.dispatchEvent(this, "CopyOrMoveFinished", success, path, fileName, isDuplicated);
   }
 
-  @SimpleEvent(description = "Hasil GetPermission: success + izin + pesan. "
-      + "Pasang need_permission dari event lain ke GetPermission.")
+  @SimpleEvent(description = "Hasil CallRequestPermission: success + izin + pesan. "
+      + "Pasang need_permission dari event lain ke CallRequestPermission.")
   public void GotPermission(boolean success, String permission, String message) {
     EventDispatcher.dispatchEvent(this, "GotPermission", success, permission, message);
   }
@@ -1668,30 +1865,34 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     return file.OpPermission();
   }
 
+  // ================= Image =================
+
   @SimpleFunction(description = "CALL: tampilkan gambar ber-id ke layout (Arrangement MIT / dinamis). "
       + "SATU pintu input: path file/asset, file:/// absolut, http(s) URL "
-      + "(di-cache otomatis), base64 (mentah / data:...), atau content:// — "
+      + "(diunduh sekali lalu di-cache otomatis — tampil ulang = tanpa unduh), "
+      + "base64 (mentah / data:...), atau content:// — "
       + "terdeteksi otomatis. Bisa jalan bareng (satu id = satu gambar). "
-      + "id = penanda. "
-      + "width/height angka MIT (-2 isi, -1 otomatis, positif pixel); fit true = muat "
-      + "penuh tanpa kepotong, false = penuhi tampilan. Sukses menembak "
+      + "id = penanda (minta ke CreateImageId / "
+      + "Tools_Base CreateUniqueId, reservasi otomatis diadopsi). "
+      + "width/height angka MIT: -2 = isi penuh, -1 = otomatis, positif = pixel. "
+      + "fit true = seluruh gambar muat (tidak kepotong); false = penuhi tampilan "
+      + "(bisa kepotong). Sukses menembak "
       + "ImageShown; gagal via ErrorOccurred.")
-  public void CallShowImage(AndroidViewComponent container, String source, int id,
-      int width, int height, boolean fit) {
+  public void CallShowImage(final AndroidViewComponent container, final String source, final int id, final int width, final int height, final boolean fit) {
     image.CallShowImage(container, source, id, width, height, fit);
   }
 
   @SimpleFunction(description = "SET: hapus SEMUA gambar Tools_Image dari layout itu "
       + "(komponen lain tidak diusik, id ikut dilepas). Tanpa feedback.")
-  public void SetClearImage(AndroidViewComponent container) {
+  public void SetClearImage(final AndroidViewComponent container) {
     image.SetClearImage(container);
   }
 
   @SimpleFunction(description = "SET: Aktif/matikan cubit-zoom (pinch) + geser "
-      + "gambar ber-id. Aktif memakai mode MATRIX (klik tetap jalan untuk tap "
-      + "tanpa zoom). Perubahan skala menembak ZoomChanged; baca kapan saja "
-      + "via GetZoom.")
-  public void SetZoomEnabled(int id, boolean enabled) {
+      + "gambar ber-id (mode cubit-geser; tap biasa tetap dihitung klik). "
+      + "Perubahan skala menembak ZoomChanged; baca kapan saja "
+      + "via GetZoom. Sukses diam; id tidak ada via ErrorOccurred.")
+  public void SetZoomEnabled(final int id, final boolean enabled) {
     image.SetZoomEnabled(id, enabled);
   }
 
@@ -1702,48 +1903,54 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "SET: kembalikan zoom gambar ber-id ke pas (1.0). Tanpa feedback.")
-  public void SetResetZoom(int id) {
+  public void SetResetZoom(final int id) {
     image.SetResetZoom(id);
   }
 
   @SimpleFunction(description = "SET: atur lebar + tinggi gambar ber-id. Angka "
       + "SAMA seperti blok bawaan MIT: -2 = isi penuh, -1 = otomatis, positif "
-      + "= pixel. Persen tidak didukung (dianggap otomatis). Tanpa feedback.")
-  public void SetImageSize(int id, int width, int height) {
+      + "= pixel. Persen tidak didukung blok ini; resep setengah layar: bungkus "
+      + "dalam 2 Arrangement sejajar (masing-masing -2 = terbagi rata), gambar di "
+      + "dalamnya -2. Sukses diam; id tidak ada via ErrorOccurred.")
+  public void SetImageSize(final int id, final int width, final int height) {
     image.SetImageSize(id, width, height);
   }
 
   @SimpleFunction(description = "SET: tampil/sembunyi gambar ber-id. "
-      + "false = GONE (hilang total). Tanpa feedback.")
-  public void SetImageVisible(int id, boolean visible) {
+      + "false = GONE (hilang total). Sukses diam; id tidak ada via ErrorOccurred.")
+  public void SetImageVisible(final int id, final boolean visible) {
     image.SetImageVisible(id, visible);
   }
 
   @SimpleFunction(description = "SET: mode pas gambar ber-id. fit true = "
       + "seluruh gambar muat di dalam (tidak kepotong); false = penuhi "
       + "tampilan (bisa kepotong). Mematikan zoom bila sedang aktif. "
-      + "Tanpa feedback.")
-  public void SetImageFit(int id, boolean fit) {
+      + "Sukses diam; id tidak ada via ErrorOccurred.")
+  public void SetImageFit(final int id, final boolean fit) {
     image.SetImageFit(id, fit);
   }
 
   @SimpleFunction(description = "SET: ganti gambar ber-id yang SUDAH tampil "
-      + "dengan sumber baru (satu pintu: path file/asset, file:/// absolut, "
-      + "http(s) URL, base64, atau content://). View, ukuran & mode fit TETAP; "
-      + "zoom bila aktif di-reset ke pas. Sukses menembak ImageShown; gagal via "
-      + "ErrorOccurred (gambar lama tetap tampil).")
-  public void SetImageSource(int id, String source) {
+      + "dengan sumber baru. SATU pintu input sama seperti CallShowImage: "
+      + "path file/asset, file:/// absolut, http(s) URL (di-cache otomatis), "
+      + "base64 (mentah / data:...), atau content:// — terdeteksi otomatis. "
+      + "View, ukuran & mode fit TETAP (tidak dibuat ulang); zoom bila aktif "
+      + "di-reset ke pas. Sukses menembak ImageShown; gagal via ErrorOccurred "
+      + "(gambar lama tetap tampil).")
+  public void SetImageSource(final int id, final String source) {
     image.SetImageSource(id, source);
   }
 
   @SimpleFunction(description = "Lebar gambar ber-id (angka MIT: -2 isi, "
-      + "-1 otomatis, positif pixel). -3 bila id tidak ada.")
+      + "-1 otomatis, positif pixel). -3 bila id tidak ada. PENERJEMAH SATUAN: "
+      + "untuk dipasang ke SetImageSize pakai blok ini (satuan MIT); GetImageSize "
+      + "(pixel) hanya untuk hitung-hitungan.")
   public int GetImageWidth(int id) {
     return image.GetImageWidth(id);
   }
 
   @SimpleFunction(description = "Tinggi gambar ber-id (angka MIT). "
-      + "-3 bila id tidak ada.")
+      + "-3 bila id tidak ada. Lihat penerjemah satuan di GetImageWidth.")
   public int GetImageHeight(int id) {
     return image.GetImageHeight(id);
   }
@@ -1755,53 +1962,72 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "CALL: bikin slider gambar ber-id (geser kanan-kiri "
-      + "bila horizontal=true, atas-bawah bila false — lebih dari Iago/Boson "
-      + "yang cuma kiri-kanan). paths = list gambar langsung (boleh kosong = isi "
-      + "belakangan via SetSliderImages, maks 20). Geser menembak "
+      + "bila horizontal=true, atas-bawah bila false). paths = list gambar langsung "
+      + "(path file/asset, URL http, atau base64; boleh list kosong = isi belakangan "
+      + "via SetSliderImages). TANPA batas jumlah (dulu maks 20); tiap gambar "
+      + "dikecilkan otomatis bila > 2048px, tapi puluhan gambar besar tetap makan "
+      + "RAM — sesuaikan. URL diunduh sekali lalu di-cache (tak perlu unduh ulang; "
+      + "bersihkan via SetClearImageCache). INGAT: halaman slider mulai dari 0 "
+      + "(bukan 1 seperti daftar id). Geser menembak "
       + "SliderChanged; baca kapan saja via GetSliderIndex.")
-  public void CallCreateImageSlider(AndroidViewComponent container, int id, boolean horizontal,
-      Object paths) {
+  public void CallCreateImageSlider(final AndroidViewComponent container, final int id, final boolean horizontal, final Object paths) {
     image.CallCreateImageSlider(container, id, horizontal, paths);
   }
 
   @SimpleFunction(description = "SET: isi slider ber-id dengan daftar gambar "
       + "(list teks: path file/asset, URL http, atau base64 — sama fleksibelnya "
-      + "dengan ShowImage; path dipakai bila item kosong). Maks 20 "
-      + "gambar. Gagal via ErrorOccurred.")
-  public void SetSliderImages(int sliderId, Object paths) {
+      + "dengan ShowImage; path dipakai bila item kosong). TANPA batas jumlah. "
+      + "URL diunduh sekali lalu di-cache (tak perlu unduh ulang). "
+      + "List kosong / slider tidak ada = ErrorOccurred. Gagal via ErrorOccurred.")
+  public void SetSliderImages(final int sliderId, final Object paths) {
     image.SetSliderImages(sliderId, paths);
   }
 
-  @SimpleFunction(description = "SET: geser slider ke halaman berikut (berputar). Tanpa feedback.")
-  public void SetSliderNext(int id) {
-    image.SetSliderNext(id);
+  @SimpleFunction(description = "SET: geser slider ke halaman berikut (berputar). "
+      + "Memicu SliderChanged bila halaman berubah (bukan tanpa feedback).")
+  public void SetSliderNext(final int sliderId) {
+    image.SetSliderNext(sliderId);
   }
 
-  @SimpleFunction(description = "SET: geser slider ke halaman sebelum (berputar). Tanpa feedback.")
-  public void SetSliderPrevious(int id) {
-    image.SetSliderPrevious(id);
+  @SimpleFunction(description = "SET: geser slider ke halaman sebelum (berputar). "
+      + "Memicu SliderChanged bila halaman berubah (bukan tanpa feedback).")
+  public void SetSliderPrevious(final int sliderId) {
+    image.SetSliderPrevious(sliderId);
   }
 
-  @SimpleFunction(description = "SET: lompat ke halaman index (0 = pertama). Tanpa feedback.")
-  public void SetSliderGoTo(int id, int index) {
-    image.SetSliderGoTo(id, index);
+  @SimpleFunction(description = "SET: lompat ke halaman index (INGAT: 0 = pertama, "
+      + "bukan 1). Memicu SliderChanged bila halaman berubah.")
+  public void SetSliderGoTo(final int sliderId, final int index) {
+    image.SetSliderGoTo(sliderId, index);
   }
 
   @SimpleFunction(description = "SET: Auto-putar slider tiap intervalMs "
-      + "(0 = mati).")
-  public void SetSliderAutoPlay(int id, long intervalMs) {
-    image.SetSliderAutoPlay(id, intervalMs);
+      + "(0 = mati). Tiap putaran memicu SliderChanged.")
+  public void SetSliderAutoPlay(final int sliderId, final long intervalMs) {
+    image.SetSliderAutoPlay(sliderId, intervalMs);
   }
 
   @SimpleFunction(description = "Fallback polling untuk event SliderChanged: "
-      + "index halaman aktif (0 = pertama).")
-  public int GetSliderIndex(int id) {
-    return image.GetSliderIndex(id);
+      + "index halaman aktif (INGAT: 0 = pertama, bukan 1). -1 bila slider tidak ada.")
+  public int GetSliderIndex(int sliderId) {
+    return image.GetSliderIndex(sliderId);
   }
 
-  @SimpleFunction(description = "Jumlah halaman slider ber-id.")
-  public int GetSliderCount(int id) {
-    return image.GetSliderCount(id);
+  @SimpleFunction(description = "Jumlah halaman slider ber-id (0 bila slider tidak ada).")
+  public int GetSliderCount(int sliderId) {
+    return image.GetSliderCount(sliderId);
+  }
+
+  @SimpleFunction(description = "True bila autoplay slider ber-id sedang jalan "
+      + "(interval > 0 dan belum dimatikan).")
+  public boolean IsSliderAutoPlay(int sliderId) {
+    return image.IsSliderAutoPlay(sliderId);
+  }
+
+  @SimpleFunction(description = "Interval autoplay slider ber-id (milidetik; "
+      + "0 = mati / slider tidak ada).")
+  public long GetSliderInterval(int sliderId) {
+    return image.GetSliderInterval(sliderId);
   }
 
   @SimpleFunction(description = "Buat id gambar unik baru (Number, siap pakai ke CallShowImage).")
@@ -1809,10 +2035,104 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     return image.CreateImageId();
   }
 
+  @SimpleFunction(description = "Semua id gambar yang tampil (URUT PEMBUATAN, "
+      + "index 1 = pertama dibuat). Beda dengan GetActiveImageIds: yang ini HANYA "
+      + "yang sudah tampil; Aktif = termasuk yang masih loading.")
+  public List<Integer> GetImageIds() {
+    return image.GetImageIds();
+  }
+
+  @SimpleFunction(description = "Jumlah gambar ber-id yang sedang tampil "
+      + "(0 bila tidak ada).")
+  public int GetImageCount() {
+    return image.GetImageCount();
+  }
+
+  @SimpleFunction(description = "Id gambar yang sedang tampil/loading (URUT PEMBUATAN). "
+      + "Beda dengan GetImageIds: yang ini termasuk yang masih loading; Ids = "
+      + "hanya yang sudah tampil.")
+  public List<Integer> GetActiveImageIds() {
+    return image.GetActiveImageIds();
+  }
+
+  @SimpleFunction(description = "Id gambar yang terakhir dibuat/di-start. -1 bila kosong.")
+  public int CurrentImageId() {
+    return image.CurrentImageId();
+  }
+
+  @SimpleFunction(description = "Id index 1 = PERTAMA DIBUAT. -1 bila kosong.")
+  public int GetFirstImageId() {
+    return image.GetFirstImageId();
+  }
+
+  @SimpleFunction(description = "Id TERAKHIR DIBUAT. -1 bila kosong.")
+  public int GetLastImageId() {
+    return image.GetLastImageId();
+  }
+
+  @SimpleFunction(description = "Id yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
+  public int GetPreviousImageId(int id) {
+    return image.GetPreviousImageId(id);
+  }
+
+  @SimpleFunction(description = "True bila id gambar ini sedang tampil/loading.")
+  public boolean IsImageIdActive(int id) {
+    return image.IsImageIdActive(id);
+  }
+
+  @SimpleFunction(description = "Hapus id gambar: lepas gambar dari layout + lepas id "
+      + "(otomatis beres-beres).")
+  public void RemoveImageId(int id) {
+    image.RemoveImageId(id);
+  }
+
   @SimpleFunction(description = "Buat id slider unik baru (Number, siap pakai "
       + "ke CallCreateImageSlider).")
   public int CreateSliderId() {
     return image.CreateSliderId();
+  }
+
+  @SimpleFunction(description = "Semua id slider (URUT PEMBUATAN, "
+      + "index 1 = pertama dibuat).")
+  public List<Integer> GetSliderIds() {
+    return image.GetSliderIds();
+  }
+
+  @SimpleFunction(description = "Id slider yang aktif (URUT PEMBUATAN).")
+  public List<Integer> GetActiveSliderIds() {
+    return image.GetActiveSliderIds();
+  }
+
+  @SimpleFunction(description = "Id slider terakhir dibuat. -1 bila kosong.")
+  public int CurrentSliderId() {
+    return image.CurrentSliderId();
+  }
+
+  @SimpleFunction(description = "Id index 1 = PERTAMA DIBUAT. -1 bila kosong.")
+  public int GetFirstSliderId() {
+    return image.GetFirstSliderId();
+  }
+
+  @SimpleFunction(description = "Id TERAKHIR DIBUAT. -1 bila kosong.")
+  public int GetLastSliderId() {
+    return image.GetLastSliderId();
+  }
+
+  @SimpleFunction(description = "Id yang dibuat TEPAT SEBELUM id ini. "
+      + "-1 bila tidak ada.")
+  public int GetPreviousSliderId(int id) {
+    return image.GetPreviousSliderId(id);
+  }
+
+  @SimpleFunction(description = "True bila id slider ini masih ada.")
+  public boolean IsSliderIdActive(int id) {
+    return image.IsSliderIdActive(id);
+  }
+
+  @SimpleFunction(description = "Hapus slider: lepas dari layout + lepas id "
+      + "(otomatis beres-beres, autoplay mati).")
+  public void RemoveSliderId(int sliderId) {
+    image.RemoveSliderId(sliderId);
   }
 
   @SimpleFunction(description = "Fallback polling untuk event "
@@ -1824,18 +2144,33 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
 
   @SimpleFunction(description = "CALL: decode base64 jadi gambar di cache. Path hasil langsung bisa "
       + "dipasang ke Image.Picture. Hasil lewat AfterPictureBase64Ready. "
-      + "Satu proses per saat.")
-  public void CallBase64ToPicture(String base64) {
+      + "Satu proses per saat: panggilan kedua saat sibuk = DITOLAK "
+      + "(AfterPictureBase64Ready success=false + ErrorOccurred).")
+  public void CallBase64ToPicture(final String base64) {
     image.CallBase64ToPicture(base64);
   }
 
-  @SimpleFunction(description = "Lebar dan tinggi gambar (pixel). Kembali: list [lebar, tinggi]. "
-      + "[0, 0] bila bukan gambar / tidak ada.")
+  @SimpleFunction(description = "Lebar dan tinggi gambar (pixel). SATU pintu: "
+      + "path file/asset, http(s) URL (pakai cache bila pernah diunduh), base64, "
+      + "atau content:// — terdeteksi "
+      + "otomatis. Kembali: list [lebar, tinggi] (index 1 = lebar, 2 = tinggi). "
+      + "[0, 0] bila bukan gambar / tidak ada. Pixel hanya untuk hitung-hitungan; "
+      + "untuk dipasang ke SetImageSize pakai GetImageWidth/Height (satuan MIT).")
   public List<Integer> GetImageSize(String path) {
     return image.GetImageSize(path);
   }
 
-  @SimpleEvent(description = "Hasil CallShowImage: gambar ber-id tampil. id + path tampil.")
+  @SimpleFunction(description = "SET: hapus SEMUA cache unduhan URL gambar "
+      + "(hemat unduh-ulang; maks 50MB, terlama terhapus otomatis). Pakai ini "
+      + "bila gambar URL berubah tapi alamatnya sama (paksa unduh baru). "
+      + "Sukses diam; gagal via ErrorOccurred.")
+  public void SetClearImageCache() {
+    image.SetClearImageCache();
+  }
+
+  @SimpleEvent(description = "Hasil CallShowImage/SetImageSource: gambar ber-id tampil. "
+      + "id + path YANG JADI (URL/base64/content -> file cache; asset/file -> path itu; "
+      + "penting untuk simpan/bagi gambar).")
   public void ImageShown(int id, String path) {
     EventDispatcher.dispatchEvent(this, "ImageShown", id, path);
   }
@@ -1862,17 +2197,19 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   }
 
   @SimpleEvent(description = "Halaman slider pindah: id slider + index "
-      + "(0 = pertama). Fallback: GetSliderIndex.")
+      + "(INGAT: 0 = pertama, bukan 1). Dipicu geser manual, GoTo/Next/Previous, "
+      + "dan autoplay. Fallback: GetSliderIndex.")
   public void SliderChanged(int sliderId, int index) {
     EventDispatcher.dispatchEvent(this, "SliderChanged", sliderId, index);
   }
 
-  @SimpleEvent(description = "Halaman slider di-klik: id slider + index.")
+  @SimpleEvent(description = "Halaman slider di-klik: id slider + index (0 = pertama).")
   public void SliderClicked(int sliderId, int index) {
     EventDispatcher.dispatchEvent(this, "SliderClicked", sliderId, index);
   }
 
-  @SimpleEvent(description = "Proses base64-gambar dimulai.")
+  @SimpleEvent(description = "Proses base64-gambar dimulai (tanpa parameter "
+      + "karena antrean serial: satu proses per saat, id tidak perlu).")
   public void PictureStarted() {
     EventDispatcher.dispatchEvent(this, "PictureStarted");
   }
@@ -1883,17 +2220,21 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     EventDispatcher.dispatchEvent(this, "AfterPictureBase64Ready", success, path, fileName, message);
   }
 
-  @SimpleProperty(description = "Nama operasi Slider (untuk if di ErrorOccurred).",
+  @SimpleProperty(description = "Nama operasi Slider (untuk if di ErrorOccurred: "
+      + "cth if component = OpSlider berarti error slider).",
       category = PropertyCategory.BEHAVIOR)
   public String OpSlider() {
     return image.OpSlider();
   }
 
-  @SimpleProperty(description = "Nama operasi Image (untuk if di ErrorOccurred).",
+  @SimpleProperty(description = "Nama operasi Image (untuk if di ErrorOccurred: "
+      + "cth if component = OpImage berarti error gambar).",
       category = PropertyCategory.BEHAVIOR)
   public String OpImage() {
     return image.OpImage();
   }
+
+  // ================= Layout =================
 
   @SimpleFunction(description = "CALL: Bikin VerticalArrangement dinamis ber-id di "
       + "dalam layout induk. width/height angka MIT (-2 isi, -1 otomatis, "
@@ -1905,29 +2246,34 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
 
   @SimpleFunction(description = "CALL: Bikin HorizontalArrangement dinamis ber-id di "
       + "dalam layout induk. width/height angka MIT (-2 isi, -1 otomatis, "
-      + "positif pixel); visible false = GONE.")
+      + "positif pixel); visible false = GONE. Sukses menembak LayoutCreated; "
+      + "gagal via ErrorOccurred.")
   public void CallCreateHorizontalLayout(AndroidViewComponent container, int id, int width, int height, boolean visible, int backgroundColor) {
     layout.CallCreateHorizontalLayout(container, id, width, height, visible, backgroundColor);
   }
 
   @SimpleFunction(description = "CALL: Bikin VerticalScrollArrangement dinamis "
       + "ber-id (bisa scroll atas-bawah) di dalam layout induk. width/height "
-      + "angka MIT; visible false = GONE.")
+      + "angka MIT; visible false = GONE. Sukses menembak LayoutCreated; gagal "
+      + "via ErrorOccurred.")
   public void CallCreateVerticalScrollLayout(AndroidViewComponent container, int id, int width, int height, boolean visible, int backgroundColor) {
     layout.CallCreateVerticalScrollLayout(container, id, width, height, visible, backgroundColor);
   }
 
   @SimpleFunction(description = "CALL: Bikin HorizontalScrollArrangement dinamis "
       + "ber-id (bisa scroll kiri-kanan) di dalam layout induk. width/height "
-      + "angka MIT; visible false = GONE.")
+      + "angka MIT; visible false = GONE. Sukses menembak LayoutCreated; gagal "
+      + "via ErrorOccurred.")
   public void CallCreateHorizontalScrollLayout(AndroidViewComponent container, int id, int width, int height, boolean visible, int backgroundColor) {
     layout.CallCreateHorizontalScrollLayout(container, id, width, height, visible, backgroundColor);
   }
 
-  @SimpleFunction(description = "Ambil layout dinamis ber-id (untuk dipakai "
-      + "sebagai wadah blok lain). null bila tidak ada.")
-  public Object GetLayoutComponent(int id) {
-    return layout.GetLayoutComponent(id);
+  @SimpleFunction(description = "Ambil layout dinamis ber-id TANPA cek tipe "
+      + "(untuk dibaca/dipegang; bebas). null bila tidak ada. Kontras: "
+      + "GetLayoutAs(type, id) = AMAN (tipe wajib cocok; untuk dicolok ke soket "
+      + "container yang menuntut tipe). Pakai As bila dicolok ke soket container.")
+  public Object GetLayout(int id) {
+    return layout.GetLayout(id);
   }
 
   @SimpleFunction(description = "Buat id layout unik baru (Number, siap pakai).")
@@ -1935,34 +2281,95 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     return layout.CreateLayoutId();
   }
 
+  @SimpleFunction(description = "Semua id layout (URUT PEMBUATAN, "
+      + "index 1 = pertama dibuat).")
+  public List<Integer> GetLayoutIds() {
+    return layout.GetLayoutIds();
+  }
+
+  @SimpleFunction(description = "Id layout yang aktif (URUT PEMBUATAN).")
+  public List<Integer> GetActiveLayoutIds() {
+    return layout.GetActiveLayoutIds();
+  }
+
+  @SimpleFunction(description = "Id layout terakhir dibuat. -1 bila kosong.")
+  public int CurrentLayoutId() {
+    return layout.CurrentLayoutId();
+  }
+
+  @SimpleFunction(description = "Id index 1 = PERTAMA DIBUAT. -1 bila kosong.")
+  public int GetFirstLayoutId() {
+    return layout.GetFirstLayoutId();
+  }
+
+  @SimpleFunction(description = "Id TERAKHIR DIBUAT. -1 bila kosong.")
+  public int GetLastLayoutId() {
+    return layout.GetLastLayoutId();
+  }
+
+  @SimpleFunction(description = "Id yang dibuat TEPAT SEBELUM id ini. "
+      + "-1 bila tidak ada.")
+  public int GetPreviousLayoutId(int id) {
+    return layout.GetPreviousLayoutId(id);
+  }
+
+  @SimpleFunction(description = "True bila id layout ini masih ada.")
+  public boolean IsLayoutIdActive(int id) {
+    return layout.IsLayoutIdActive(id);
+  }
+
+  @SimpleFunction(description = "Hapus layout dinamis: lepas dari induk + "
+      + "lepas id (isi ikut hilang dari layar). CASCADING: isi dinamis di "
+      + "dalamnya (Core/Image/Sheet/nested Tools_Layout) ikut dilepas id-nya. "
+      + "Sukses menembak LayoutRemoved; id tidak ada = diam (tanpa event).")
+  public void RemoveLayoutId(int id) {
+    layout.RemoveLayoutId(id);
+  }
+
   @SimpleFunction(description = "SET: Hapus SEMUA layout dinamis Tools_Layout "
-      + "(id ikut dilepas).")
+      + "(id ikut dilepas; cascading seperti RemoveLayoutId). Menembak "
+      + "LayoutRemoved SATU PER SATU id.")
   public void SetClearLayouts() {
     layout.SetClearLayouts();
   }
 
+  @SimpleFunction(description = "SET: Hapus HANYA layout dinamis yang ada di "
+      + "dalam container ini (wadah luar/arrangement biasa boleh; isi dinamis "
+      + "di dalamnya cascading seperti RemoveLayoutId). Menembak LayoutRemoved "
+      + "satu per satu id. Kontras: SetClearLayouts = sapu SEMUA.")
+  public void SetClearLayoutsIn(AndroidViewComponent container) {
+    layout.SetClearLayoutsIn(container);
+  }
+
   @SimpleFunction(description = "SET: tampil/sembunyi layout dinamis ber-id. "
-      + "layout = colok TypeVertical/TypeHorizontal/TypeVerticalScroll/"
+      + "type = colok TypeVertical/TypeHorizontal/TypeVerticalScroll/"
       + "TypeHorizontalScroll (WAJIB cocok dengan tipe aslinya, biar tidak "
       + "ketuker); id = id layout; visible false = GONE (hilang total, "
       + "ruang ikut ketutup). Tanpa feedback; cek dulu pakai IsLayoutExists "
       + "bila ragu.")
-  public void SetLayoutVisible(String layout, int id, boolean visible) {
-    this.layout.SetLayoutVisible(layout, id, visible);
+  public void SetLayoutVisible(String type, int id, boolean visible) {
+    layout.SetLayoutVisible(type, id, visible);
   }
 
   @SimpleFunction(description = "True bila layout dinamis ber-id ini ADA dan "
-      + "tipenya PERSIS sama dengan layout yang diminta (colok TypeVertical/"
+      + "tipenya PERSIS sama dengan type yang diminta (colok TypeVertical/"
       + "dll). False bila id tidak ada ATAU tipe beda.")
-  public boolean IsLayoutExists(String layout, int id) {
-    return this.layout.IsLayoutExists(layout, id);
+  public boolean IsLayoutExists(String type, int id) {
+    return layout.IsLayoutExists(type, id);
   }
 
   @SimpleFunction(description = "True bila layout dinamis ber-id ini ADA, "
       + "tipenya cocok (seperti IsLayoutExists), DAN sedang tampil (visible). "
-      + "False bila tidak ada / tipe beda / sedang GONE.")
-  public boolean IsLayoutVisible(String layout, int id) {
-    return this.layout.IsLayoutVisible(layout, id);
+      + "False bila tidak ada / tipe beda / sedang GONE. Kebalikan: IsLayoutGone.")
+  public boolean IsLayoutVisible(String type, int id) {
+    return layout.IsLayoutVisible(type, id);
+  }
+
+  @SimpleFunction(description = "True bila layout dinamis ber-id ini sedang GONE/"
+      + "sembunyi. Kebalikan IsLayoutVisible: true juga bila id tidak ada / tipe "
+      + "beda (ragu? cek IsLayoutExists dulu).")
+  public boolean IsLayoutGone(String type, int id) {
+    return layout.IsLayoutGone(type, id);
   }
 
   @SimpleFunction(description = "Tipe layout ber-id (\"VerticalArrangement\" "
@@ -1973,67 +2380,72 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     return layout.GetLayoutType(id);
   }
 
-  @SimpleProperty(description = "Pembanding read-only: tipe VerticalArrangement.",
+  @SimpleProperty(description = "BLOK KUNING, pembanding read-only: tipe "
+      + "VerticalArrangement (colok ke soket type).",
       category = PropertyCategory.BEHAVIOR)
   public String TypeVertical() {
     return layout.TypeVertical();
   }
 
-  @SimpleProperty(description = "Pembanding read-only: tipe HorizontalArrangement.",
+  @SimpleProperty(description = "BLOK KUNING, pembanding read-only: tipe "
+      + "HorizontalArrangement (colok ke soket type).",
       category = PropertyCategory.BEHAVIOR)
   public String TypeHorizontal() {
     return layout.TypeHorizontal();
   }
 
-  @SimpleProperty(description = "Pembanding read-only: tipe VerticalScrollArrangement.",
+  @SimpleProperty(description = "BLOK KUNING, pembanding read-only: tipe "
+      + "VerticalScrollArrangement (colok ke soket type).",
       category = PropertyCategory.BEHAVIOR)
   public String TypeVerticalScroll() {
     return layout.TypeVerticalScroll();
   }
 
-  @SimpleProperty(description = "Pembanding read-only: tipe HorizontalScrollArrangement.",
+  @SimpleProperty(description = "BLOK KUNING, pembanding read-only: tipe "
+      + "HorizontalScrollArrangement (colok ke soket type).",
       category = PropertyCategory.BEHAVIOR)
   public String TypeHorizontalScroll() {
     return layout.TypeHorizontalScroll();
   }
 
   @SimpleFunction(description = "Ambil layout dinamis ber-id yang tipenya PERSIS "
-      + "sama dengan layout yang diminta (untuk dicolok ke soket container, "
-      + "mis. Create button). null bila id tidak ada ATAU tipe beda.")
-  public Object GetLayout(String layout, int id) {
-    return this.layout.GetLayout(layout, id);
+      + "sama dengan type yang diminta (colok TypeVertical/dll; untuk dicolok ke "
+      + "soket container, mis. Create button). AMAN vs GetLayout(id) yang bebas. "
+      + "null bila id tidak ada ATAU tipe beda.")
+  public Object GetLayoutAs(String type, int id) {
+    return layout.GetLayoutAs(type, id);
   }
 
   @SimpleFunction(description = "SET: atur lebar + tinggi layout dinamis ber-id "
       + "(tipe wajib cocok). Angka SAMA seperti blok bawaan MIT: -2 = isi "
       + "penuh (fill parent), -1 = otomatis, positif = pixel. Tanpa feedback.")
-  public void SetLayoutSize(String layout, int id, int width, int height) {
-    this.layout.SetLayoutSize(layout, id, width, height);
+  public void SetLayoutSize(String type, int id, int width, int height) {
+    layout.SetLayoutSize(type, id, width, height);
   }
 
   @SimpleFunction(description = "SET: warna latar layout dinamis ber-id (tipe "
       + "wajib cocok). Colok blok warna MIT. Tanpa feedback.")
-  public void SetLayoutBackgroundColor(String layout, int id, int color) {
-    this.layout.SetLayoutBackgroundColor(layout, id, color);
+  public void SetLayoutBackgroundColor(String type, int id, int color) {
+    layout.SetLayoutBackgroundColor(type, id, color);
   }
 
   @SimpleFunction(description = "SET: perataan isi layout dinamis ber-id (tipe "
       + "wajib cocok). Angka SAMA seperti blok bawaan MIT: horizontal 1=kiri, "
       + "2=tengah, 3=kanan; vertikal 1=atas, 2=tengah, 3=bawah. Tanpa feedback.")
-  public void SetLayoutAlignment(String layout, int id, int horizontal, int vertical) {
-    this.layout.SetLayoutAlignment(layout, id, horizontal, vertical);
+  public void SetLayoutAlignment(String type, int id, int horizontal, int vertical) {
+    layout.SetLayoutAlignment(type, id, horizontal, vertical);
   }
 
   @SimpleFunction(description = "Lebar layout dinamis ber-id (angka MIT: -2 isi, "
       + "-1 otomatis, positif pixel). -3 bila id tidak ada / tipe beda.")
-  public int GetLayoutWidth(String layout, int id) {
-    return this.layout.GetLayoutWidth(layout, id);
+  public int GetLayoutWidth(String type, int id) {
+    return layout.GetLayoutWidth(type, id);
   }
 
   @SimpleFunction(description = "Tinggi layout dinamis ber-id (angka MIT). "
       + "-3 bila id tidak ada / tipe beda.")
-  public int GetLayoutHeight(String layout, int id) {
-    return this.layout.GetLayoutHeight(layout, id);
+  public int GetLayoutHeight(String type, int id) {
+    return layout.GetLayoutHeight(type, id);
   }
 
   @SimpleEvent(description = "Layout dinamis jadi: id + nama tipe.")
@@ -2041,48 +2453,86 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     EventDispatcher.dispatchEvent(this, "LayoutCreated", id, typeName);
   }
 
+  @SimpleEvent(description = "Layout dinamis dilepas (RemoveLayoutId/ "
+      + "SetClearLayouts/SetClearLayoutsIn): id yang hilang.")
+  public void LayoutRemoved(int id) {
+    EventDispatcher.dispatchEvent(this, "LayoutRemoved", id);
+  }
+
   @SimpleProperty(description = "Nama operasi Layout (untuk if di "
-      + "ErrorOccurred).",
+      + "ErrorOccurred: cth if component = OpLayout berarti error Layout).",
       category = PropertyCategory.BEHAVIOR)
   public String OpLayout() {
     return layout.OpLayout();
   }
 
-  @SimpleFunction(description = "Daftarkan bottom-sheet ber-id. content = "
-      + "Arrangement (dipindah ke dialog saat tampil, dikembalikan saat "
-      + "tutup). gravity angka: 80=bawah, 48=atas, 17=tengah, 3=kiri, 5=kanan. "
-      + "widthDp/heightDp <= 0 = menyesuaikan (lebar penuh bila gravity "
-      + "atas/bawah). dimPercent 0-100 (kegelapan latar). animationType teks: "
-      + "pakai properti SlideFromBottom/SlideFromTop/SlideFromLeft/"
-      + "SlideFromRight/FadeAnim/NoAnim. animationDurationMs 0 = 250. "
-      + "cancelable = bisa tutup via tombol back/luar. swipeToDismiss = geser "
-      + "ke arah tutup untuk menutup. Sukses tanpa event; gagal via "
+  // ================= Sheet =================
+
+  @SimpleFunction(description = "Daftarkan bottom-sheet ber-id dengan gaya BAKU "
+      + "(bawah, lebar penuh, dim 50, geser-bawah 250ms, bisa tutup back/luar, "
+      + "geser-tutup aktif). content = Arrangement (dipindah ke dialog saat "
+      + "tampil, dikembalikan saat tutup). Gaya cukup = langsung CallShowSheet; "
+      + "mau gaya lain = SetSheetStyle dulu. Sukses tanpa event; gagal via "
       + "ErrorOccurred.")
-  public void RegisterSheet(int id, AndroidViewComponent content, int gravity, int widthDp, int heightDp, int dimPercent, String animationType, int animationDurationMs, boolean cancelable, boolean swipeToDismiss) {
-    sheet.RegisterSheet(id, content, gravity, widthDp, heightDp, dimPercent, animationType, animationDurationMs, cancelable, swipeToDismiss);
+  public void RegisterSheet(final int id, final AndroidViewComponent content) {
+    sheet.RegisterSheet(id, content);
+  }
+
+  @SimpleFunction(description = "SET: ubah gaya sheet TERDAFTAR (boleh sebelum/sesudah "
+      + "tampil; langsung kelihatan bila sedang tampil). gravity angka: 80=bawah, "
+      + "48=atas, 17=tengah, 3=kiri, 5=kanan. widthDp/heightDp <= 0 = menyesuaikan "
+      + "(lebar penuh bila gravity atas/bawah). dimPercent 0-100 (kegelapan latar). "
+      + "animationType teks: pakai blok kuning SlideFromBottom/SlideFromTop/"
+      + "SlideFromLeft/SlideFromRight/FadeAnim/NoAnim "
+      + "(salah ketik = slide-bawah). animationDurationMs 0 = 250. "
+      + "cancelable = bisa tutup via tombol back/luar. swipeToDismiss = geser "
+      + "ke arah tutup untuk menutup. Sukses diam; id belum register via "
+      + "ErrorOccurred.")
+  public void SetSheetStyle(final int id, final int gravity, final int widthDp, final int heightDp, final int dimPercent, final String animationType, final int animationDurationMs, final boolean cancelable, final boolean swipeToDismiss) {
+    sheet.SetSheetStyle(id, gravity, widthDp, heightDp, dimPercent, animationType, animationDurationMs, cancelable, swipeToDismiss);
+  }
+
+  @SimpleFunction(description = "CALL: tampilkan sheet SEDERHANA dari Arrangement "
+      + "dalam 1 blok (tanpa Register dulu): gaya baku bawah + full-width + "
+      + "dim 50 + geser-bawah, id dibuat otomatis. Kembali: id sheet (tampil via "
+      + "event SheetShown; tutup via CallDismissSheet; -1 bila gagal).")
+  public int ShowSimpleSheet(final AndroidViewComponent content) {
+    return sheet.ShowSimpleSheet(content);
   }
 
   @SimpleFunction(description = "CALL: Tampilkan sheet ber-id (animasi geser naik "
       + "otomatis). Hasil lewat SheetShown.")
-  public void CallShowSheet(int id) {
+  public void CallShowSheet(final int id) {
     sheet.CallShowSheet(id);
   }
 
   @SimpleFunction(description = "CALL: Tutup sheet ber-id (animasi keluar). "
-      + "Hasil lewat SheetHidden (registrasi tetap, bisa CallShowSheet lagi).")
-  public void CallDismissSheet(int id) {
+      + "Hasil lewat SheetHidden. Dismiss = tutup TAPI registrasi tetap (bisa "
+      + "CallShowSheet lagi); beda dengan RemoveSheetId (tutup + id dibuang) dan "
+      + "SetClearSheets (buang semua).")
+  public void CallDismissSheet(final int id) {
     sheet.CallDismissSheet(id);
   }
 
-  @SimpleFunction(description = "True bila sheet ber-id sedang tampil.")
+  @SimpleFunction(description = "True bila sheet ber-id sedang tampil. Kontras: "
+      + "baru Register tapi belum Show -> IsSheetIdActive=true, IsSheetShowing=false.")
   public boolean IsSheetShowing(int id) {
     return sheet.IsSheetShowing(id);
   }
 
-  @SimpleFunction(description = "SET: Tampilkan toast (pesan singkat bawah layar). "
-      + "longDuration = tampil lebih lama. Gagal via ErrorOccurred.")
-  public void SetShowToast(String message, boolean longDuration) {
-    sheet.SetShowToast(message, longDuration);
+  @SimpleFunction(description = "Hapus sheet ber-id: tutup diam-diam (tanpa "
+      + "SheetHidden), kembalikan konten ke layout asal, lepas id. Remove = tutup "
+      + "+ id dibuang; beda dengan CallDismissSheet (registrasi tetap) dan "
+      + "SetClearSheets (buang semua).")
+  public void RemoveSheetId(final int id) {
+    sheet.RemoveSheetId(id);
+  }
+
+  @SimpleFunction(description = "CALL: tampilkan toast (pesan singkat bawah layar). "
+      + "longDuration = tampil lebih lama. Sukses menembak ToastShown; gagal via "
+      + "ErrorOccurred. Toast TIDAK butuh izin notifikasi.")
+  public void CallShowToast(final String message, final boolean longDuration) {
+    sheet.CallShowToast(message, longDuration);
   }
 
   @SimpleFunction(description = "SET: Minta izin notifikasi (Android 13+). "
@@ -2091,11 +2541,19 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     sheet.SetRequestNotificationPermission();
   }
 
-  @SimpleFunction(description = "SET: Tampilkan notifikasi bar status: id (angka "
-      + "unik, mis. 1), judul, isi. Tap notifikasi membuka aplikasi. "
-      + "Gagal (mis. izin belum ada) via ErrorOccurred.")
-  public void SetShowNotification(int id, String title, String text) {
-    sheet.SetShowNotification(id, title, text);
+  @SimpleFunction(description = "Buat id notifikasi unik baru (Number; minta ke sini, "
+      + "JANGAN angka manual — id dobel = notifikasi lama tertimpa).")
+  public int CreateNotificationId() {
+    return sheet.CreateNotificationId();
+  }
+
+  @SimpleFunction(description = "CALL: tampilkan notifikasi bar status: id (minta ke "
+      + "CreateNotificationId; manual boleh tapi dobel = tertimpa), judul, isi. "
+      + "Tap notifikasi membuka aplikasi. Hanya NOTIFIKASI yang butuh izin "
+      + "POST_NOTIFICATIONS (toast/sheet tidak). Sukses menembak NotificationShown; "
+      + "gagal (mis. izin belum ada) via ErrorOccurred.")
+  public void CallSetNotification(final int id, final String title, final String text) {
+    sheet.CallSetNotification(id, title, text);
   }
 
   @SimpleFunction(description = "SET: Hapus notifikasi ber-id.")
@@ -2145,13 +2603,52 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "Buat id sheet unik baru (Number, siap pakai "
-      + "ke RegisterSheet).")
+      + "ke RegisterSheet). 90% kasus cukup 2 blok id: CreateSheetId + RemoveSheetId.")
   public int CreateSheetId() {
     return sheet.CreateSheetId();
   }
 
+  @SimpleFunction(description = "Semua id sheet (URUT PEMBUATAN, "
+      + "index 1 = pertama dibuat).")
+  public List<Integer> GetSheetIds() {
+    return sheet.GetSheetIds();
+  }
+
+  @SimpleFunction(description = "Id sheet yang aktif (URUT PEMBUATAN).")
+  public List<Integer> GetActiveSheetIds() {
+    return sheet.GetActiveSheetIds();
+  }
+
+  @SimpleFunction(description = "Id sheet terakhir dibuat. -1 bila kosong.")
+  public int CurrentSheetId() {
+    return sheet.CurrentSheetId();
+  }
+
+  @SimpleFunction(description = "Id index 1 = PERTAMA DIBUAT. -1 bila kosong.")
+  public int GetFirstSheetId() {
+    return sheet.GetFirstSheetId();
+  }
+
+  @SimpleFunction(description = "Id TERAKHIR DIBUAT. -1 bila kosong.")
+  public int GetLastSheetId() {
+    return sheet.GetLastSheetId();
+  }
+
+  @SimpleFunction(description = "Id yang dibuat TEPAT SEBELUM id ini. "
+      + "-1 bila tidak ada.")
+  public int GetPreviousSheetId(int id) {
+    return sheet.GetPreviousSheetId(id);
+  }
+
+  @SimpleFunction(description = "True bila id sheet ini masih terdaftar. Kontras: "
+      + "baru Register tapi belum Show -> Active=true, Showing=false.")
+  public boolean IsSheetIdActive(int id) {
+    return sheet.IsSheetIdActive(id);
+  }
+
   @SimpleFunction(description = "SET: Hapus SEMUA sheet Tools_Sheet (tutup "
-      + "diam-diam, konten dikembalikan, id dilepas).")
+      + "diam-diam, konten dikembalikan, id dilepas). Clear = buang semua; beda "
+      + "dengan CallDismissSheet (registrasi tetap) dan RemoveSheetId (satu id).")
   public void SetClearSheets() {
     sheet.SetClearSheets();
   }
@@ -2162,31 +2659,43 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     EventDispatcher.dispatchEvent(this, "SheetHidden", id);
   }
 
-  @SimpleEvent(description = "Sheet ber-id tampil (hasil CallShowSheet): id.")
+  @SimpleEvent(description = "Sheet ber-id tampil (hasil CallShowSheet/ShowSimpleSheet): id.")
   public void SheetShown(int id) {
     EventDispatcher.dispatchEvent(this, "SheetShown", id);
   }
 
+  @SimpleEvent(description = "Toast tampil (hasil CallShowToast).")
+  public void ToastShown() {
+    EventDispatcher.dispatchEvent(this, "ToastShown");
+  }
+
+  @SimpleEvent(description = "Notifikasi tampil (hasil CallSetNotification): id.")
+  public void NotificationShown(int id) {
+    EventDispatcher.dispatchEvent(this, "NotificationShown", id);
+  }
+
   @SimpleProperty(description = "Nama operasi Sheet (untuk if di "
-      + "ErrorOccurred).",
+      + "ErrorOccurred: cth if component = OpSheet berarti error sheet).",
       category = PropertyCategory.BEHAVIOR)
   public String OpSheet() {
     return sheet.OpSheet();
   }
 
   @SimpleProperty(description = "Nama operasi Toast (untuk if di "
-      + "ErrorOccurred).",
+      + "ErrorOccurred: cth if component = OpToast berarti error toast).",
       category = PropertyCategory.BEHAVIOR)
   public String OpToast() {
     return sheet.OpToast();
   }
 
   @SimpleProperty(description = "Nama operasi Notification (untuk if di "
-      + "ErrorOccurred).",
+      + "ErrorOccurred: cth if component = OpNotification berarti error notifikasi).",
       category = PropertyCategory.BEHAVIOR)
   public String OpNotification() {
     return sheet.OpNotification();
   }
+
+  // ================= Style =================
 
   @SimpleFunction(description = "SET: Atur sudut membulat (radius, dp). Background "
       + "bawaan diganti.")
@@ -2200,12 +2709,66 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     style.SetBorder(comp, color, widthDp);
   }
 
-  @SimpleFunction(description = "SET: Atur gradien banyak warna (list warna) + arah "
-      + "angka: 0=atas-bawah, 1=kananATAS-kiriBAWAH, 2=kanan-kiri, 3=kananBAWAH-"
-      + "kiriATAS, 4=bawah-atas, 5=kiriBAWAH-kananATAS, 6=kiri-kanan, "
-      + "7=kiriATAS-kananBAWAH. Background bawaan diganti.")
+  @SimpleFunction(description = "SET: Atur gradien banyak warna (list warna, "
+      + "minimal 2). arah = colok OrientationTopBottom/dll (blok kuning); "
+      + "angka 0-7 = cara lama (0=atas-bawah, 1=kananATAS-kiriBAWAH, "
+      + "2=kanan-kiri, 3=kananBAWAH-kiriATAS, 4=bawah-atas, 5=kiriBAWAH-"
+      + "kananATAS, 6=kiri-kanan, 7=kiriATAS-kananBAWAH). Background bawaan "
+      + "diganti (menimpa warna polos).")
   public void SetGradient(AndroidViewComponent comp, Object colors, int orientation) {
     style.SetGradient(comp, colors, orientation);
+  }
+
+  @SimpleProperty(description = "BLOK KUNING, arah gradien: atas-bawah (= 0).",
+      category = PropertyCategory.BEHAVIOR)
+  public int OrientationTopBottom() {
+    return style.OrientationTopBottom();
+  }
+
+  @SimpleProperty(description = "BLOK KUNING, arah gradien: kananATAS-"
+      + "kiriBAWAH (= 1).",
+      category = PropertyCategory.BEHAVIOR)
+  public int OrientationTopRightBottomLeft() {
+    return style.OrientationTopRightBottomLeft();
+  }
+
+  @SimpleProperty(description = "BLOK KUNING, arah gradien: kanan-kiri (= 2).",
+      category = PropertyCategory.BEHAVIOR)
+  public int OrientationRightLeft() {
+    return style.OrientationRightLeft();
+  }
+
+  @SimpleProperty(description = "BLOK KUNING, arah gradien: kananBAWAH-"
+      + "kiriATAS (= 3).",
+      category = PropertyCategory.BEHAVIOR)
+  public int OrientationBottomRightTopLeft() {
+    return style.OrientationBottomRightTopLeft();
+  }
+
+  @SimpleProperty(description = "BLOK KUNING, arah gradien: bawah-atas (= 4).",
+      category = PropertyCategory.BEHAVIOR)
+  public int OrientationBottomTop() {
+    return style.OrientationBottomTop();
+  }
+
+  @SimpleProperty(description = "BLOK KUNING, arah gradien: kiriBAWAH-"
+      + "kananATAS (= 5).",
+      category = PropertyCategory.BEHAVIOR)
+  public int OrientationBottomLeftTopRight() {
+    return style.OrientationBottomLeftTopRight();
+  }
+
+  @SimpleProperty(description = "BLOK KUNING, arah gradien: kiri-kanan (= 6).",
+      category = PropertyCategory.BEHAVIOR)
+  public int OrientationLeftRight() {
+    return style.OrientationLeftRight();
+  }
+
+  @SimpleProperty(description = "BLOK KUNING, arah gradien: kiriATAS-"
+      + "kananBAWAH (= 7).",
+      category = PropertyCategory.BEHAVIOR)
+  public int OrientationTopLeftBottomRight() {
+    return style.OrientationTopLeftBottomRight();
   }
 
   @SimpleFunction(description = "SET: Atur gradien radial: warna tengah, warna tepi, "
@@ -2214,55 +2777,59 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     style.SetRadialGradient(comp, centerColor, edgeColor, radiusDp);
   }
 
-  @SimpleFunction(description = "SET: Atur bentuk background angka: pakai properti "
-      + "ShapeRectangle/ShapeOval/ShapeLine/ShapeRing.")
+  @SimpleFunction(description = "SET: Atur bentuk background: colok "
+      + "ShapeRectangle/ShapeOval/ShapeLine/ShapeRing (blok kuning).")
   public void SetShape(AndroidViewComponent comp, int shape) {
     style.SetShape(comp, shape);
   }
 
-  @SimpleProperty(description = "Bentuk: persegi.",
+  @SimpleProperty(description = "BLOK KUNING, bentuk: persegi.",
       category = PropertyCategory.BEHAVIOR)
   public int ShapeRectangle() {
     return style.ShapeRectangle();
   }
 
-  @SimpleProperty(description = "Bentuk: oval/lingkaran.",
+  @SimpleProperty(description = "BLOK KUNING, bentuk: oval/lingkaran.",
       category = PropertyCategory.BEHAVIOR)
   public int ShapeOval() {
     return style.ShapeOval();
   }
 
-  @SimpleProperty(description = "Bentuk: garis.",
+  @SimpleProperty(description = "BLOK KUNING, bentuk: garis.",
       category = PropertyCategory.BEHAVIOR)
   public int ShapeLine() {
     return style.ShapeLine();
   }
 
-  @SimpleProperty(description = "Bentuk: cincin.",
+  @SimpleProperty(description = "BLOK KUNING, bentuk: cincin.",
       category = PropertyCategory.BEHAVIOR)
   public int ShapeRing() {
     return style.ShapeRing();
   }
 
-  @SimpleFunction(description = "SET: Atur visibilitas angka: pakai properti "
-      + "VisibilityVisible/VisibilityInvisible/VisibilityGone.")
+  @SimpleFunction(description = "SET: Atur visibilitas: colok "
+      + "VisibilityVisible/VisibilityInvisible/VisibilityGone (blok kuning). "
+      + "Gone = hilang + tempat ikut hilang (≈ Visible=false MIT); Invisible "
+      + "= tak terlihat tapi tempat tetap ada.")
   public void SetVisibility(AndroidViewComponent comp, int visibility) {
     style.SetVisibility(comp, visibility);
   }
 
-  @SimpleProperty(description = "Visibilitas: terlihat.",
+  @SimpleProperty(description = "BLOK KUNING, visibilitas: terlihat.",
       category = PropertyCategory.BEHAVIOR)
   public int VisibilityVisible() {
     return style.VisibilityVisible();
   }
 
-  @SimpleProperty(description = "Visibilitas: tak terlihat (tempat tetap ada).",
+  @SimpleProperty(description = "BLOK KUNING, visibilitas: tak terlihat "
+      + "(tempat tetap ada).",
       category = PropertyCategory.BEHAVIOR)
   public int VisibilityInvisible() {
     return style.VisibilityInvisible();
   }
 
-  @SimpleProperty(description = "Visibilitas: hilang (tempat ikut hilang).",
+  @SimpleProperty(description = "BLOK KUNING, visibilitas: hilang "
+      + "(tempat ikut hilang).",
       category = PropertyCategory.BEHAVIOR)
   public int VisibilityGone() {
     return style.VisibilityGone();
@@ -2273,16 +2840,17 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     style.SetRotation(comp, degrees);
   }
 
-  @SimpleFunction(description = "SET: Efek ripple (gelombang sentuh) warna tertentu. "
-      + "Background bawaan diganti RippleDrawable.")
+  @SimpleFunction(description = "SET: Efek ripple (gelombang sentuh) warna "
+      + "tertentu. Menimpa SEMUA background — pasang PALING AKHIR.")
   public void SetRipple(AndroidViewComponent comp, int color) {
     style.SetRipple(comp, color);
   }
 
-  @SimpleFunction(description = "SET: Garis tepi putus-putus: warna, tebal (dp), "
-      + "panjang garis (dp), jarak garis (dp). dashed=false = garis penuh.")
-  public void SetStroke(AndroidViewComponent comp, boolean dashed, float widthDp, int color, float dashLengthDp, float dashGapDp) {
-    style.SetStroke(comp, dashed, widthDp, color, dashLengthDp, dashGapDp);
+  @SimpleFunction(description = "SET: Garis tepi: warna + tebal (dp) dulu, "
+      + "lalu bila dashed=true tambah panjang garis (dp) + jarak garis (dp). "
+      + "dashLengthDp/dashGapDp DIABAIKAN bila dashed=false (= garis penuh).")
+  public void SetStroke(AndroidViewComponent comp, int color, float widthDp, boolean dashed, float dashLengthDp, float dashGapDp) {
+    style.SetStroke(comp, color, widthDp, dashed, dashLengthDp, dashGapDp);
   }
 
   @SimpleFunction(description = "SET: Atur spasi teks (khusus Label/TextBox/Button): "
@@ -2303,26 +2871,32 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     style.SetCircularBorder(comp, color, widthDp);
   }
 
-  @SimpleFunction(description = "SET: Kembalikan efek sementara: hapus animasi, "
-      + "alpha/rotasi/skala/posisi ke normal. Background tidak diubah.")
+  @SimpleFunction(description = "SET RESET: hapus animasi; kembalikan "
+      + "opacity/alpha, rotasi, skala, posisi (translation) ke normal. yang "
+      + "TIDAK di-reset: background, elevation, padding, margin.")
   public void SetResetEffects(AndroidViewComponent comp) {
     style.SetResetEffects(comp);
   }
 
-  @SimpleFunction(description = "SET: Atur warna background polos. Background "
-      + "bawaan diganti.")
+  @SimpleFunction(description = "SET: Atur warna background polos. "
+      + "Background bawaan diganti. Bertarung dengan SetDynamicBackgroundColor "
+      + "(Core): yang dipanggil TERAKHIR menang.")
   public void SetBackgroundColor(AndroidViewComponent comp, int color) {
     style.SetBackgroundColor(comp, color);
   }
 
-  @SimpleFunction(description = "SET: Atur gambar background (file/asset, "
-      + "path di-root /storage/emulated/0). Cocok untuk wadah.")
-  public void SetBackgroundImage(AndroidViewComponent comp, String path) {
+  @SimpleFunction(description = "SET: Atur gambar background dari file LOKAL "
+      + "atau asset (path di-root /storage/emulated/0; asset diawali \"//\"). "
+      + "KHUSUS lokal — BUKAN URL (URL: unduh dulu pakai Tools_Image/Tools_"
+      + "Downloader). Izin baca storage otomatis dibawa komponen ini. Cocok "
+      + "untuk wadah. Menimpa background bawaan.")
+  public void SetBackgroundImage(AndroidViewComponent comp, final String path) {
     style.SetBackgroundImage(comp, path);
   }
 
-  @SimpleFunction(description = "SET: Atur bayangan/elevasi (dp). Efek terlihat di "
-      + "Android 5.0+.")
+  @SimpleFunction(description = "SET: Atur bayangan/elevasi (dp). Butuh "
+      + "background tidak transparan + ruang kosong di sekitar agar bayangan "
+      + "terlihat; di tema gelap bayangan samar.")
   public void SetElevation(AndroidViewComponent comp, float dp) {
     style.SetElevation(comp, dp);
   }
@@ -2334,7 +2908,9 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "SET: Atur jarak luar/margin (dp): kiri, atas, "
-      + "kanan, bawah. Hanya bila induk mendukung margin.")
+      + "kanan, bawah. Hanya bila induk mendukung margin (Vertical/Horizontal/"
+      + "ScrollArrangement BISA; TableArrangement TIDAK — baris tabel "
+      + "mengabaikan margin). Induk tak mendukung = ErrorOccurred.")
   public void SetMargin(AndroidViewComponent comp, float leftDp, float topDp, float rightDp, float bottomDp) {
     style.SetMargin(comp, leftDp, topDp, rightDp, bottomDp);
   }
@@ -2345,26 +2921,55 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "CALL: Animasi fade: startPercent ke endPercent "
-      + "(0-100). Mis. 0->100 muncul, 100->0 hilang. Menembak "
+      + "(0-100). Mis. 0->100 muncul, 100->0 hilang. durationMs mis. 300; "
+      + "durationMs<=0 = tanpa set durasi (jalan instan). Menembak "
       + "AnimationStarted/AnimationEnded.")
   public void CallAnimateFade(AndroidViewComponent comp, int durationMs, int startPercent, int endPercent) {
     style.CallAnimateFade(comp, durationMs, startPercent, endPercent);
   }
 
-  @SimpleFunction(description = "CALL: Animasi geser-masuk: direction = "
-      + "left/right/top/bottom. durationMs mis. 300.")
+  @SimpleProperty(description = "BLOK KUNING, arah geser: dari kiri.",
+      category = PropertyCategory.BEHAVIOR)
+  public String DirectionLeft() {
+    return style.DirectionLeft();
+  }
+
+  @SimpleProperty(description = "BLOK KUNING, arah geser: dari kanan.",
+      category = PropertyCategory.BEHAVIOR)
+  public String DirectionRight() {
+    return style.DirectionRight();
+  }
+
+  @SimpleProperty(description = "BLOK KUNING, arah geser: dari atas.",
+      category = PropertyCategory.BEHAVIOR)
+  public String DirectionTop() {
+    return style.DirectionTop();
+  }
+
+  @SimpleProperty(description = "BLOK KUNING, arah geser: dari bawah.",
+      category = PropertyCategory.BEHAVIOR)
+  public String DirectionBottom() {
+    return style.DirectionBottom();
+  }
+
+  @SimpleFunction(description = "CALL: Animasi geser-masuk: direction = colok "
+      + "DirectionLeft/DirectionRight/DirectionTop/DirectionBottom (blok "
+      + "kuning); teks left/right/top/bottom = cara lama. durationMs mis. "
+      + "300; durationMs<=0 = tanpa set durasi (jalan instan).")
   public void CallAnimateSlideIn(AndroidViewComponent comp, String direction, int durationMs) {
     style.CallAnimateSlideIn(comp, direction, durationMs);
   }
 
   @SimpleFunction(description = "CALL: Animasi skala: ke toXPercent/toYPercent "
-      + "(100 = normal). durationMs mis. 300.")
+      + "(100 = normal). durationMs mis. 300; durationMs<=0 = tanpa set durasi "
+      + "(jalan instan).")
   public void CallAnimateScale(AndroidViewComponent comp, int durationMs, int toXPercent, int toYPercent) {
     style.CallAnimateScale(comp, durationMs, toXPercent, toYPercent);
   }
 
   @SimpleFunction(description = "CALL: Animasi putar (derajat, searah jarum jam). "
-      + "durationMs mis. 300.")
+      + "durationMs mis. 300; durationMs<=0 = tanpa set durasi (jalan "
+      + "instan).")
   public void CallAnimateRotation(AndroidViewComponent comp, int durationMs, float degrees) {
     style.CallAnimateRotation(comp, durationMs, degrees);
   }
@@ -2388,57 +2993,102 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   }
 
   @SimpleProperty(description = "Nama operasi Style (untuk if di "
-      + "ErrorOccurred).",
+      + "ErrorOccurred: cth if component = OpStyle berarti error Style).",
       category = PropertyCategory.BEHAVIOR)
   public String OpStyle() {
     return style.OpStyle();
   }
 
+  // ================= Task =================
+
   @SimpleFunction(description = "Buat id tugas unik baru (Number, siap pakai "
-      + "ke CallSchedule*/CallSetAlarm). Urutan pembuatan menentukan urutan list.")
+      + "ke CallSchedule*/CallScheduleAlarm). Urutan pembuatan menentukan urutan list.")
   public int CreateTaskId() {
     return task.CreateTaskId();
   }
 
-  @SimpleFunction(description = "Alias GetActiveTaskIds: id yang masih pending.")
-  public List<Integer> GetPendingTaskIds() {
-    return task.GetPendingTaskIds();
+  @SimpleFunction(description = "Semua id tugas/alarm (URUT PEMBUATAN, "
+      + "index 1 = pertama dibuat).")
+  public List<Integer> GetTaskIds() {
+    return task.GetTaskIds();
+  }
+
+  @SimpleFunction(description = "Id tugas/alarm yang aktif (jalan/jeda/terpasang, "
+      + "URUT PEMBUATAN).")
+  public List<Integer> GetActiveTaskIds() {
+    return task.GetActiveTaskIds();
+  }
+
+  @SimpleFunction(description = "Id tugas terakhir dibuat/di-start. -1 bila kosong.")
+  public int CurrentTaskId() {
+    return task.CurrentTaskId();
+  }
+
+  @SimpleFunction(description = "Id index 1 = PERTAMA DIBUAT. -1 bila kosong.")
+  public int GetFirstTaskId() {
+    return task.GetFirstTaskId();
+  }
+
+  @SimpleFunction(description = "Id TERAKHIR DIBUAT. -1 bila kosong.")
+  public int GetLastTaskId() {
+    return task.GetLastTaskId();
+  }
+
+  @SimpleFunction(description = "Id yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
+  public int GetPreviousTaskId(int id) {
+    return task.GetPreviousTaskId(id);
+  }
+
+  @SimpleFunction(description = "True bila id tugas ini aktif (jalan/jeda/alarm terpasang).")
+  public boolean IsTaskIdActive(int id) {
+    return task.IsTaskIdActive(id);
+  }
+
+  @SimpleFunction(description = "Hapus id tugas: batalkan jadwal + cabut alarm "
+      + "sistem + lepas id (otomatis beres-beres).")
+  public void RemoveTaskId(int id) {
+    task.RemoveTaskId(id);
   }
 
   @SimpleFunction(description = "CALL: Batalkan SEMUA tugas dalam-aplikasi (alarm "
-      + "sistem tidak ikut; pakai CallCancelAllAlarms bila perlu). Tiap tugas "
+      + "sistem tidak ikut; pakai SetCancelAllAlarms bila perlu). Tiap tugas "
       + "yang jalan menembak TaskCancelled.")
   public void CallCancelAllTasks() {
     task.CallCancelAllTasks();
   }
 
   @SimpleFunction(description = "CALL: Jadwalkan tugas sekali jalan: id + jeda "
-      + "mili-detik + payload teks (JSON via Tools_Base bila perlu). "
-      + "Menembak TaskStarted lalu TaskFinished. Sukses menembak Started; gagal via ErrorOccurred.")
+      + "mili-detik + payload teks. Jadwal diterima = menembak TaskStarted, lalu "
+      + "TaskFinished. Payload kompleks = JSON via Tools_Base (kirim JsonEncode, "
+      + "terima JsonDecode). Gagal via ErrorOccurred.")
   public void CallScheduleOnce(int id, long delayMillis, String payload) {
     task.CallScheduleOnce(id, delayMillis, payload);
   }
 
   @SimpleFunction(description = "CALL: Jadwalkan tugas berulang: id + jeda awal + "
-      + "interval + jumlah ulang (mis. 5) atau -1 = selamanya + payload. "
-      + "Tiap tick menembak TaskTick; selesai menembak TaskFinished.")
+      + "interval + jumlah ulang (mis. 5; -1/0 = selamanya; 1 = sekali) + payload. "
+      + "Tiap tick menembak TaskTick; selesai menembak TaskFinished. Payload "
+      + "kompleks = JSON via Tools_Base (kirim JsonEncode, terima JsonDecode).")
   public void CallScheduleRepeating(int id, long initialDelayMillis, long intervalMillis, int repeatCount, String payload) {
     task.CallScheduleRepeating(id, initialDelayMillis, intervalMillis, repeatCount, payload);
   }
 
   @SimpleFunction(description = "CALL: Jadwalkan tugas pada jam epoch mili-detik "
-      + "(lihat NowMillis). Lewat = langsung jalan.")
+      + "(lihat NowMillis; mau jam harian tanpa epoch = CallScheduleDailyAt). "
+      + "Lewat = langsung jalan.")
   public void CallScheduleAt(int id, long epochMillis, String payload) {
     task.CallScheduleAt(id, epochMillis, payload);
   }
 
   @SimpleFunction(description = "SET: Jeda tugas ber-id (berlaku untuk once/repeating "
-      + "yang belum selesai). Lanjut via SetResumeTask.")
+      + "yang belum selesai). Lanjut via SetResumeTask. Bukan jeda/jalan = ErrorOccurred. "
+      + "Sukses diam.")
   public void SetPauseTask(int id) {
     task.SetPauseTask(id);
   }
 
-  @SimpleFunction(description = "SET: Lanjutkan tugas yang dijeda (SetPauseTask).")
+  @SimpleFunction(description = "SET: Lanjutkan tugas yang dijeda (SetPauseTask). "
+      + "Bukan jeda = ErrorOccurred. Sukses diam.")
   public void SetResumeTask(int id) {
     task.SetResumeTask(id);
   }
@@ -2449,47 +3099,73 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     task.CallCancelTask(id);
   }
 
-  @SimpleFunction(description = "Waktu sekarang epoch mili-detik (untuk CallScheduleAt/SetAlarm).")
+  @SimpleFunction(description = "True bila tugas ber-id sedang dijeda (SetPauseTask, "
+      + "belum resume/batal). False = jalan/selesai/batal/tidak ada (ragu? cek "
+      + "GetTaskStatus).")
+  public boolean IsTaskPaused(int id) {
+    return task.IsTaskPaused(id);
+  }
+
+  @SimpleFunction(description = "Sisa mili-detik sampai bunyi berikutnya (jalan = "
+      + "nextFire - sekarang; jeda = sisa saat dijeda; selesai/batal/tidak ada = 0). "
+      + "Pasangan GetTaskProgress (index 4 = nextFireAt).")
+  public long GetTaskRemaining(int id) {
+    return task.GetTaskRemaining(id);
+  }
+
+  @SimpleFunction(description = "Mili-detik sejak tick terakhir (jalan; jeda = nilai "
+      + "saat dijeda; belum pernah bunyi = sejak dijadwalkan; selesai/batal/tidak "
+      + "ada = 0).")
+  public long GetTaskElapsed(int id) {
+    return task.GetTaskElapsed(id);
+  }
+
+  @SimpleFunction(description = "Waktu sekarang epoch mili-detik (untuk CallScheduleAt/CallScheduleAlarm).")
   public long NowMillis() {
     return task.NowMillis();
   }
 
   @SimpleFunction(description = "Fallback polling untuk event Task*: status "
       + "tugas ber-id. Salah satu: antri, jalan, jeda, selesai, batal, gagal, "
-      + "alarm, atau tidak ada.")
+      + "alarm, atau tidak ada. Jeda = cek IsTaskPaused; sisa = GetTaskRemaining.")
   public String GetTaskStatus(int id) {
     return task.GetTaskStatus(id);
   }
 
   @SimpleFunction(description = "Fallback polling untuk TaskFinished: list "
-      + "[success, payload, message]. Tetap ada sampai RemoveTaskId.")
+      + "[index 1=success, 2=payload, 3=message]. Tetap ada sampai RemoveTaskId.")
   public List<Object> GetTaskResult(int id) {
     return task.GetTaskResult(id);
   }
 
   @SimpleFunction(description = "Fallback polling untuk TaskTick: list "
-      + "[tickCount, repeatCount, lastTickAt, nextFireAt].")
+      + "[index 1=tickCount, 2=repeatCount, 3=lastTickAt, 4=nextFireAt].")
   public List<Object> GetTaskProgress(int id) {
     return task.GetTaskProgress(id);
   }
 
-  @SimpleFunction(description = "Id tugas dalam-aplikasi terakhir yang selesai/bunyi. -1 bila belum ada.")
+  @SimpleFunction(description = "Id tugas dalam-aplikasi terakhir yang selesai/bunyi "
+      + "(-1 bila belum ada). Terakhir-menang: dua selesai berdekatan = kedua "
+      + "menimpa; butuh pasti = TaskFinished.")
   public int GetLastFiredTaskId() {
     return task.GetLastFiredTaskId();
   }
 
-  @SimpleFunction(description = "Payload tugas terakhir yang selesai/bunyi.")
+  @SimpleFunction(description = "Payload tugas terakhir yang selesai/bunyi "
+      + "(terakhir-menang; butuh pasti = TaskFinished).")
   public String GetLastFiredPayload() {
     return task.GetLastFiredPayload();
   }
 
-  @SimpleFunction(description = "Waktu epoch tugas terakhir selesai/bunyi. 0 bila belum ada.")
+  @SimpleFunction(description = "Waktu epoch tugas terakhir selesai/bunyi "
+      + "(0 bila belum ada; terakhir-menang; butuh pasti = TaskFinished).")
   public long GetLastFiredTime() {
     return task.GetLastFiredTime();
   }
 
   @SimpleFunction(description = "SET: Simpan extra teks untuk tugas ber-id (mis. "
-      + "url, nama file). Menimpa kunci yang sama. Tanpa feedback.")
+      + "url, nama file). Angka -> teks dulu. Menimpa kunci yang sama. "
+      + "Sukses diam; id tidak ada = ErrorOccurred.")
   public void SetTaskExtra(int id, String key, String value) {
     task.SetTaskExtra(id, key, value);
   }
@@ -2510,12 +3186,13 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "Hapus SEMUA extra tugas ber-id.")
-  public void ClearTaskExtras(int id) {
-    task.ClearTaskExtras(id);
+  public void SetClearTaskExtras(int id) {
+    task.SetClearTaskExtras(id);
   }
 
   @SimpleFunction(description = "SET: Simpan variabel teks global (bisa dibaca tugas "
-      + "mana pun + blok lain).")
+      + "mana pun + blok lain; tersimpan di HP = survive reboot + terbaca saat "
+      + "alarm menyalakan aplikasi). Angka -> teks dulu. Sukses diam.")
   public void SetVar(String name, String value) {
     task.SetVar(name, value);
   }
@@ -2530,9 +3207,9 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     task.RemoveVar(name);
   }
 
-  @SimpleFunction(description = "Hapus SEMUA variabel global.")
-  public void ClearVars() {
-    task.ClearVars();
+  @SimpleFunction(description = "SET: Hapus SEMUA variabel global (tersimpan ikut terhapus).")
+  public void SetClearVars() {
+    task.SetClearVars();
   }
 
   @SimpleFunction(description = "Semua nama variabel global (URUT DIBUAT).")
@@ -2554,21 +3231,31 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
 
   @SimpleFunction(description = "CALL: Pasang alarm SISTEM sekali bunyi: id + epoch "
       + "mili-detik + payload + exact (true = tepat waktu bila izin ada). "
-      + "Bunyi = membuka aplikasi; baca via CheckStartupAlarm/AlarmFired. "
-      + "Tersimpan otomatis (survive reboot via RestoreAlarms).")
-  public void CallSetAlarm(int id, long epochMillis, String payload, boolean exact) {
-    task.CallSetAlarm(id, epochMillis, payload, exact);
+      + "Bunyi = membuka aplikasi; baca via CallCheckStartupAlarm/AlarmFired. "
+      + "Mau jam harian tanpa epoch = CallScheduleDailyAt. Tersimpan di HP; "
+      + "untuk hidup lagi habis reboot, panggil CallRestoreAlarms di Initialize.")
+  public void CallScheduleAlarm(int id, long epochMillis, String payload, boolean exact) {
+    task.CallScheduleAlarm(id, epochMillis, payload, exact);
   }
 
   @SimpleFunction(description = "CALL: Pasang alarm SISTEM berulang: id + epoch "
       + "pertama + interval + payload. Interval <1 detik dibulatkan ke 1 detik "
-      + "(hemat baterai, aturan Android).")
-  public void CallSetRepeatingAlarm(int id, long firstEpochMillis, long intervalMillis, String payload) {
-    task.CallSetRepeatingAlarm(id, firstEpochMillis, intervalMillis, payload);
+      + "(hemat baterai, aturan Android). Tersimpan di HP; untuk hidup lagi "
+      + "habis reboot, panggil CallRestoreAlarms di Initialize.")
+  public void CallScheduleRepeatingAlarm(int id, long firstEpochMillis, long intervalMillis, String payload) {
+    task.CallScheduleRepeatingAlarm(id, firstEpochMillis, intervalMillis, payload);
+  }
+
+  @SimpleFunction(description = "CALL: alarm HARIAN jam dinding tanpa mikir epoch: "
+      + "id + jam 0-23 + menit 0-59 + payload. Bunyi tiap hari jam itu (interval "
+      + "24 jam, mulai kejadian terdekat: lewat jam hari ini = besok). Salah "
+      + "jam/menit = ErrorOccurred. Batal via SetCancelAlarm.")
+  public void CallScheduleDailyAt(int id, int hour, int minute, String payload) {
+    task.CallScheduleDailyAt(id, hour, minute, payload);
   }
 
   @SimpleFunction(description = "SET: Cabut alarm sistem ber-id (tugas dalam-aplikasi "
-      + "dengan id sama tidak ikut; pakai CancelTask bila perlu).")
+      + "dengan id sama tidak ikut; pakai CallCancelTask bila perlu).")
   public void SetCancelAlarm(int id) {
     task.SetCancelAlarm(id);
   }
@@ -2589,8 +3276,8 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     return task.GetPendingAlarmIds();
   }
 
-  @SimpleFunction(description = "Fallback polling alarm: list [epochMillis, "
-      + "intervalMillis (0 = sekali), payload]. Kosong = tidak ada.")
+  @SimpleFunction(description = "Fallback polling alarm: list [index 1=epochMillis, "
+      + "2=intervalMillis (0 = sekali), 3=payload]. Kosong = tidak ada.")
   public List<Object> GetAlarmInfo(int id) {
     return task.GetAlarmInfo(id);
   }
@@ -2602,8 +3289,10 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     task.CallCheckStartupAlarm();
   }
 
-  @SimpleFunction(description = "CALL: Pasang ulang SEMUA alarm tersimpan (mis. "
-      + "habis reboot: panggil di Screen.Initialize). Tanpa return.")
+  @SimpleFunction(description = "CALL: Pasang ulang SEMUA alarm tersimpan (habis "
+      + "reboot: WAJIB panggil di Screen.Initialize; alarm TIDAK hidup sendiri). "
+      + "Selesai menembak AlarmsRestored (jumlah dipasang ulang; 0 = tidak ada "
+      + "tersimpan).")
   public void CallRestoreAlarms() {
     task.CallRestoreAlarms();
   }
@@ -2652,89 +3341,106 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   }
 
   @SimpleEvent(description = "Alarm sistem bunyi (aplikasi dibuka oleh alarm): "
-      + "id + payload. Selalu cek juga via CheckStartupAlarm di Initialize.")
+      + "id + payload. Selalu cek juga via CallCheckStartupAlarm di Initialize.")
   public void AlarmFired(int id, String payload) {
     EventDispatcher.dispatchEvent(this, "AlarmFired", id, payload);
   }
 
-  @SimpleProperty(description = "Nama operasi Task (untuk if di ErrorOccurred).",
+  @SimpleEvent(description = "Restore alarm selesai (hasil CallRestoreAlarms): "
+      + "jumlah alarm dipasang ulang (0 = tidak ada tersimpan). Habis reboot = "
+      + "panggil CallRestoreAlarms di Initialize, alarm TIDAK hidup sendiri.")
+  public void AlarmsRestored(int count) {
+    EventDispatcher.dispatchEvent(this, "AlarmsRestored", count);
+  }
+
+  @SimpleProperty(description = "Nama operasi Task (untuk if di ErrorOccurred: "
+      + "cth if component = OpTask berarti error tugas).",
       category = PropertyCategory.BEHAVIOR)
   public String OpTask() {
     return task.OpTask();
   }
 
-  @SimpleProperty(description = "Nama operasi Alarm (untuk if di ErrorOccurred).",
+  @SimpleProperty(description = "Nama operasi Alarm (untuk if di ErrorOccurred: "
+      + "cth if component = OpAlarm berarti error alarm).",
       category = PropertyCategory.BEHAVIOR)
   public String OpAlarm() {
     return task.OpAlarm();
   }
 
-  @SimpleProperty(description = "Nama operasi Var (untuk if di ErrorOccurred).",
+  @SimpleProperty(description = "Nama operasi Var (untuk if di ErrorOccurred: "
+      + "cth if component = OpVar berarti error variabel).",
       category = PropertyCategory.BEHAVIOR)
   public String OpVar() {
     return task.OpVar();
   }
 
-  @SimpleFunction(description = "Putar video ber-id di dalam layout (Arrangement MIT / dinamis). "
-      + "Bisa jalan bareng (satu id = satu video). path file (/Download/..., absolut "
-      + "apa adanya), atau http(s) URL (streaming). id dari CreateVideoId / "
-      + "Tools_Base CreateUniqueId. "
-      + "Atur tinggi arrangement (mis. 300px) agar video kelihatan. "
-      + "Double-tap: kiri = mundur, kanan = maju, tengah = pause/resume. "
-      + "Sukses menembak VideoStarted; gagal via ErrorOccurred.")
-  public void CallPlayVideoIn(AndroidViewComponent container, String path, int id) {
+  // ================= Video =================
+
+  @SimpleFunction(description = "CALL: Putar video ber-id di dalam layout (Arrangement MIT / "
+      + "dinamis). Bisa jalan bareng (satu id = satu video). path file (/Download/... atau "
+      + "absolut apa adanya), atau http(s) URL (streaming, izin INTERNET otomatis dibawa). "
+      + "id dari CreateVideoId atau CreateUniqueId Tools_Base. "
+      + "Atur tinggi wadah (mis. 300px) agar video kelihatan. Id yang masih main tidak bisa "
+      + "dipakai ulang (Stop/Pause dulu). Id yang sama diputar di wadah lain = PINDAH "
+      + "(lepas dari wadah lama). Stop lalu Play = mulai dari awal. Double-tap "
+      + "mati secara default (nyalakan via DoubleTapSeek bila butuh). Video mengikuti ukuran "
+      + "wadah (bisa gepeng bila rasio beda; samakan rasio wadah dengan video). Controller "
+      + "bawaan + slider sendiri bisa rebutan: pilih satu. Sukses menembak VideoStarted; "
+      + "gagal via ErrorOccurred.")
+  public void CallPlayVideoIn(final AndroidViewComponent container, final String path, final int id) {
     video.CallPlayVideoIn(container, path, id);
   }
 
-  @SimpleFunction(description = "SET: Jeda video yang sedang main. (per id)")
+  @SimpleFunction(description = "SET: Jeda video yang sedang main. Tanpa feedback. "
+      + "Cek status via IsVideoPaused.")
   public void SetPauseVideo(int id) {
     video.SetPauseVideo(id);
   }
 
-  @SimpleFunction(description = "SET: Lanjutkan video yang dijeda. (per id)")
+  @SimpleFunction(description = "SET: Lanjutkan video yang dijeda. Tanpa feedback. "
+      + "Cek status via IsVideoPaused.")
   public void SetResumeVideo(int id) {
     video.SetResumeVideo(id);
   }
 
-  @SimpleFunction(description = "SET: Hentikan video + lepas dari layout (per id). "
-      + "Id tetap tercatat (Play lagi langsung bisa). Bersih total via RemoveVideoId.")
+  @SimpleFunction(description = "SET: Hentikan video + lepas dari layout. "
+      + "Id tetap tercatat (Play lagi langsung bisa, mulai dari awal). Tanpa event. "
+      + "Bersih total via RemoveVideoId.")
   public void SetStopVideo(int id) {
     video.SetStopVideo(id);
   }
 
-  @SimpleFunction(description = "SET: Lompat video ke posisi (ms). Bisa dipasang ke Slider. (per id)")
+  @SimpleFunction(description = "SET: Lompat video ke posisi milidetik. Bisa dipasang ke "
+      + "Slider (matikan controller bawaan bila rebutan). Tanpa feedback.")
   public void SetSeekVideo(int id, int position) {
     video.SetSeekVideo(id, position);
   }
 
-  @SimpleFunction(description = "SET: Maju video sejauh SkipSeconds detik. (per id)")
+  @SimpleFunction(description = "SET: Maju video sejauh SkipSeconds DETIK. "
+      + "Tanpa feedback.")
   public void SetForwardVideo(int id) {
     video.SetForwardVideo(id);
   }
 
-  @SimpleFunction(description = "SET: Mundur video sejauh SkipSeconds detik. (per id)")
+  @SimpleFunction(description = "SET: Mundur video sejauh SkipSeconds DETIK. "
+      + "Tanpa feedback.")
   public void SetBackwardVideo(int id) {
     video.SetBackwardVideo(id);
   }
 
-  @SimpleFunction(description = "Posisi video sekarang (ms). (per id)")
+  @SimpleFunction(description = "Posisi video sekarang dalam milidetik. 0 bila belum siap.")
   public int GetVideoPosition(int id) {
     return video.GetVideoPosition(id);
   }
 
-  @SimpleFunction(description = "Durasi video (ms). 0 bila belum siap. (per id)")
+  @SimpleFunction(description = "Durasi video dalam milidetik. 0 bila belum siap.")
   public int GetVideoDuration(int id) {
     return video.GetVideoDuration(id);
   }
 
-  @SimpleFunction(description = "True bila video id ini sedang main.")
-  public boolean IsVideoPlaying(int id) {
-    return video.IsVideoPlaying(id);
-  }
-
   @SimpleFunction(description = "SET: Hapus SEMUA video Tools_Video dari layout itu (id ikut dilepas, "
       + "komponen lain tidak diusik). Video ikut di-pause.")
-  public void SetClearVideo(AndroidViewComponent container) {
+  public void SetClearVideo(final AndroidViewComponent container) {
     video.SetClearVideo(container);
   }
 
@@ -2743,35 +3449,151 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     return video.CreateVideoId();
   }
 
-  @SimpleProperty(description = "Tampilkan kontrol bawaan video. Default true.",
+  @SimpleFunction(description = "Semua id video yang dipegang (URUT PEMBUATAN, "
+      + "index 1 = pertama dibuat).")
+  public List<Integer> GetVideoIds() {
+    return video.GetVideoIds();
+  }
+
+  @SimpleFunction(description = "Id video yang sedang main (URUT PEMBUATAN). "
+      + "Yang dijeda/berhenti TIDAK masuk sini.")
+  public List<Integer> GetActiveVideoIds() {
+    return video.GetActiveVideoIds();
+  }
+
+  @SimpleFunction(description = "Id video yang terakhir disentuh (dibuat atau di-start). "
+      + "-1 bila kosong. Beda dengan GetLastVideoId (terakhir dibuat).")
+  public int CurrentVideoId() {
+    return video.CurrentVideoId();
+  }
+
+  @SimpleFunction(description = "Id index 1 = PERTAMA DIBUAT. -1 bila kosong.")
+  public int GetFirstVideoId() {
+    return video.GetFirstVideoId();
+  }
+
+  @SimpleFunction(description = "Id video TERAKHIR DIBUAT. -1 bila kosong. Beda dengan "
+      + "CurrentVideoId (terakhir disentuh).")
+  public int GetLastVideoId() {
+    return video.GetLastVideoId();
+  }
+
+  @SimpleFunction(description = "Id yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
+  public int GetPreviousVideoId(int id) {
+    return video.GetPreviousVideoId(id);
+  }
+
+  @SimpleFunction(description = "True bila id video ini sedang main. False = jeda, "
+      + "berhenti, atau belum ada (bedakan jeda vs berhenti via IsVideoPaused).")
+  public boolean IsVideoIdActive(int id) {
+    return video.IsVideoIdActive(id);
+  }
+
+  @SimpleFunction(description = "True bila id video ini sedang dijeda (Pause tapi "
+      + "belum Stop/selesai). False = main/berhenti/belum ada.")
+  public boolean IsVideoPaused(int id) {
+    return video.IsVideoPaused(id);
+  }
+
+  @SimpleFunction(description = "Volume khusus satu id (0-100). = volume global "
+      + "bila belum diatur via SetVideoVolume.")
+  public int GetVideoVolume(int id) {
+    return video.GetVideoVolume(id);
+  }
+
+  @SimpleFunction(description = "SET: Volume khusus satu id (0-100). Menimpa "
+      + "volume global untuk id ini. Tanpa feedback.")
+  public void SetVideoVolume(int id, int volume) {
+    video.SetVideoVolume(id, volume);
+  }
+
+  @SimpleFunction(description = "Loop khusus satu id. = loop global bila belum "
+      + "diatur via SetVideoLooping.")
+  public boolean GetVideoLooping(int id) {
+    return video.GetVideoLooping(id);
+  }
+
+  @SimpleFunction(description = "SET: Loop khusus satu id (true = mengulang bila "
+      + "selesai). Menimpa loop global untuk id ini. Berlaku untuk putaran "
+      + "berikutnya. Tanpa feedback.")
+  public void SetVideoLooping(int id, boolean loop) {
+    video.SetVideoLooping(id, loop);
+  }
+
+  @SimpleFunction(description = "True bila id video ini sedang dibisukan via "
+      + "SetVideoMuted.")
+  public boolean IsVideoMuted(int id) {
+    return video.IsVideoMuted(id);
+  }
+
+  @SimpleFunction(description = "SET: Bisukan/suarakan satu id. Bisu = volume 0 "
+      + "sementara (nilai lama disimpan, pulih saat unmute). Tanpa feedback.")
+  public void SetVideoMuted(int id, boolean muted) {
+    video.SetVideoMuted(id, muted);
+  }
+
+  @SimpleFunction(description = "SET: Maju video sejauh seconds DETIK "
+      + "(tanpa ubah SkipSeconds). Tanpa feedback.")
+  public void SetForwardVideoBy(int id, int seconds) {
+    video.SetForwardVideoBy(id, seconds);
+  }
+
+  @SimpleFunction(description = "SET: Mundur video sejauh seconds DETIK "
+      + "(tanpa ubah SkipSeconds). Tanpa feedback.")
+  public void SetBackwardVideoBy(int id, int seconds) {
+    video.SetBackwardVideoBy(id, seconds);
+  }
+
+  @SimpleFunction(description = "SET: Hapus SEMUA video (semua layout) + buang "
+      + "semua id. Tanpa feedback.")
+  public void SetClearVideos() {
+    video.SetClearVideos();
+  }
+
+  @SimpleFunction(description = "Hapus id video: hentikan + lepas dari layout + lepas id "
+      + "(otomatis beres-beres).")
+  public void RemoveVideoId(int id) {
+    video.RemoveVideoId(id);
+  }
+
+  @SimpleProperty(description = "Tampilkan kontrol bawaan video (ada tombol play + geser bawaan). "
+      + "Default true. Matikan bila pakai slider sendiri (bisa rebutan).",
       category = PropertyCategory.BEHAVIOR)
   public boolean ShowVideoController() {
     return video.ShowVideoController();
   }
 
+  @DesignerProperty(editorType = PropertyTypeConstants.PROPERTY_TYPE_BOOLEAN,
+      defaultValue = "True")
   @SimpleProperty(category = PropertyCategory.BEHAVIOR)
   public void ShowVideoController(boolean show) {
     video.ShowVideoController(show);
   }
 
-  @SimpleProperty(description = "Video mengulang otomatis bila selesai. Default false.",
+  @SimpleProperty(description = "Loop global (default false). Id yang sudah diatur via "
+      + "SetVideoLooping memakai nilainya sendiri.",
       category = PropertyCategory.BEHAVIOR)
   public boolean VideoLooping() {
     return video.VideoLooping();
   }
 
+  @DesignerProperty(editorType = PropertyTypeConstants.PROPERTY_TYPE_BOOLEAN,
+      defaultValue = "False")
   @SimpleProperty(category = PropertyCategory.BEHAVIOR)
   public void VideoLooping(boolean loop) {
     video.VideoLooping(loop);
   }
 
   @SimpleProperty(description = "Double-tap video: kiri = mundur, kanan = maju, "
-      + "tengah = pause/resume. Default true.",
+      + "tengah = pause/resume. Default false (matikan perilaku tak terduga; "
+      + "nyalakan bila butuh).",
       category = PropertyCategory.BEHAVIOR)
   public boolean DoubleTapSeek() {
     return video.DoubleTapSeek();
   }
 
+  @DesignerProperty(editorType = PropertyTypeConstants.PROPERTY_TYPE_BOOLEAN,
+      defaultValue = "False")
   @SimpleProperty(category = PropertyCategory.BEHAVIOR)
   public void DoubleTapSeek(boolean enabled) {
     video.DoubleTapSeek(enabled);
@@ -2792,45 +3614,11 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     EventDispatcher.dispatchEvent(this, "VideoFinished", id);
   }
 
-  @SimpleProperty(description = "Nama operasi Video (untuk if di ErrorOccurred).",
+  @SimpleProperty(description = "Nama operasi Video untuk if di ErrorOccurred. Contoh: "
+      + "colok ke perbandingan = dengan component dari event ErrorOccurred.",
       category = PropertyCategory.BEHAVIOR)
   public String OpVideo() {
     return video.OpVideo();
   }
 
-  @SimpleProperty(description = "Jeda event progres dalam milidetik. Satu kenop mengatur Audio+Video sekaligus; baca mengembalikan nilai Audio.",
-      category = PropertyCategory.BEHAVIOR)
-  public int ProgressInterval() {
-    return audio.ProgressInterval();
-  }
-
-  @SimpleProperty(category = PropertyCategory.BEHAVIOR)
-  public void ProgressInterval(int value) {
-    audio.ProgressInterval(value);
-    video.ProgressInterval(value);
-  }
-
-  @SimpleProperty(description = "Lompatan Maju/Mundur dalam detik. Satu kenop mengatur Audio+Video sekaligus; baca mengembalikan nilai Audio.",
-      category = PropertyCategory.BEHAVIOR)
-  public int SkipSeconds() {
-    return audio.SkipSeconds();
-  }
-
-  @SimpleProperty(category = PropertyCategory.BEHAVIOR)
-  public void SkipSeconds(int value) {
-    audio.SkipSeconds(value);
-    video.SkipSeconds(value);
-  }
-
-  @SimpleProperty(description = "Volume media 0-100. Satu kenop mengatur Audio+Video sekaligus; baca mengembalikan nilai Audio.",
-      category = PropertyCategory.BEHAVIOR)
-  public int MediaVolume() {
-    return audio.MediaVolume();
-  }
-
-  @SimpleProperty(category = PropertyCategory.BEHAVIOR)
-  public void MediaVolume(int value) {
-    audio.MediaVolume(value);
-    video.MediaVolume(value);
-  }
 }

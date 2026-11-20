@@ -138,6 +138,22 @@ public final class TagIds {
     return last.intValue();
   }
 
+  /** Id pada nomor urut index (1 = pertama disimpan). -1 bila kosong/di luar. */
+  public static synchronized int at(String tag, int index) {
+    LinkedHashSet<Integer> s = tags.get(norm(tag));
+    if (s == null || index < 1 || index > s.size()) {
+      return -1;
+    }
+    int i = 1;
+    for (Integer k : s) {
+      if (i == index) {
+        return k.intValue();
+      }
+      i = i + 1;
+    }
+    return -1;
+  }
+
   /** Id yang disimpan TEPAT SEBELUM id ini di tag itu. -1 bila tidak ada. */
   public static synchronized int previous(Object idIn, String tag) {
     int id = toId(idIn);

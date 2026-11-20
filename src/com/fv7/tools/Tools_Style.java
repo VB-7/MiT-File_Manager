@@ -18,6 +18,7 @@ import com.google.appinventor.components.annotations.SimpleEvent;
 import com.google.appinventor.components.annotations.SimpleFunction;
 import com.google.appinventor.components.annotations.SimpleObject;
 import com.google.appinventor.components.annotations.SimpleProperty;
+import com.google.appinventor.components.annotations.UsesPermissions;
 import com.google.appinventor.components.common.ComponentCategory;
 import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
 import com.google.appinventor.components.runtime.AndroidViewComponent;
@@ -32,20 +33,31 @@ import java.io.InputStream;
 import java.util.ArrayList;
 
 @DesignerComponent(
-    version = 17,
+    version = 20,
     description = "Tools_Style: percantik komponen/wadah yang kelihatan "
         + "(Button, Label, Arrangement, gambar Tools_Image, komponen dinamis, "
         + "dsb). Radius, border, gradien, elevation, padding, margin, opacity, "
-        + "background warna/gambar, plus animasi fade/slide/zoom. Tanpa id "
-        + "(stateless, langsung ke komponen). Semua prosedur void; gagal via "
-        + "ErrorOccurred. Catatan: background bawaan komponen (mis. Button) "
-        + "diganti drawable baru. "
-        + "(v17 2026-11-17: tanpa perubahan fungsi; penomoran versi.)",
+        + "background warna/gambar, plus animasi fade/slide/scale/rotation. "
+        + "Tanpa id (stateless, langsung tempel ke komponen — TIDAK perlu "
+        + "CreateId). Semua prosedur void; gagal via ErrorOccurred (id selalu "
+        + "0). PERANG CAT (satu tembok, yang terakhir menang): radius+border = "
+        + "AKUR (satu drawable, boleh digabung); warna polos menimpa "
+        + "gradien/ripple; gradien menimpa warna; ripple menimpa SEMUA "
+        + "background — pasang PALING AKHIR. Vs SetDynamicBackgroundColor "
+        + "(Core, untuk komponen dinamis): dua-duanya menulis background view "
+        + "— yang DIPANGGIL TERAKHIR menang. Konvensi awalan: Is = boolean "
+        + "(colok ke if), Call = async + hasil lewat event, Set = tanpa "
+        + "feedback sukses (gagal via ErrorOccurred), Get = nilai balik "
+        + "sinkron. Blok kuning = pilihan tetap (colok ke soket yang cocok). "
+        + "Kamus MakeViewUp: SetRadius = SetCornerRadius di sini; SetImage = "
+        + "SetBackgroundImage; SetSpace = SetTextSpace.",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,
-    iconName = "aiwebres/tools_style.jpg")
+    iconName = "aiwebres/tools_style.jpg",
+    helpUrl = "https://github.com/VB-7/MiT-File_Manager")
 @SimpleObject(external = true)
+@UsesPermissions({"android.permission.READ_EXTERNAL_STORAGE"})
 public class Tools_Style extends AndroidNonvisibleComponent {
 
   private final Context context;
@@ -126,10 +138,12 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "SET: Atur gradien banyak warna (list warna) + arah "
-      + "angka: 0=atas-bawah, 1=kananATAS-kiriBAWAH, 2=kanan-kiri, 3=kananBAWAH-"
-      + "kiriATAS, 4=bawah-atas, 5=kiriBAWAH-kananATAS, 6=kiri-kanan, "
-      + "7=kiriATAS-kananBAWAH. Background bawaan diganti.")
+  @SimpleFunction(description = "SET: Atur gradien banyak warna (list warna, "
+      + "minimal 2). arah = colok OrientationTopBottom/dll (blok kuning); "
+      + "angka 0-7 = cara lama (0=atas-bawah, 1=kananATAS-kiriBAWAH, "
+      + "2=kanan-kiri, 3=kananBAWAH-kiriATAS, 4=bawah-atas, 5=kiriBAWAH-"
+      + "kananATAS, 6=kiri-kanan, 7=kiriATAS-kananBAWAH). Background bawaan "
+      + "diganti (menimpa warna polos).")
   public void SetGradient(AndroidViewComponent comp, Object colors,
       int orientation) {
     View v = viewOf(comp, "Gradient");
@@ -137,6 +151,8 @@ public class Tools_Style extends AndroidNonvisibleComponent {
       return;
     }
     if (orientation < 0 || orientation > 7) {
+      Shared.err(this, "Style", 0,
+          "Gradient: orientation 0-7 (pakai OrientationTopBottom/dll)");
       return;
     }
     ArrayList<Integer> list = new ArrayList<Integer>();
@@ -160,6 +176,7 @@ public class Tools_Style extends AndroidNonvisibleComponent {
       // abaikan
     }
     if (list.size() < 2) {
+      Shared.err(this, "Style", 0, "Gradient: butuh minimal 2 warna");
       return;
     }
     try {
@@ -185,6 +202,58 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
   }
 
+  @SimpleProperty(description = "BLOK KUNING, arah gradien: atas-bawah (= 0).",
+      category = PropertyCategory.BEHAVIOR)
+  public int OrientationTopBottom() {
+    return 0;
+  }
+
+  @SimpleProperty(description = "BLOK KUNING, arah gradien: kananATAS-"
+      + "kiriBAWAH (= 1).",
+      category = PropertyCategory.BEHAVIOR)
+  public int OrientationTopRightBottomLeft() {
+    return 1;
+  }
+
+  @SimpleProperty(description = "BLOK KUNING, arah gradien: kanan-kiri (= 2).",
+      category = PropertyCategory.BEHAVIOR)
+  public int OrientationRightLeft() {
+    return 2;
+  }
+
+  @SimpleProperty(description = "BLOK KUNING, arah gradien: kananBAWAH-"
+      + "kiriATAS (= 3).",
+      category = PropertyCategory.BEHAVIOR)
+  public int OrientationBottomRightTopLeft() {
+    return 3;
+  }
+
+  @SimpleProperty(description = "BLOK KUNING, arah gradien: bawah-atas (= 4).",
+      category = PropertyCategory.BEHAVIOR)
+  public int OrientationBottomTop() {
+    return 4;
+  }
+
+  @SimpleProperty(description = "BLOK KUNING, arah gradien: kiriBAWAH-"
+      + "kananATAS (= 5).",
+      category = PropertyCategory.BEHAVIOR)
+  public int OrientationBottomLeftTopRight() {
+    return 5;
+  }
+
+  @SimpleProperty(description = "BLOK KUNING, arah gradien: kiri-kanan (= 6).",
+      category = PropertyCategory.BEHAVIOR)
+  public int OrientationLeftRight() {
+    return 6;
+  }
+
+  @SimpleProperty(description = "BLOK KUNING, arah gradien: kiriATAS-"
+      + "kananBAWAH (= 7).",
+      category = PropertyCategory.BEHAVIOR)
+  public int OrientationTopLeftBottomRight() {
+    return 7;
+  }
+
   @SimpleFunction(description = "SET: Atur gradien radial: warna tengah, warna tepi, "
       + "radius (dp). Background bawaan diganti.")
   public void SetRadialGradient(AndroidViewComponent comp, int centerColor,
@@ -203,14 +272,16 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "SET: Atur bentuk background angka: pakai properti "
-      + "ShapeRectangle/ShapeOval/ShapeLine/ShapeRing.")
+  @SimpleFunction(description = "SET: Atur bentuk background: colok "
+      + "ShapeRectangle/ShapeOval/ShapeLine/ShapeRing (blok kuning).")
   public void SetShape(AndroidViewComponent comp, int shape) {
     View v = viewOf(comp, "Shape");
     if (v == null) {
       return;
     }
     if (shape < 0 || shape > 3) {
+      Shared.err(this, "Style", 0,
+          "Shape: pakai ShapeRectangle/ShapeOval/ShapeLine/ShapeRing");
       return;
     }
     try {
@@ -221,32 +292,34 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleProperty(description = "Bentuk: persegi.",
+  @SimpleProperty(description = "BLOK KUNING, bentuk: persegi.",
       category = PropertyCategory.BEHAVIOR)
   public int ShapeRectangle() {
     return GradientDrawable.RECTANGLE;
   }
 
-  @SimpleProperty(description = "Bentuk: oval/lingkaran.",
+  @SimpleProperty(description = "BLOK KUNING, bentuk: oval/lingkaran.",
       category = PropertyCategory.BEHAVIOR)
   public int ShapeOval() {
     return GradientDrawable.OVAL;
   }
 
-  @SimpleProperty(description = "Bentuk: garis.",
+  @SimpleProperty(description = "BLOK KUNING, bentuk: garis.",
       category = PropertyCategory.BEHAVIOR)
   public int ShapeLine() {
     return GradientDrawable.LINE;
   }
 
-  @SimpleProperty(description = "Bentuk: cincin.",
+  @SimpleProperty(description = "BLOK KUNING, bentuk: cincin.",
       category = PropertyCategory.BEHAVIOR)
   public int ShapeRing() {
     return GradientDrawable.RING;
   }
 
-  @SimpleFunction(description = "SET: Atur visibilitas angka: pakai properti "
-      + "VisibilityVisible/VisibilityInvisible/VisibilityGone.")
+  @SimpleFunction(description = "SET: Atur visibilitas: colok "
+      + "VisibilityVisible/VisibilityInvisible/VisibilityGone (blok kuning). "
+      + "Gone = hilang + tempat ikut hilang (≈ Visible=false MIT); Invisible "
+      + "= tak terlihat tapi tempat tetap ada.")
   public void SetVisibility(AndroidViewComponent comp, int visibility) {
     View v = viewOf(comp, "Visibility");
     if (v == null) {
@@ -258,19 +331,21 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleProperty(description = "Visibilitas: terlihat.",
+  @SimpleProperty(description = "BLOK KUNING, visibilitas: terlihat.",
       category = PropertyCategory.BEHAVIOR)
   public int VisibilityVisible() {
     return View.VISIBLE;
   }
 
-  @SimpleProperty(description = "Visibilitas: tak terlihat (tempat tetap ada).",
+  @SimpleProperty(description = "BLOK KUNING, visibilitas: tak terlihat "
+      + "(tempat tetap ada).",
       category = PropertyCategory.BEHAVIOR)
   public int VisibilityInvisible() {
     return View.INVISIBLE;
   }
 
-  @SimpleProperty(description = "Visibilitas: hilang (tempat ikut hilang).",
+  @SimpleProperty(description = "BLOK KUNING, visibilitas: hilang "
+      + "(tempat ikut hilang).",
       category = PropertyCategory.BEHAVIOR)
   public int VisibilityGone() {
     return View.GONE;
@@ -288,8 +363,8 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "SET: Efek ripple (gelombang sentuh) warna tertentu. "
-      + "Background bawaan diganti RippleDrawable.")
+  @SimpleFunction(description = "SET: Efek ripple (gelombang sentuh) warna "
+      + "tertentu. Menimpa SEMUA background — pasang PALING AKHIR.")
   public void SetRipple(AndroidViewComponent comp, int color) {
     View v = viewOf(comp, "Ripple");
     if (v == null) {
@@ -311,10 +386,11 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "SET: Garis tepi putus-putus: warna, tebal (dp), "
-      + "panjang garis (dp), jarak garis (dp). dashed=false = garis penuh.")
-  public void SetStroke(AndroidViewComponent comp, boolean dashed,
-      float widthDp, int color, float dashLengthDp, float dashGapDp) {
+  @SimpleFunction(description = "SET: Garis tepi: warna + tebal (dp) dulu, "
+      + "lalu bila dashed=true tambah panjang garis (dp) + jarak garis (dp). "
+      + "dashLengthDp/dashGapDp DIABAIKAN bila dashed=false (= garis penuh).")
+  public void SetStroke(AndroidViewComponent comp, int color,
+      float widthDp, boolean dashed, float dashLengthDp, float dashGapDp) {
     View v = viewOf(comp, "Stroke");
     if (v == null) {
       return;
@@ -342,6 +418,8 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
     try {
       if (!(v instanceof android.widget.TextView)) {
+        Shared.err(this, "Style", 0,
+            "TextSpace: khusus komponen teks (Label/TextBox/Button)");
         return;
       }
       android.widget.TextView tv = (android.widget.TextView) v;
@@ -387,8 +465,9 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "SET: Kembalikan efek sementara: hapus animasi, "
-      + "alpha/rotasi/skala/posisi ke normal. Background tidak diubah.")
+  @SimpleFunction(description = "SET RESET: hapus animasi; kembalikan "
+      + "opacity/alpha, rotasi, skala, posisi (translation) ke normal. yang "
+      + "TIDAK di-reset: background, elevation, padding, margin.")
   public void SetResetEffects(AndroidViewComponent comp) {
     View v = viewOf(comp, "Reset");
     if (v == null) {
@@ -406,8 +485,9 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "SET: Atur warna background polos. Background "
-      + "bawaan diganti.")
+  @SimpleFunction(description = "SET: Atur warna background polos. "
+      + "Background bawaan diganti. Bertarung dengan SetDynamicBackgroundColor "
+      + "(Core): yang dipanggil TERAKHIR menang.")
   public void SetBackgroundColor(AndroidViewComponent comp, int color) {
     View v = viewOf(comp, "BackgroundColor");
     if (v == null) {
@@ -421,8 +501,11 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "SET: Atur gambar background (file/asset, "
-      + "path di-root /storage/emulated/0). Cocok untuk wadah.")
+  @SimpleFunction(description = "SET: Atur gambar background dari file LOKAL "
+      + "atau asset (path di-root /storage/emulated/0; asset diawali \"//\"). "
+      + "KHUSUS lokal — BUKAN URL (URL: unduh dulu pakai Tools_Image/Tools_"
+      + "Downloader). Izin baca storage otomatis dibawa komponen ini. Cocok "
+      + "untuk wadah. Menimpa background bawaan.")
   public void SetBackgroundImage(AndroidViewComponent comp,
       final String path) {
     final View v = viewOf(comp, "BackgroundImage");
@@ -431,6 +514,7 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
     final String p = Shared.clean(path == null ? "" : path);
     if (p.length() == 0) {
+      Shared.err(this, "Style", 0, "BackgroundImage: path kosong");
       return;
     }
     AsynchUtil.runAsynchronously(new Runnable() {
@@ -510,8 +594,9 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     });
   }
 
-  @SimpleFunction(description = "SET: Atur bayangan/elevasi (dp). Efek terlihat di "
-      + "Android 5.0+.")
+  @SimpleFunction(description = "SET: Atur bayangan/elevasi (dp). Butuh "
+      + "background tidak transparan + ruang kosong di sekitar agar bayangan "
+      + "terlihat; di tema gelap bayangan samar.")
   public void SetElevation(AndroidViewComponent comp, float dp) {
     View v = viewOf(comp, "Elevation");
     if (v == null) {
@@ -538,7 +623,9 @@ public class Tools_Style extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "SET: Atur jarak luar/margin (dp): kiri, atas, "
-      + "kanan, bawah. Hanya bila induk mendukung margin.")
+      + "kanan, bawah. Hanya bila induk mendukung margin (Vertical/Horizontal/"
+      + "ScrollArrangement BISA; TableArrangement TIDAK — baris tabel "
+      + "mengabaikan margin). Induk tak mendukung = ErrorOccurred.")
   public void SetMargin(AndroidViewComponent comp, float leftDp,
       float topDp, float rightDp, float bottomDp) {
     View v = viewOf(comp, "Margin");
@@ -552,6 +639,8 @@ public class Tools_Style extends AndroidNonvisibleComponent {
             dp(rightDp), dp(bottomDp));
         v.requestLayout();
       } else {
+        Shared.err(this, "Style", 0,
+            "Margin: induk tidak mendukung margin (mis. TableArrangement)");
       }
     } catch (Exception e) {
     }
@@ -616,7 +705,8 @@ public class Tools_Style extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "CALL: Animasi fade: startPercent ke endPercent "
-      + "(0-100). Mis. 0->100 muncul, 100->0 hilang. Menembak "
+      + "(0-100). Mis. 0->100 muncul, 100->0 hilang. durationMs mis. 300; "
+      + "durationMs<=0 = tanpa set durasi (jalan instan). Menembak "
       + "AnimationStarted/AnimationEnded.")
   public void CallAnimateFade(AndroidViewComponent comp, int durationMs,
       int startPercent, int endPercent) {
@@ -631,8 +721,34 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     play(comp, v, a, durationMs, "fade", "fade");
   }
 
-  @SimpleFunction(description = "CALL: Animasi geser-masuk: direction = "
-      + "left/right/top/bottom. durationMs mis. 300.")
+  @SimpleProperty(description = "BLOK KUNING, arah geser: dari kiri.",
+      category = PropertyCategory.BEHAVIOR)
+  public String DirectionLeft() {
+    return "left";
+  }
+
+  @SimpleProperty(description = "BLOK KUNING, arah geser: dari kanan.",
+      category = PropertyCategory.BEHAVIOR)
+  public String DirectionRight() {
+    return "right";
+  }
+
+  @SimpleProperty(description = "BLOK KUNING, arah geser: dari atas.",
+      category = PropertyCategory.BEHAVIOR)
+  public String DirectionTop() {
+    return "top";
+  }
+
+  @SimpleProperty(description = "BLOK KUNING, arah geser: dari bawah.",
+      category = PropertyCategory.BEHAVIOR)
+  public String DirectionBottom() {
+    return "bottom";
+  }
+
+  @SimpleFunction(description = "CALL: Animasi geser-masuk: direction = colok "
+      + "DirectionLeft/DirectionRight/DirectionTop/DirectionBottom (blok "
+      + "kuning); teks left/right/top/bottom = cara lama. durationMs mis. "
+      + "300; durationMs<=0 = tanpa set durasi (jalan instan).")
   public void CallAnimateSlideIn(AndroidViewComponent comp, String direction,
       int durationMs) {
     View v = viewOf(comp, "SlideIn");
@@ -666,7 +782,8 @@ public class Tools_Style extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "CALL: Animasi skala: ke toXPercent/toYPercent "
-      + "(100 = normal). durationMs mis. 300.")
+      + "(100 = normal). durationMs mis. 300; durationMs<=0 = tanpa set durasi "
+      + "(jalan instan).")
   public void CallAnimateScale(AndroidViewComponent comp, int durationMs,
       int toXPercent, int toYPercent) {
     View v = viewOf(comp, "Scale");
@@ -681,7 +798,8 @@ public class Tools_Style extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "CALL: Animasi putar (derajat, searah jarum jam). "
-      + "durationMs mis. 300.")
+      + "durationMs mis. 300; durationMs<=0 = tanpa set durasi (jalan "
+      + "instan).")
   public void CallAnimateRotation(AndroidViewComponent comp, int durationMs,
       float degrees) {
     View v = viewOf(comp, "RotationAnim");
@@ -733,7 +851,8 @@ public class Tools_Style extends AndroidNonvisibleComponent {
   // ================= EVENTS =================
 
   @SimpleEvent(description = "SATU-SATUNYA error Tools_Style. component = nama "
-      + "operasi (bandingkan dengan blok OpStyle). Id selalu 0 (stateless).")
+      + "operasi (bandingkan dengan blok OpStyle; cth: if component = OpStyle "
+      + "berarti error Style). Id selalu 0 (stateless).")
   public void ErrorOccurred(String component, int id, String message) {
     Shared.fire(this, "ErrorOccurred",
         component, Integer.valueOf(id), message);
@@ -742,7 +861,7 @@ public class Tools_Style extends AndroidNonvisibleComponent {
   // ================= OP =================
 
   @SimpleProperty(description = "Nama operasi Style (untuk if di "
-      + "ErrorOccurred).",
+      + "ErrorOccurred: cth if component = OpStyle berarti error Style).",
       category = PropertyCategory.BEHAVIOR)
   public String OpStyle() {
     return "Style";

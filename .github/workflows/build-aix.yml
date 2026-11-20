@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check facade sync
+        run: node tools/gen_facade.mjs --check
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

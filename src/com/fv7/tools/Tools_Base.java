@@ -20,18 +20,21 @@ import java.net.URLEncoder;
 import java.util.List;
 
 @DesignerComponent(
-    version = 17,
-    description = "Fondasi Tools: id pool lintas extension + helper Tag untuk id "
-        + "komponen LUAR (auto-konversi teks angka) + util dasar "
-        + "(JSON, URI, waktu, byte, mime). Id unik global via CreateUniqueId, "
-        + "atau per tipe via CreateDownloadId/CreateImageId/CreateAudioId/CreateVideoId. "
-        + "Semua list id URUT PEMBUATAN (index 1 = pertama dibuat). "
-        + "(v17 2026-11-17: ToolsVersion 17; blok baru GetWhatsNew = catatan "
-        + "update yang bisa dibaca lewat blok.)",
+    version = 20,
+    description = "Fondasi Tools: id pool global + helper Tag untuk id komponen "
+        + "LUAR (auto-konversi teks angka: \"5\" = 5) + util dasar (JSON, URI, "
+        + "waktu, byte, mime). Butuh id? CreateUniqueId (global, reservasi "
+        + "otomatis). Id komponen luar? RegisterTagId (catat) / CreateTagId "
+        + "(buatkan). Angka cepat tanpa booking? SuggestId (tanpa reservasi, "
+        + "JANGAN dipakai dua tempat). Id per tipe (Download/Image/dll) ada "
+        + "di komponen pemiliknya masing-masing, bukan di sini. Konvensi "
+        + "awalan: Is = boolean (colok ke if), Call = async + hasil lewat "
+        + "event, Set = tanpa feedback, Get = nilai balik sinkron.",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,
-    iconName = "aiwebres/tools_base.jpg")
+    iconName = "aiwebres/tools_base.jpg",
+    helpUrl = "https://github.com/VB-7/MiT-File_Manager")
 @SimpleObject(external = true)
 public class Tools_Base extends AndroidNonvisibleComponent {
 
@@ -46,9 +49,9 @@ public class Tools_Base extends AndroidNonvisibleComponent {
 
   // ================= ID POOL (global) =================
 
-  @SimpleFunction(description = "Buat id unik global baru (Number). Reservasi otomatis, "
-      + "siap pakai ke CallDownload / CallShowImage / CallPlayAudio / CallPlayVideoIn "
-      + "(reservasi otomatis diadopsi). Urutan pembuatan = urutan list.")
+  @SimpleFunction(description = "Buat id unik global baru (Number, reservasi otomatis). "
+      + "Siap pakai ke blok Call... pemiliknya (Download/Image/Audio/Video/dll; "
+      + "reservasi otomatis diadopsi). Urutan pembuatan = urutan list.")
   public int CreateUniqueId() {
     int id = Ids.createUnique();
     if (id < 1) {
@@ -57,8 +60,10 @@ public class Tools_Base extends AndroidNonvisibleComponent {
     return id;
   }
 
-  @SimpleFunction(description = "Id yang disarankan: angka terkecil >= 1 yang belum dipakai "
-      + "siapa pun (tidak di-reservasi, langsung pakai).")
+  @SimpleFunction(description = "BAHAYA: angka terkecil >= 1 yang belum dipakai siapa "
+      + "pun, TAPI tidak di-reservasi (tidak dibooking). Dua pemanggil bisa "
+      + "dapat angka SAMA = tabrakan. JANGAN dipakai dua tempat bersamaan; "
+      + "kalau ragu pakai CreateUniqueId (reservasi otomatis).")
   public int SuggestId() {
     return Ids.suggest();
   }
@@ -74,408 +79,19 @@ public class Tools_Base extends AndroidNonvisibleComponent {
     return Ids.busyList();
   }
 
-  @SimpleFunction(description = "Lepas paksa id yang macet. Jangan dipakai saat operasinya "
-      + "masih jalan (pakai Cancel/Stop/Remove dulu).")
-  public void ReleaseId(int id) {
+  @SimpleFunction(description = "SET: lepas paksa id yang macet (ruang UGD). "
+      + "Resep urut: Cancel/Stop/Remove pemiliknya DULU, SetForceReleaseId "
+      + "TERAKHIR. Id macet bila cancel tidak melepas / crash di tengah. "
+      + "Tanpa feedback.")
+  public void SetForceReleaseId(int id) {
     Ids.release(id);
-  }
-
-  // ================= ID: Download =================
-
-  @SimpleFunction(description = "Semua id unduhan (URUT PEMBUATAN, index 1 = pertama dibuat).")
-  public List<Integer> GetDownloadIds() {
-    return Ids.idsOf(Ids.DOWNLOAD);
-  }
-
-  @SimpleFunction(description = "Id unduhan yang sedang jalan (URUT PEMBUATAN). "
-      + "Yang dijeda TIDAK masuk sini.")
-  public List<Integer> GetActiveDownloadIds() {
-    return Ids.activeIdsOf(Ids.DOWNLOAD);
-  }
-
-  @SimpleFunction(description = "Id unduhan terakhir dibuat/di-start. -1 bila kosong.")
-  public int CurrentDownloadId() {
-    return Ids.currentOf(Ids.DOWNLOAD);
-  }
-
-  @SimpleFunction(description = "Id unduhan index 1 = PERTAMA DIBUAT. -1 bila kosong.")
-  public int GetFirstDownloadId() {
-    return Ids.firstOf(Ids.DOWNLOAD);
-  }
-
-  @SimpleFunction(description = "Id unduhan TERAKHIR DIBUAT. -1 bila kosong.")
-  public int GetLastDownloadId() {
-    return Ids.lastOf(Ids.DOWNLOAD);
-  }
-
-  @SimpleFunction(description = "Id unduhan yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
-  public int GetPreviousDownloadId(int id) {
-    return Ids.previousOf(Ids.DOWNLOAD, id);
-  }
-
-  @SimpleFunction(description = "True bila id unduhan ini sedang jalan.")
-  public boolean IsDownloadIdActive(int id) {
-    return Ids.isActive(Ids.DOWNLOAD, id);
-  }
-
-  @SimpleFunction(description = "Hapus id unduhan: batalkan bila jalan + lepas id.")
-  public void RemoveDownloadId(int id) {
-    Tools_Downloader.cancelStatic(id);
-    Ids.setActive(Ids.DOWNLOAD, id, false);
-    Ids.unregister(Ids.DOWNLOAD, id);
-  }
-
-  // ================= ID: Image =================
-
-  @SimpleFunction(description = "Semua id gambar (URUT PEMBUATAN, index 1 = pertama dibuat).")
-  public List<Integer> GetImageIds() {
-    return Ids.idsOf(Ids.IMAGE);
-  }
-
-  @SimpleFunction(description = "Id gambar yang sedang tampil/loading (URUT PEMBUATAN).")
-  public List<Integer> GetActiveImageIds() {
-    return Ids.activeIdsOf(Ids.IMAGE);
-  }
-
-  @SimpleFunction(description = "Id gambar terakhir dibuat/di-start. -1 bila kosong.")
-  public int CurrentImageId() {
-    return Ids.currentOf(Ids.IMAGE);
-  }
-
-  @SimpleFunction(description = "Id gambar index 1 = PERTAMA DIBUAT. -1 bila kosong.")
-  public int GetFirstImageId() {
-    return Ids.firstOf(Ids.IMAGE);
-  }
-
-  @SimpleFunction(description = "Id gambar TERAKHIR DIBUAT. -1 bila kosong.")
-  public int GetLastImageId() {
-    return Ids.lastOf(Ids.IMAGE);
-  }
-
-  @SimpleFunction(description = "Id gambar yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
-  public int GetPreviousImageId(int id) {
-    return Ids.previousOf(Ids.IMAGE, id);
-  }
-
-  @SimpleFunction(description = "True bila id gambar ini sedang tampil/loading.")
-  public boolean IsImageIdActive(int id) {
-    return Ids.isActive(Ids.IMAGE, id);
-  }
-
-  @SimpleFunction(description = "Hapus id gambar: lepas dari layout + lepas id.")
-  public void RemoveImageId(int id) {
-    Tools_Image.clearStatic(id);
-  }
-
-  // ================= ID: Audio =================
-
-  @SimpleFunction(description = "Semua id audio (URUT PEMBUATAN, index 1 = pertama dibuat).")
-  public List<Integer> GetAudioIds() {
-    return Ids.idsOf(Ids.AUDIO);
-  }
-
-  @SimpleFunction(description = "Id audio yang sedang bunyi (URUT PEMBUATAN).")
-  public List<Integer> GetActiveAudioIds() {
-    return Ids.activeIdsOf(Ids.AUDIO);
-  }
-
-  @SimpleFunction(description = "Id audio terakhir dibuat/di-start. -1 bila kosong.")
-  public int CurrentAudioId() {
-    return Ids.currentOf(Ids.AUDIO);
-  }
-
-  @SimpleFunction(description = "Id audio index 1 = PERTAMA DIBUAT. -1 bila kosong.")
-  public int GetFirstAudioId() {
-    return Ids.firstOf(Ids.AUDIO);
-  }
-
-  @SimpleFunction(description = "Id audio TERAKHIR DIBUAT. -1 bila kosong.")
-  public int GetLastAudioId() {
-    return Ids.lastOf(Ids.AUDIO);
-  }
-
-  @SimpleFunction(description = "Id audio yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
-  public int GetPreviousAudioId(int id) {
-    return Ids.previousOf(Ids.AUDIO, id);
-  }
-
-  @SimpleFunction(description = "True bila id audio ini sedang bunyi.")
-  public boolean IsAudioIdActive(int id) {
-    return Ids.isActive(Ids.AUDIO, id);
-  }
-
-  @SimpleFunction(description = "Hapus id audio: hentikan bila bunyi + lepas id.")
-  public void RemoveAudioId(int id) {
-    Tools_Audio.stopStatic(id);
-  }
-
-  // ================= ID: Video =================
-
-  @SimpleFunction(description = "Semua id video (URUT PEMBUATAN, index 1 = pertama dibuat).")
-  public List<Integer> GetVideoIds() {
-    return Ids.idsOf(Ids.VIDEO);
-  }
-
-  @SimpleFunction(description = "Id video yang sedang main (URUT PEMBUATAN).")
-  public List<Integer> GetActiveVideoIds() {
-    return Ids.activeIdsOf(Ids.VIDEO);
-  }
-
-  @SimpleFunction(description = "Id video terakhir dibuat/di-start. -1 bila kosong.")
-  public int CurrentVideoId() {
-    return Ids.currentOf(Ids.VIDEO);
-  }
-
-  @SimpleFunction(description = "Id video index 1 = PERTAMA DIBUAT. -1 bila kosong.")
-  public int GetFirstVideoId() {
-    return Ids.firstOf(Ids.VIDEO);
-  }
-
-  @SimpleFunction(description = "Id video TERAKHIR DIBUAT. -1 bila kosong.")
-  public int GetLastVideoId() {
-    return Ids.lastOf(Ids.VIDEO);
-  }
-
-  @SimpleFunction(description = "Id video yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
-  public int GetPreviousVideoId(int id) {
-    return Ids.previousOf(Ids.VIDEO, id);
-  }
-
-  @SimpleFunction(description = "True bila id video ini sedang main.")
-  public boolean IsVideoIdActive(int id) {
-    return Ids.isActive(Ids.VIDEO, id);
-  }
-
-  @SimpleFunction(description = "Hapus id video: hentikan + lepas layout + lepas id.")
-  public void RemoveVideoId(int id) {
-    Tools_Video.stopStatic(id);
-  }
-
-  // ================= ID: Core (dinamis) =================
-
-  @SimpleFunction(description = "Semua id dinamis Tools_Core (URUT PEMBUATAN, "
-      + "index 1 = pertama dibuat).")
-  public List<Integer> GetDynamicIds() {
-    return Ids.idsOf(Ids.CORE);
-  }
-
-  @SimpleFunction(description = "Id dinamis yang aktif (URUT PEMBUATAN).")
-  public List<Integer> GetActiveDynamicIds() {
-    return Ids.activeIdsOf(Ids.CORE);
-  }
-
-  @SimpleFunction(description = "Id dinamis terakhir dibuat. -1 bila kosong.")
-  public int CurrentDynamicId() {
-    return Ids.currentOf(Ids.CORE);
-  }
-
-  @SimpleFunction(description = "Id dinamis index 1 = PERTAMA DIBUAT. -1 bila kosong.")
-  public int GetFirstDynamicId() {
-    return Ids.firstOf(Ids.CORE);
-  }
-
-  @SimpleFunction(description = "Id dinamis TERAKHIR DIBUAT. -1 bila kosong.")
-  public int GetLastDynamicId() {
-    return Ids.lastOf(Ids.CORE);
-  }
-
-  @SimpleFunction(description = "Id dinamis yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
-  public int GetPreviousDynamicId(int id) {
-    return Ids.previousOf(Ids.CORE, id);
-  }
-
-  @SimpleFunction(description = "True bila id dinamis ini masih ada.")
-  public boolean IsDynamicIdActive(int id) {
-    return Ids.isActive(Ids.CORE, id);
-  }
-
-  @SimpleFunction(description = "Hapus id dinamis: lepas view + lepas id.")
-  public void RemoveDynamicId(int id) {
-    Tools_Core.clearStatic(id);
-  }
-
-  // ================= ID: Layout (dinamis) =================
-
-  @SimpleFunction(description = "Semua id layout Tools_Layout (URUT PEMBUATAN, "
-      + "index 1 = pertama dibuat).")
-  public List<Integer> GetLayoutIds() {
-    return Ids.idsOf(Ids.LAYOUT);
-  }
-
-  @SimpleFunction(description = "Id layout yang aktif (URUT PEMBUATAN).")
-  public List<Integer> GetActiveLayoutIds() {
-    return Ids.activeIdsOf(Ids.LAYOUT);
-  }
-
-  @SimpleFunction(description = "Id layout terakhir dibuat. -1 bila kosong.")
-  public int CurrentLayoutId() {
-    return Ids.currentOf(Ids.LAYOUT);
-  }
-
-  @SimpleFunction(description = "Id layout index 1 = PERTAMA DIBUAT. -1 bila kosong.")
-  public int GetFirstLayoutId() {
-    return Ids.firstOf(Ids.LAYOUT);
-  }
-
-  @SimpleFunction(description = "Id layout TERAKHIR DIBUAT. -1 bila kosong.")
-  public int GetLastLayoutId() {
-    return Ids.lastOf(Ids.LAYOUT);
-  }
-
-  @SimpleFunction(description = "Id layout yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
-  public int GetPreviousLayoutId(int id) {
-    return Ids.previousOf(Ids.LAYOUT, id);
-  }
-
-  @SimpleFunction(description = "True bila id layout ini masih ada.")
-  public boolean IsLayoutIdActive(int id) {
-    return Ids.isActive(Ids.LAYOUT, id);
-  }
-
-  @SimpleFunction(description = "Hapus id layout: lepas dari induk (anak dinamis "
-      + "di dalamnya ikut beres) + lepas id.")
-  public void RemoveLayoutId(int id) {
-    Tools_Layout.clearStatic(id);
-  }
-
-  // ================= ID: Sheet =================
-
-  @SimpleFunction(description = "Semua id sheet Tools_Sheet (URUT PEMBUATAN, "
-      + "index 1 = pertama dibuat).")
-  public List<Integer> GetSheetIds() {
-    return Ids.idsOf(Ids.SHEET);
-  }
-
-  @SimpleFunction(description = "Id sheet yang aktif (URUT PEMBUATAN).")
-  public List<Integer> GetActiveSheetIds() {
-    return Ids.activeIdsOf(Ids.SHEET);
-  }
-
-  @SimpleFunction(description = "Id sheet terakhir dibuat. -1 bila kosong.")
-  public int CurrentSheetId() {
-    return Ids.currentOf(Ids.SHEET);
-  }
-
-  @SimpleFunction(description = "Id sheet index 1 = PERTAMA DIBUAT. -1 bila kosong.")
-  public int GetFirstSheetId() {
-    return Ids.firstOf(Ids.SHEET);
-  }
-
-  @SimpleFunction(description = "Id sheet TERAKHIR DIBUAT. -1 bila kosong.")
-  public int GetLastSheetId() {
-    return Ids.lastOf(Ids.SHEET);
-  }
-
-  @SimpleFunction(description = "Id sheet yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
-  public int GetPreviousSheetId(int id) {
-    return Ids.previousOf(Ids.SHEET, id);
-  }
-
-  @SimpleFunction(description = "True bila id sheet ini masih terdaftar.")
-  public boolean IsSheetIdActive(int id) {
-    return Ids.isActive(Ids.SHEET, id);
-  }
-
-  @SimpleFunction(description = "Hapus id sheet: tutup diam-diam + lepas id.")
-  public void RemoveSheetId(int id) {
-    Tools_Sheet.clearStatic(id);
-  }
-
-  // ================= ID: Slider =================
-
-  @SimpleFunction(description = "Semua id slider Tools_Image (URUT PEMBUATAN, "
-      + "index 1 = pertama dibuat).")
-  public List<Integer> GetSliderIds() {
-    return Ids.idsOf(Ids.SLIDER);
-  }
-
-  @SimpleFunction(description = "Id slider yang aktif (URUT PEMBUATAN).")
-  public List<Integer> GetActiveSliderIds() {
-    return Ids.activeIdsOf(Ids.SLIDER);
-  }
-
-  @SimpleFunction(description = "Id slider terakhir dibuat. -1 bila kosong.")
-  public int CurrentSliderId() {
-    return Ids.currentOf(Ids.SLIDER);
-  }
-
-  @SimpleFunction(description = "Id slider index 1 = PERTAMA DIBUAT. -1 bila kosong.")
-  public int GetFirstSliderId() {
-    return Ids.firstOf(Ids.SLIDER);
-  }
-
-  @SimpleFunction(description = "Id slider TERAKHIR DIBUAT. -1 bila kosong.")
-  public int GetLastSliderId() {
-    return Ids.lastOf(Ids.SLIDER);
-  }
-
-  @SimpleFunction(description = "Id slider yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
-  public int GetPreviousSliderId(int id) {
-    return Ids.previousOf(Ids.SLIDER, id);
-  }
-
-  @SimpleFunction(description = "True bila id slider ini masih ada.")
-  public boolean IsSliderIdActive(int id) {
-    return Ids.isActive(Ids.SLIDER, id);
-  }
-
-  @SimpleFunction(description = "Hapus id slider: lepas dari layout (autoplay "
-      + "mati) + lepas id.")
-  public void RemoveSliderId(int id) {
-    Tools_Image.clearSliderStatic(id);
-  }
-
-  // ================= SCOPE (Helper) =================
-
-  // ================= ID: Task =================
-
-  @SimpleFunction(description = "Semua id tugas/alarm Tools_Task (URUT PEMBUATAN, "
-      + "index 1 = pertama dibuat).")
-  public List<Integer> GetTaskIds() {
-    return Ids.idsOf(Ids.TASK);
-  }
-
-  @SimpleFunction(description = "Id tugas/alarm yang aktif (URUT PEMBUATAN).")
-  public List<Integer> GetActiveTaskIds() {
-    return Ids.activeIdsOf(Ids.TASK);
-  }
-
-  @SimpleFunction(description = "Id tugas terakhir dibuat. -1 bila kosong.")
-  public int CurrentTaskId() {
-    return Ids.currentOf(Ids.TASK);
-  }
-
-  @SimpleFunction(description = "Id tugas index 1 = PERTAMA DIBUAT. -1 bila kosong.")
-  public int GetFirstTaskId() {
-    return Ids.firstOf(Ids.TASK);
-  }
-
-  @SimpleFunction(description = "Id tugas TERAKHIR DIBUAT. -1 bila kosong.")
-  public int GetLastTaskId() {
-    return Ids.lastOf(Ids.TASK);
-  }
-
-  @SimpleFunction(description = "Id tugas yang dibuat TEPAT SEBELUM id ini. -1 bila tidak ada.")
-  public int GetPreviousTaskId(int id) {
-    return Ids.previousOf(Ids.TASK, id);
-  }
-
-  @SimpleFunction(description = "True bila id tugas ini aktif (jalan/jeda/alarm terpasang).")
-  public boolean IsTaskIdActive(int id) {
-    return Ids.isActive(Ids.TASK, id);
-  }
-
-  @SimpleFunction(description = "Hapus id tugas: batalkan jadwal + cabut alarm "
-      + "sistem + lepas id.")
-  public void RemoveTaskId(int id) {
-    Tools_Task.clearStaticFull(context, id);
   }
 
   // ================= ID TAG (helper komponen LUAR) =================
 
   @SimpleFunction(description = "Buat id unik baru di tag ini (Number, angka terkecil yang belum "
       + "dipakai, langsung di-reservasi). Untuk saat kamulah yang menentukan id-nya "
-      + "(mis. bikin tab sendiri). Beda dengan SaveTagId yang mencatat id dari luar.")
+      + "(mis. bikin tab sendiri). Beda dengan RegisterTagId yang mencatat id dari luar.")
   public int CreateTagId(String tag) {
     int id = TagIds.create(tag);
     if (id < 0) {
@@ -484,10 +100,11 @@ public class Tools_Base extends AndroidNonvisibleComponent {
     return id;
   }
 
-  @SimpleFunction(description = "Simpan id komponen LUAR ke tag (mis. WebView pihak ketiga). "
+  @SimpleFunction(description = "Catat id komponen LUAR ke tag (mis. WebView pihak ketiga). "
       + "id boleh Number ATAU teks angka (\"5\" = 5, otomatis dikonversi). "
-      + "Id dobel = tetap satu. Gagal (tag kosong / bukan angka) via ErrorOccurred.")
-  public void SaveTagId(Object id, String tag) {
+      + "Beda dengan CreateTagId yang MEMBUATKAN id baru. Id dobel = tetap "
+      + "satu (idempoten). Gagal (tag kosong / bukan angka) via ErrorOccurred.")
+  public void RegisterTagId(Object id, String tag) {
     boolean ok = TagIds.save(id, tag);
     if (!ok) {
       Shared.err(this, "Id", 0, "tag kosong / id bukan angka");
@@ -498,6 +115,13 @@ public class Tools_Base extends AndroidNonvisibleComponent {
       + "index 1 = pertama disimpan).")
   public List<Integer> GetTagIds(String tag) {
     return TagIds.list(tag);
+  }
+
+  @SimpleFunction(description = "Id pada nomor urut index di tag ini "
+      + "(1 = pertama disimpan). -1 bila tag kosong / index di luar. "
+      + "Cth: GetTagIds lalu GetTagIdAt(tag, 2) = id kedua.")
+  public int GetTagIdAt(String tag, int index) {
+    return TagIds.at(tag, index);
   }
 
   @SimpleFunction(description = "Id index 1 = PERTAMA DISIMPAN di tag ini. -1 bila kosong.")
@@ -534,7 +158,9 @@ public class Tools_Base extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "Hapus satu id dari tag (hanya lepas catatan, komponen luar "
-      + "tidak diusik). Tag yang kosong ikut dibuang. Tidak tercatat via ErrorOccurred.")
+      + "tidak diusik). Tag yang kosong ikut dibuang. Id yang memang tidak "
+      + "tercatat = idempoten, TAPI tetap lapor via ErrorOccurred (\"tidak tercatat\") "
+      + "agar salah ketik tag ketahuan; bukan diam.")
   public void RemoveTagId(Object id, String tag) {
     boolean gone = TagIds.remove(id, tag);
     if (!gone) {
@@ -542,8 +168,8 @@ public class Tools_Base extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "Buang SELURUH isi satu tag.")
-  public void ClearTag(String tag) {
+  @SimpleFunction(description = "SET: hapus SELURUH isi satu tag. Tanpa feedback.")
+  public void SetClearTag(String tag) {
     TagIds.clear(tag);
   }
 
@@ -554,7 +180,7 @@ public class Tools_Base extends AndroidNonvisibleComponent {
 
   // ================= JSON =================
 
-  @SimpleFunction(description = "Encode list/dictionary/teks jadi JSON.")
+  @SimpleFunction(description = "Encode list/dictionary/teks/angka/boolean jadi JSON.")
   public String JsonEncode(Object value) {
     try {
       return JsonUtil.getJsonRepresentation(value);
@@ -565,7 +191,8 @@ public class Tools_Base extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "Decode teks JSON jadi dictionary/list. Gagal = \"\" + error.")
+  @SimpleFunction(description = "Decode teks JSON jadi dictionary/list. "
+      + "Gagal = \"\" + error (cek LastError(\"Json\"); pola guard: if hasil = \"\" berarti gagal).")
   public Object JsonDecode(String json) {
     try {
       return JsonUtil.getObjectFromJson(json == null ? "" : json);
@@ -623,15 +250,49 @@ public class Tools_Base extends AndroidNonvisibleComponent {
     return Shared.mimeFor(fileName);
   }
 
-  @SimpleFunction(description = "Versi paket Tools (sama untuk semua Tools_* dalam satu .aix).")
+  @SimpleFunction(description = "Versi paket Tools (sama untuk semua Tools_* dalam satu .aix: "
+      + "wajib SAMA semua per rilis; beda = bug kemasan).")
   public int ToolsVersion() {
-    return 18;
+    return 20;
   }
 
   @SimpleFunction(description = "Catatan update paket Tools (dibaca lewat blok, "
       + "karena panel info extension tidak bisa diubah manual).")
   public String GetWhatsNew() {
-    return "v18 2026-11-18: 3 blok duplikat 1-input "
+    return "v20 2026-11-20: RILIS BREAKING (pengguna tunggal = pemilik; "
+        + "proyek lama wajib pasang ulang blok yang di-rename). HAPUS: 72 "
+        + "cermin per-tipe Tools_Base (diet 99->31 blok); IsAudioPlaying/"
+        + "IsVideoPlaying; GetPendingTaskIds; Downloader.GetFileName (pakai "
+        + "CallGuessFileName); SaveTagId->RegisterTagId; ReleaseId->"
+        + "SetForceReleaseId; ClearTag/ClearVars/ClearTaskExtras->SetClearTag/"
+        + "SetClearVars/SetClearTaskExtras; File GetPermission->"
+        + "CallRequestPermission; CallSetAlarm/CallSetRepeatingAlarm->"
+        + "CallScheduleAlarm/CallScheduleRepeatingAlarm (+CallScheduleDailyAt); "
+        + "Sheet SetShowToast/SetShowNotification->CallShowToast/"
+        + "CallSetNotification (+event ToastShown/NotificationShown); "
+        + "RegisterSheet pecah: RegisterSheet(id,content)+SetSheetStyle (+"
+        + "ShowSimpleSheet, CreateNotificationId); Layout GetLayout(id)+"
+        + "GetLayoutAs(type,id), param layout->type di 9 blok (+IsLayoutGone, "
+        + "LayoutRemoved, SetClearLayoutsIn); Style SetStroke urutan baru "
+        + "(comp,color,widthDp,dashed,dashLen,dashGap) + Orientation*/"
+        + "Direction* kuning + background KHUSUS lokal/asset (BUKAN URL); "
+        + "Compress ListZipContents->GetZipEntries + percent 0-100 + cancel "
+        + "hapus ZIP sebagian; File success jadi #1 di 10 event + "
+        + "IsCopyOrMoveBusy + CallCopyFile/Move/AppendFile + GetLastModified/"
+        + "IsFileReadable; Core Set* diam->lapor ErrorOccurred + "
+        + "InvokeDynamic->CallInvokeDynamic + GetDynamicType/16 Type*/"
+        + "IsDynamicVisible; Image slider TANPA batas jumlah + cache URL 50MB "
+        + "MD5 (+SetClearImageCache) + IsSliderAutoPlay/GetSliderInterval/"
+        + "GetImageCount; Task IsTaskPaused/GetTaskElapsed/GetTaskRemaining + "
+        + "AlarmsRestored; Audio/Video IsAudioPaused/IsVideoPaused + "
+        + "SetForward/Backward*By + volume/loop/speed per-id + 4 designer "
+        + "props; Downloader IsDownloadPaused + Get* + CallRetryDownload. "
+        + "ALIAS pindah (tetap jalan): tipe file 'vidio'->video. RENCANA v21: "
+        + "paket migrasi event besar (CoreClicked dkk); reserves kamera/mic/"
+        + "lokasi di File (dicadangkan 2026-11-20) jadi blok nyata. "
+        + "v19: Image ShowImage +width/height/fit, slider +paths, +"
+        + "SetImageSource; fasad satu pintu. "
+        + "v18 2026-11-18: 3 blok duplikat 1-input "
         + "(IsDuplicateFileOrDirectory boolean, GetManyDuplicateFileOr-"
         + "Directory number, GetListDuplicateFileOrDirectory list; keluarga "
         + "counter _N/(N), 1 laci tanpa subfolder; + IsTagIdExists(tag); "
@@ -669,13 +330,15 @@ public class Tools_Base extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred: "
-      + "pesan error terakhir operasi ini (Id/Json/Tag, kosong bila belum ada).")
+      + "pesan error terakhir operasi ini (colok OpId/OpJson, kosong bila belum ada). "
+      + "Cth: JsonDecode gagal -> LastError(OpJson) berisi sebabnya.")
   public String LastError(String operation) {
     return Shared.lastError(operation);
   }
 
   @SimpleEvent(description = "SATU-SATUNYA error Tools_Base. component = nama operasi "
-      + "(bandingkan dengan blok Op...).")
+      + "(bandingkan dengan blok OpId/OpJson; cth: if component = OpJson berarti error JSON). "
+      + "id = id terkait (0 bila umum).")
   public void ErrorOccurred(String component, int id, String message) {
     Shared.fire(this, "ErrorOccurred",
         component, Integer.valueOf(id), message);

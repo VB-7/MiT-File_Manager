@@ -17,6 +17,9 @@ import com.google.appinventor.components.annotations.PropertyCategory;
 import com.google.appinventor.components.annotations.SimpleEvent;
 import com.google.appinventor.components.annotations.SimpleFunction;
 import com.google.appinventor.components.annotations.SimpleObject;
+import com.google.appinventor.components.annotations.UsesPermissions;
+import com.google.appinventor.components.annotations.DesignerProperty;
+import com.google.appinventor.components.common.PropertyTypeConstants;
 import com.google.appinventor.components.annotations.SimpleProperty;
 import com.google.appinventor.components.common.ComponentCategory;
 import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
@@ -33,17 +36,21 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@UsesPermissions("android.permission.INTERNET")
 @DesignerComponent(
-    version = 17,
+    version = 20,
     description = "Tools_Video: putar BANYAK video ber-id di dalam layout (Arrangement MIT / dinamis), "
         + "kontrol ala VLC (pause/resume/seek/maju/mundur/double-tap), loop, volume. "
-        + "Satu id = satu video, bisa jalan bareng. Id dikelola CreateVideoId / Tools_Base. "
-        + "List id URUT PEMBUATAN. "
-        + "(v17 2026-11-17: tanpa perubahan fungsi; penomoran versi.)",
+        + "Satu id = satu video, bisa jalan bareng. Id dikelola CreateVideoId (atau "
+        + "CreateUniqueId Tools_Base). List id URUT PEMBUATAN (index 1 = pertama dibuat). "
+        + "Streaming URL butuh izin INTERNET (otomatis dibawa komponen ini). Akhiran In = "
+        + "butuh wadah layout. Konvensi awalan: Is = cek boolean; Call = async + hasil "
+        + "lewat event; Set = langsung tanpa feedback; Get = nilai balik sinkron."
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,
-    iconName = "aiwebres/tools_video.jpg")
+    iconName = "aiwebres/tools_video.jpg",
+    helpUrl = "https://github.com/VB-7/MiT-File_Manager")
 @SimpleObject(external = true)
 public class Tools_Video extends AndroidNonvisibleComponent
     implements OnDestroyListener {
@@ -56,7 +63,15 @@ public class Tools_Video extends AndroidNonvisibleComponent
   private boolean showVideoController = true;
   private boolean videoLooping = false;
   private int mediaVolume = 100;
-  private boolean doubleTapSeek = true;
+  private boolean doubleTapSeek = false;
+  private final Map<Integer, Integer> volumes =
+      new HashMap<Integer, Integer>();
+  private final Map<Integer, Boolean> loops =
+      new HashMap<Integer, Boolean>();
+  private static final Map<Integer, MediaPlayer> mps =
+      new HashMap<Integer, MediaPlayer>();
+  private static final Map<Integer, Integer> mutedPrev =
+      new HashMap<Integer, Integer>();
 
   private static final Map<Integer, VideoView> views = new HashMap<Integer, VideoView>();
   private static final Map<Integer, Boolean> readies = new HashMap<Integer, Boolean>();
@@ -103,6 +118,52 @@ public class Tools_Video extends AndroidNonvisibleComponent
     this.activity = container.$context();
   }
 
+  private float effVolFloat(int id) {
+    Integer o;
+    synchronized (videoLock) {
+      o = volumes.get(Integer.valueOf(id));
+    }
+    return volFloatV(o == null ? mediaVolume : o.intValue());
+  }
+
+  private int effVolInt(int id) {
+    Integer o;
+    synchronized (videoLock) {
+      o = volumes.get(Integer.valueOf(id));
+    }
+    int v = o == null ? mediaVolume : o.intValue();
+    if (v < 0) {
+      v = 0;
+    }
+    if (v > 100) {
+      v = 100;
+    }
+    return v;
+  }
+
+  private boolean effLoop(int id) {
+    Boolean o;
+    synchronized (videoLock) {
+      o = loops.get(Integer.valueOf(id));
+    }
+    return o == null ? videoLooping : o.booleanValue();
+  }
+
+  private void applyVolId(int id, int volume) {
+    try {
+      MediaPlayer mp;
+      synchronized (videoLock) {
+        mp = mps.get(Integer.valueOf(id));
+      }
+      if (mp != null) {
+        float v = volFloatV(volume);
+        mp.setVolume(v, v);
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
   private void updateTickState() {
     try {
       boolean need = false;
@@ -136,8 +197,7 @@ public class Tools_Video extends AndroidNonvisibleComponent
     }
   }
 
-  private float volFloat() {
-    int v = mediaVolume;
+  private float volFloatV(int v) {
     if (v < 0) {
       v = 0;
     }
@@ -172,13 +232,17 @@ public class Tools_Video extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Putar video ber-id di dalam layout (Arrangement MIT / dinamis). "
-      + "Bisa jalan bareng (satu id = satu video). path file (/Download/..., absolut "
-      + "apa adanya), atau http(s) URL (streaming). id dari CreateVideoId / "
-      + "Tools_Base CreateUniqueId. "
-      + "Atur tinggi arrangement (mis. 300px) agar video kelihatan. "
-      + "Double-tap: kiri = mundur, kanan = maju, tengah = pause/resume. "
-      + "Sukses menembak VideoStarted; gagal via ErrorOccurred.")
+  @SimpleFunction(description = "CALL: Putar video ber-id di dalam layout (Arrangement MIT / "
+      + "dinamis). Bisa jalan bareng (satu id = satu video). path file (/Download/... atau "
+      + "absolut apa adanya), atau http(s) URL (streaming, izin INTERNET otomatis dibawa). "
+      + "id dari CreateVideoId atau CreateUniqueId Tools_Base. "
+      + "Atur tinggi wadah (mis. 300px) agar video kelihatan. Id yang masih main tidak bisa "
+      + "dipakai ulang (Stop/Pause dulu). Id yang sama diputar di wadah lain = PINDAH "
+      + "(lepas dari wadah lama). Stop lalu Play = mulai dari awal. Double-tap "
+      + "mati secara default (nyalakan via DoubleTapSeek bila butuh). Video mengikuti ukuran "
+      + "wadah (bisa gepeng bila rasio beda; samakan rasio wadah dengan video). Controller "
+      + "bawaan + slider sendiri bisa rebutan: pilih satu. Sukses menembak VideoStarted; "
+      + "gagal via ErrorOccurred.")
   public void CallPlayVideoIn(final AndroidViewComponent container,
       final String path, final int id) {
     if (id < 1) {
@@ -340,9 +404,12 @@ public class Tools_Video extends AndroidNonvisibleComponent
           }
           readies.put(Integer.valueOf(id), Boolean.valueOf(true));
         }
+        synchronized (videoLock) {
+          mps.put(Integer.valueOf(id), mp);
+        }
         try {
-          mp.setLooping(videoLooping);
-          float v = volFloat();
+          mp.setLooping(effLoop(id));
+          float v = effVolFloat(id);
           mp.setVolume(v, v);
         } catch (Exception e) {
           // abaikan
@@ -365,7 +432,7 @@ public class Tools_Video extends AndroidNonvisibleComponent
             return;
           }
         }
-        if (videoLooping) {
+        if (effLoop(id)) {
           try {
             vv.start();
           } catch (Exception e) {
@@ -466,7 +533,8 @@ public class Tools_Video extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: Jeda video yang sedang main. (per id)")
+  @SimpleFunction(description = "SET: Jeda video yang sedang main. Tanpa feedback. "
+      + "Cek status via IsVideoPaused.")
   public void SetPauseVideo(int id) {
     try {
       VideoView vv = viewOf(id);
@@ -481,7 +549,8 @@ public class Tools_Video extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: Lanjutkan video yang dijeda. (per id)")
+  @SimpleFunction(description = "SET: Lanjutkan video yang dijeda. Tanpa feedback. "
+      + "Cek status via IsVideoPaused.")
   public void SetResumeVideo(int id) {
     try {
       VideoView vv = viewOf(id);
@@ -496,8 +565,9 @@ public class Tools_Video extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: Hentikan video + lepas dari layout (per id). "
-      + "Id tetap tercatat (Play lagi langsung bisa). Bersih total via RemoveVideoId.")
+  @SimpleFunction(description = "SET: Hentikan video + lepas dari layout. "
+      + "Id tetap tercatat (Play lagi langsung bisa, mulai dari awal). Tanpa event. "
+      + "Bersih total via RemoveVideoId.")
   public void SetStopVideo(int id) {
     try {
       VideoView vv = viewOf(id);
@@ -515,6 +585,8 @@ public class Tools_Video extends AndroidNonvisibleComponent
         synchronized (videoLock) {
           views.remove(Integer.valueOf(id));
           readies.remove(Integer.valueOf(id));
+          mps.remove(Integer.valueOf(id));
+          mutedPrev.remove(Integer.valueOf(id));
         }
         Ids.setActive(Ids.VIDEO, id, false);
         updateTickState();
@@ -525,7 +597,8 @@ public class Tools_Video extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: Lompat video ke posisi (ms). Bisa dipasang ke Slider. (per id)")
+  @SimpleFunction(description = "SET: Lompat video ke posisi milidetik. Bisa dipasang ke "
+      + "Slider (matikan controller bawaan bila rebutan). Tanpa feedback.")
   public void SetSeekVideo(int id, int position) {
     try {
       VideoView vv = viewOf(id);
@@ -538,8 +611,7 @@ public class Tools_Video extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: Maju video sejauh SkipSeconds detik. (per id)")
-  public void SetForwardVideo(int id) {
+  private void seekBySeconds(int id, int seconds) {
     try {
       VideoView vv = viewOf(id);
       if (vv != null && readyOf(id)) {
@@ -550,34 +622,33 @@ public class Tools_Video extends AndroidNonvisibleComponent
         } catch (Exception e) {
           // abaikan
         }
-        int skip = skipSeconds * 1000;
-        if (dur > 0) {
-          vv.seekTo(Math.min(dur, pos + skip));
-        } else {
-          vv.seekTo(pos + skip);
+        int np = pos + seconds * 1000;
+        if (np < 0) {
+          np = 0;
         }
-      } else {
+        if (dur > 0 && np > dur) {
+          np = dur;
+        }
+        vv.seekTo(np);
       }
     } catch (Exception e) {
-      String m = e.getMessage();
+      // abaikan
     }
   }
 
-  @SimpleFunction(description = "SET: Mundur video sejauh SkipSeconds detik. (per id)")
+  @SimpleFunction(description = "SET: Maju video sejauh SkipSeconds DETIK. "
+      + "Tanpa feedback.")
+  public void SetForwardVideo(int id) {
+    seekBySeconds(id, skipSeconds);
+  }
+
+  @SimpleFunction(description = "SET: Mundur video sejauh SkipSeconds DETIK. "
+      + "Tanpa feedback.")
   public void SetBackwardVideo(int id) {
-    try {
-      VideoView vv = viewOf(id);
-      if (vv != null && readyOf(id)) {
-        int pos = vv.getCurrentPosition();
-        vv.seekTo(Math.max(0, pos - skipSeconds * 1000));
-      } else {
-      }
-    } catch (Exception e) {
-      String m = e.getMessage();
-    }
+    seekBySeconds(id, -skipSeconds);
   }
 
-  @SimpleFunction(description = "Posisi video sekarang (ms). (per id)")
+  @SimpleFunction(description = "Posisi video sekarang dalam milidetik. 0 bila belum siap.")
   public int GetVideoPosition(int id) {
     try {
       VideoView vv = viewOf(id);
@@ -590,7 +661,7 @@ public class Tools_Video extends AndroidNonvisibleComponent
     return 0;
   }
 
-  @SimpleFunction(description = "Durasi video (ms). 0 bila belum siap. (per id)")
+  @SimpleFunction(description = "Durasi video dalam milidetik. 0 bila belum siap.")
   public int GetVideoDuration(int id) {
     try {
       VideoView vv = viewOf(id);
@@ -602,16 +673,6 @@ public class Tools_Video extends AndroidNonvisibleComponent
       // abaikan
     }
     return 0;
-  }
-
-  @SimpleFunction(description = "True bila video id ini sedang main.")
-  public boolean IsVideoPlaying(int id) {
-    try {
-      VideoView vv = viewOf(id);
-      return vv != null && readyOf(id) && vv.isPlaying();
-    } catch (Exception e) {
-      return false;
-    }
   }
 
   @SimpleFunction(description = "SET: Hapus SEMUA video Tools_Video dari layout itu (id ikut dilepas, "
@@ -650,6 +711,8 @@ public class Tools_Video extends AndroidNonvisibleComponent
                 int gid = gone.get(i).intValue();
                 views.remove(Integer.valueOf(gid));
                 readies.remove(Integer.valueOf(gid));
+                mps.remove(Integer.valueOf(gid));
+                mutedPrev.remove(Integer.valueOf(gid));
                 Ids.setActive(Ids.VIDEO, gid, false);
                 Ids.unregister(Ids.VIDEO, gid);
               }
@@ -674,6 +737,8 @@ public class Tools_Video extends AndroidNonvisibleComponent
     synchronized (videoLock) {
       vv = views.remove(Integer.valueOf(id));
       readies.remove(Integer.valueOf(id));
+      mps.remove(Integer.valueOf(id));
+      mutedPrev.remove(Integer.valueOf(id));
     }
     if (vv != null) {
       try {
@@ -727,7 +792,8 @@ public class Tools_Video extends AndroidNonvisibleComponent
     return Ids.activeIdsOf(Ids.VIDEO);
   }
 
-  @SimpleFunction(description = "Id video yang terakhir dibuat/di-start. -1 bila kosong.")
+  @SimpleFunction(description = "Id video yang terakhir disentuh (dibuat atau di-start). "
+      + "-1 bila kosong. Beda dengan GetLastVideoId (terakhir dibuat).")
   public int CurrentVideoId() {
     return Ids.currentOf(Ids.VIDEO);
   }
@@ -737,7 +803,8 @@ public class Tools_Video extends AndroidNonvisibleComponent
     return Ids.firstOf(Ids.VIDEO);
   }
 
-  @SimpleFunction(description = "Id TERAKHIR DIBUAT. -1 bila kosong.")
+  @SimpleFunction(description = "Id video TERAKHIR DIBUAT. -1 bila kosong. Beda dengan "
+      + "CurrentVideoId (terakhir disentuh).")
   public int GetLastVideoId() {
     return Ids.lastOf(Ids.VIDEO);
   }
@@ -747,9 +814,127 @@ public class Tools_Video extends AndroidNonvisibleComponent
     return Ids.previousOf(Ids.VIDEO, id);
   }
 
-  @SimpleFunction(description = "True bila id video ini sedang main.")
+  @SimpleFunction(description = "True bila id video ini sedang main. False = jeda, "
+      + "berhenti, atau belum ada (bedakan jeda vs berhenti via IsVideoPaused).")
   public boolean IsVideoIdActive(int id) {
     return Ids.isActive(Ids.VIDEO, id);
+  }
+
+  @SimpleFunction(description = "True bila id video ini sedang dijeda (Pause tapi "
+      + "belum Stop/selesai). False = main/berhenti/belum ada.")
+  public boolean IsVideoPaused(int id) {
+    try {
+      VideoView vv = viewOf(id);
+      return vv != null && readyOf(id) && !vv.isPlaying();
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
+  @SimpleFunction(description = "Volume khusus satu id (0-100). = volume global "
+      + "bila belum diatur via SetVideoVolume.")
+  public int GetVideoVolume(int id) {
+    synchronized (videoLock) {
+      Integer o = volumes.get(Integer.valueOf(id));
+      if (o != null) {
+        return o.intValue();
+      }
+    }
+    return mediaVolume;
+  }
+
+  @SimpleFunction(description = "SET: Volume khusus satu id (0-100). Menimpa "
+      + "volume global untuk id ini. Tanpa feedback.")
+  public void SetVideoVolume(int id, int volume) {
+    if (volume < 0) {
+      volume = 0;
+    }
+    if (volume > 100) {
+      volume = 100;
+    }
+    synchronized (videoLock) {
+      volumes.put(Integer.valueOf(id), Integer.valueOf(volume));
+      mutedPrev.remove(Integer.valueOf(id));
+    }
+    applyVolId(id, volume);
+  }
+
+  @SimpleFunction(description = "Loop khusus satu id. = loop global bila belum "
+      + "diatur via SetVideoLooping.")
+  public boolean GetVideoLooping(int id) {
+    synchronized (videoLock) {
+      Boolean o = loops.get(Integer.valueOf(id));
+      if (o != null) {
+        return o.booleanValue();
+      }
+    }
+    return videoLooping;
+  }
+
+  @SimpleFunction(description = "SET: Loop khusus satu id (true = mengulang bila "
+      + "selesai). Menimpa loop global untuk id ini. Berlaku untuk putaran "
+      + "berikutnya. Tanpa feedback.")
+  public void SetVideoLooping(int id, boolean loop) {
+    synchronized (videoLock) {
+      loops.put(Integer.valueOf(id), Boolean.valueOf(loop));
+    }
+  }
+
+  @SimpleFunction(description = "True bila id video ini sedang dibisukan via "
+      + "SetVideoMuted.")
+  public boolean IsVideoMuted(int id) {
+    synchronized (videoLock) {
+      return mutedPrev.containsKey(Integer.valueOf(id));
+    }
+  }
+
+  @SimpleFunction(description = "SET: Bisukan/suarakan satu id. Bisu = volume 0 "
+      + "sementara (nilai lama disimpan, pulih saat unmute). Tanpa feedback.")
+  public void SetVideoMuted(int id, boolean muted) {
+    if (muted) {
+      synchronized (videoLock) {
+        if (!mutedPrev.containsKey(Integer.valueOf(id))) {
+          mutedPrev.put(Integer.valueOf(id), Integer.valueOf(effVolInt(id)));
+        }
+      }
+      applyVolId(id, 0);
+    } else {
+      Integer p;
+      synchronized (videoLock) {
+        p = mutedPrev.remove(Integer.valueOf(id));
+      }
+      applyVolId(id, p == null ? effVolInt(id) : p.intValue());
+    }
+  }
+
+  @SimpleFunction(description = "SET: Maju video sejauh seconds DETIK "
+      + "(tanpa ubah SkipSeconds). Tanpa feedback.")
+  public void SetForwardVideoBy(int id, int seconds) {
+    seekBySeconds(id, seconds);
+  }
+
+  @SimpleFunction(description = "SET: Mundur video sejauh seconds DETIK "
+      + "(tanpa ubah SkipSeconds). Tanpa feedback.")
+  public void SetBackwardVideoBy(int id, int seconds) {
+    seekBySeconds(id, -seconds);
+  }
+
+  @SimpleFunction(description = "SET: Hapus SEMUA video (semua layout) + buang "
+      + "semua id. Tanpa feedback.")
+  public void SetClearVideos() {
+    try {
+      List<Integer> ids = Ids.idsOf(Ids.VIDEO);
+      for (int i = 0; i < ids.size(); i = i + 1) {
+        try {
+          stopStatic(ids.get(i).intValue());
+        } catch (Exception e) {
+          // abaikan per-id
+        }
+      }
+      updateTickState();
+    } catch (Exception e) {
+      // abaikan
+    }
   }
 
   @SimpleFunction(description = "Hapus id video: hentikan + lepas dari layout + lepas id "
@@ -761,57 +946,73 @@ public class Tools_Video extends AndroidNonvisibleComponent
 
   // ================= pengaturan =================
 
-  @SimpleProperty(description = "Jeda event VideoProgressChanged dalam milidetik (default 500).",
+  @SimpleProperty(description = "Jeda event VideoProgressChanged dalam milidetik (default 500). "
+      + "Lagu 3 menit = 360 event; HP kentang naikkan ke 1000.",
       category = PropertyCategory.BEHAVIOR)
   public int ProgressInterval() {
     return progressInterval;
   }
 
+  @DesignerProperty(editorType = PropertyTypeConstants.PROPERTY_TYPE_INTEGER,
+      defaultValue = "500")
   @SimpleProperty(category = PropertyCategory.BEHAVIOR)
   public void ProgressInterval(int interval) {
     progressInterval = interval <= 0 ? 500 : interval;
     updateTickState();
   }
 
-  @SimpleProperty(description = "Lompatan Maju/Mundur + double-tap dalam detik (default 10).",
+  @SimpleProperty(description = "Lompatan Maju/Mundur + double-tap dalam DETIK (bukan ms). "
+      + "Default 10. Untuk lompatan sekali-sekali pakai SetForwardVideoBy/SetBackwardVideoBy.",
       category = PropertyCategory.BEHAVIOR)
   public int SkipSeconds() {
     return skipSeconds;
   }
 
+  @DesignerProperty(editorType = PropertyTypeConstants.PROPERTY_TYPE_INTEGER,
+      defaultValue = "10")
   @SimpleProperty(category = PropertyCategory.BEHAVIOR)
   public void SkipSeconds(int seconds) {
     skipSeconds = seconds <= 0 ? 10 : seconds;
   }
 
-  @SimpleProperty(description = "Tampilkan kontrol bawaan video. Default true.",
+  @SimpleProperty(description = "Tampilkan kontrol bawaan video (ada tombol play + geser bawaan). "
+      + "Default true. Matikan bila pakai slider sendiri (bisa rebutan).",
       category = PropertyCategory.BEHAVIOR)
   public boolean ShowVideoController() {
     return showVideoController;
   }
 
+  @DesignerProperty(editorType = PropertyTypeConstants.PROPERTY_TYPE_BOOLEAN,
+      defaultValue = "True")
   @SimpleProperty(category = PropertyCategory.BEHAVIOR)
   public void ShowVideoController(boolean show) {
     showVideoController = show;
   }
 
-  @SimpleProperty(description = "Video mengulang otomatis bila selesai. Default false.",
+  @SimpleProperty(description = "Loop global (default false). Id yang sudah diatur via "
+      + "SetVideoLooping memakai nilainya sendiri.",
       category = PropertyCategory.BEHAVIOR)
   public boolean VideoLooping() {
     return videoLooping;
   }
 
+  @DesignerProperty(editorType = PropertyTypeConstants.PROPERTY_TYPE_BOOLEAN,
+      defaultValue = "False")
   @SimpleProperty(category = PropertyCategory.BEHAVIOR)
   public void VideoLooping(boolean loop) {
     videoLooping = loop;
   }
 
-  @SimpleProperty(description = "Volume video 0-100 (default 100).",
+  @SimpleProperty(description = "Volume global 0-100 (default 100, awal semua id). Id yang "
+      + "sudah diatur via SetVideoVolume memakai nilainya sendiri. Bisu sementara via "
+      + "SetVideoMuted.",
       category = PropertyCategory.BEHAVIOR)
   public int MediaVolume() {
     return mediaVolume;
   }
 
+  @DesignerProperty(editorType = PropertyTypeConstants.PROPERTY_TYPE_INTEGER,
+      defaultValue = "100")
   @SimpleProperty(category = PropertyCategory.BEHAVIOR)
   public void MediaVolume(int volume) {
     if (volume < 0) {
@@ -821,15 +1022,36 @@ public class Tools_Video extends AndroidNonvisibleComponent
       volume = 100;
     }
     mediaVolume = volume;
+    try {
+      ArrayList<Integer> keys;
+      synchronized (videoLock) {
+        keys = new ArrayList<Integer>(mps.keySet());
+      }
+      for (int i = 0; i < keys.size(); i = i + 1) {
+        int vid = keys.get(i).intValue();
+        Integer mo;
+        synchronized (videoLock) {
+          mo = mutedPrev.get(Integer.valueOf(vid));
+        }
+        if (mo == null) {
+          applyVolId(vid, effVolInt(vid));
+        }
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
   }
 
   @SimpleProperty(description = "Double-tap video: kiri = mundur, kanan = maju, "
-      + "tengah = pause/resume. Default true.",
+      + "tengah = pause/resume. Default false (matikan perilaku tak terduga; "
+      + "nyalakan bila butuh).",
       category = PropertyCategory.BEHAVIOR)
   public boolean DoubleTapSeek() {
     return doubleTapSeek;
   }
 
+  @DesignerProperty(editorType = PropertyTypeConstants.PROPERTY_TYPE_BOOLEAN,
+      defaultValue = "False")
   @SimpleProperty(category = PropertyCategory.BEHAVIOR)
   public void DoubleTapSeek(boolean enabled) {
     doubleTapSeek = enabled;
@@ -855,20 +1077,24 @@ public class Tools_Video extends AndroidNonvisibleComponent
     Shared.fire(this, "VideoFinished", Integer.valueOf(id));
   }
 
-  @SimpleEvent(description = "SATU-SATUNYA error Tools_Video.")
+  @SimpleEvent(description = "SATU-SATUNYA error Tools_Video. component = nama operasi "
+      + "(isi dengan blok kuning OpVideo untuk if). Contoh: jika component = OpVideo "
+      + "maka tampilkan message.")
   public void ErrorOccurred(String component, int id, String message) {
     Shared.fire(this, "ErrorOccurred",
         component, Integer.valueOf(id), message);
   }
 
-  @SimpleProperty(description = "Nama operasi Video (untuk if di ErrorOccurred).",
+  @SimpleProperty(description = "Nama operasi Video untuk if di ErrorOccurred. Contoh: "
+      + "colok ke perbandingan = dengan component dari event ErrorOccurred.",
       category = PropertyCategory.BEHAVIOR)
   public String OpVideo() {
     return "Video";
   }
 
-  @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred: "
-      + "pesan error terakhir operasi ini (kosong bila belum ada).")
+  @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred: pesan error "
+      + "terakhir operasi ini (teks kosong bila belum ada). Isi operation dengan blok "
+      + "kuning (mis. OpVideo).")
   public String LastError(String operation) {
     return Shared.lastError(operation);
   }

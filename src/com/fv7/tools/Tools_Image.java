@@ -45,22 +45,22 @@ import java.util.List;
 import java.util.Map;
 
 @DesignerComponent(
-    version = 19,
+    version = 20,
     description = "Tools_Image: tampilkan BANYAK gambar ber-id ke layout (path/URL/base64 mandiri) + "
         + "gambar dari base64 + info ukuran. Id dikelola CreateImageId / Tools_Base. "
-        + "Sukses tampil tanpa event (langsung kelihatan); gagal via ErrorOccurred. "
-        + "List id URUT PEMBUATAN. "
-        + "(v19: SATU pintu input — CallShowImage(source saja, +width/height/fit), "
-        + "CallCreateImageSlider(+paths list), GetImageSize universal "
-        + "(path/asset/URL/base64/content://), +SetImageSource ganti gambar "
-        + "show-image yang sudah tampil (view/ukuran/fit tetap, zoom di-reset, "
-        + "tembak ImageShown). v18: +SetImageSize/Visible/Fit "
-        + "+GetImageWidth/Height +IsImageVisible. "
-        + "v17 2026-11-17: tanpa perubahan fungsi; penomoran versi.)",
+        + "Sukses menembak ImageShown (id + path); gagal via ErrorOccurred. "
+        + "List id URUT PEMBUATAN (index 1 = pertama dibuat). INGAT DUA KALENDER: "
+        + "daftar id mulai dari 1, TAPI halaman slider mulai dari 0. Slider TANPA "
+        + "batas jumlah; URL gambar diunduh sekali lalu di-cache otomatis (maks "
+        + "50MB, terlama dihapus dulu; bersihkan manual via SetClearImageCache). "
+        + "Konvensi awalan: Is = boolean (colok ke if), Call = async + hasil lewat "
+        + "event, Set = tanpa feedback sukses (gagal via ErrorOccurred), Get = nilai "
+        + "balik sinkron.",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,
-    iconName = "aiwebres/tools_image.jpg")
+    iconName = "aiwebres/tools_image.jpg",
+    helpUrl = "https://github.com/VB-7/MiT-File_Manager")
 @SimpleObject(external = true)
 @UsesPermissions({"android.permission.INTERNET",
     "android.permission.READ_EXTERNAL_STORAGE",
@@ -168,9 +168,163 @@ public class Tools_Image extends AndroidNonvisibleComponent
     }
   }
 
+  // ================= CACHE URL (hemat unduh-ulang) =================
+
+  private static final long IMG_CACHE_MAX = 50L * 1024L * 1024L;
+
+  private File imgCacheDir() {
+    try {
+      File base = context.getCacheDir();
+      if (base == null) {
+        return null;
+      }
+      File d = new File(base, "tools_img");
+      if (!d.exists()) {
+        d.mkdirs();
+      }
+      return d;
+    } catch (Exception e) {
+      return null;
+    }
+  }
+
+  private static String md5hex(String s) {
+    try {
+      java.security.MessageDigest md =
+          java.security.MessageDigest.getInstance("MD5");
+      byte[] h = md.digest(s.getBytes("UTF-8"));
+      StringBuilder sb = new StringBuilder();
+      for (int i = 0; i < h.length; i = i + 1) {
+        String hx = Integer.toHexString(h[i] & 0xFF);
+        if (hx.length() == 1) {
+          sb.append('0');
+        }
+        sb.append(hx);
+      }
+      return sb.toString();
+    } catch (Exception e) {
+      return null;
+    }
+  }
+
+  private static String urlExt(String url) {
+    try {
+      String u = url;
+      int q = u.indexOf('?');
+      if (q >= 0) {
+        u = u.substring(0, q);
+      }
+      int hsh = u.indexOf('#');
+      if (hsh >= 0) {
+        u = u.substring(0, hsh);
+      }
+      int dot = u.lastIndexOf('.');
+      int slash = u.lastIndexOf('/');
+      if (dot > slash && dot < u.length() - 1) {
+        String e = u.substring(dot + 1).toLowerCase();
+        if (e.equals("jpg") || e.equals("jpeg") || e.equals("png")
+            || e.equals("gif") || e.equals("webp") || e.equals("bmp")) {
+          return "." + e;
+        }
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    return ".img";
+  }
+
+  /** Ambil byte URL dari cache disk. null bila belum ada/gagal. */
+  private byte[] readUrlCache(String url) {
+    try {
+      File d = imgCacheDir();
+      String k = md5hex(url);
+      if (d == null || k == null) {
+        return null;
+      }
+      File f = new File(d, k + urlExt(url));
+      if (!f.exists()) {
+        return null;
+      }
+      FileInputStream fin = new FileInputStream(f);
+      try {
+        return Shared.readAll(fin);
+      } finally {
+        try {
+          fin.close();
+        } catch (Exception e) {
+          // abaikan
+        }
+      }
+    } catch (Exception e) {
+      return null;
+    }
+  }
+
+  /** Simpan byte URL ke cache disk (gagal diam-diam = unduh ulang lain kali). */
+  private void writeUrlCache(String url, byte[] data) {
+    try {
+      File d = imgCacheDir();
+      String k = md5hex(url);
+      if (d == null || k == null || data == null) {
+        return;
+      }
+      File f = new File(d, k + urlExt(url));
+      FileOutputStream out = new FileOutputStream(f);
+      try {
+        out.write(data);
+        out.flush();
+      } finally {
+        try {
+          out.close();
+        } catch (Exception e) {
+          // abaikan
+        }
+      }
+      pruneImgCache(d);
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  private static void pruneImgCache(File dir) {
+    try {
+      File[] fs = dir.listFiles();
+      if (fs == null || fs.length == 0) {
+        return;
+      }
+      long total = 0;
+      for (int i = 0; i < fs.length; i = i + 1) {
+        total = total + fs[i].length();
+      }
+      if (total <= IMG_CACHE_MAX) {
+        return;
+      }
+      for (int i = 0; i < fs.length; i = i + 1) {
+        for (int j = i + 1; j < fs.length; j = j + 1) {
+          if (fs[j].lastModified() < fs[i].lastModified()) {
+            File t = fs[i];
+            fs[i] = fs[j];
+            fs[j] = t;
+          }
+        }
+      }
+      for (int i = 0; i < fs.length && total > IMG_CACHE_MAX; i = i + 1) {
+        total = total - fs[i].length();
+        try {
+          fs[i].delete();
+        } catch (Exception e) {
+          // abaikan
+        }
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
   @SimpleFunction(description = "CALL: tampilkan gambar ber-id ke layout (Arrangement MIT / dinamis). "
       + "SATU pintu input: path file/asset, file:/// absolut, http(s) URL "
-      + "(di-cache otomatis), base64 (mentah / data:...), atau content:// — "
+      + "(diunduh sekali lalu di-cache otomatis — tampil ulang = tanpa unduh), "
+      + "base64 (mentah / data:...), atau content:// — "
       + "terdeteksi otomatis. Bisa jalan bareng (satu id = satu gambar). "
       + "id = penanda (minta ke CreateImageId / "
       + "Tools_Base CreateUniqueId, reservasi otomatis diadopsi). "
@@ -215,31 +369,38 @@ public class Tools_Image extends AndroidNonvisibleComponent
               cache.mkdirs();
             }
             File dst = Shared.uniqueFile(cache, "img_" + id + "_" + name);
-            HttpURLConnection c = (HttpURLConnection) new URL(src).openConnection();
-            c.setConnectTimeout(20000);
-            c.setReadTimeout(20000);
-            c.setInstanceFollowRedirects(true);
-            c.setRequestProperty("User-Agent", "Mozilla/5.0");
-            int code = c.getResponseCode();
-            if (code >= 400) {
-              err = "HTTP " + code;
-            } else {
-              InputStream in = c.getInputStream();
-              byte[] data;
-              try {
-                data = Shared.readAll(in);
-              } finally {
+            byte[] data = readUrlCache(src);
+            if (data == null) {
+              HttpURLConnection c = (HttpURLConnection) new URL(src).openConnection();
+              c.setConnectTimeout(20000);
+              c.setReadTimeout(20000);
+              c.setInstanceFollowRedirects(true);
+              c.setRequestProperty("User-Agent", "Mozilla/5.0");
+              int code = c.getResponseCode();
+              if (code >= 400) {
+                err = "HTTP " + code;
+              } else {
+                InputStream in = c.getInputStream();
                 try {
-                  in.close();
+                  data = Shared.readAll(in);
+                } finally {
+                  try {
+                    in.close();
+                  } catch (Exception e) {
+                    // abaikan
+                  }
+                }
+                try {
+                  c.disconnect();
                 } catch (Exception e) {
                   // abaikan
                 }
+                if (data != null) {
+                  writeUrlCache(src, data);
+                }
               }
-              try {
-                c.disconnect();
-              } catch (Exception e) {
-                // abaikan
-              }
+            }
+            if (err.length() == 0 && data != null) {
               bmp = boundedDecode(data);
               if (bmp == null) {
                 err = "URL bukan gambar yang valid";
@@ -257,6 +418,8 @@ public class Tools_Image extends AndroidNonvisibleComponent
                 }
                 disp = dst.getAbsolutePath();
               }
+            } else if (err.length() == 0) {
+              err = "URL tidak bisa diunduh";
             }
           } else if (src.startsWith("data:") || looksBase64(src)) {
             String b64 = src;
@@ -775,9 +938,9 @@ public class Tools_Image extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "SET: Aktif/matikan cubit-zoom (pinch) + geser "
-      + "gambar ber-id. Aktif memakai mode MATRIX (klik tetap jalan untuk tap "
-      + "tanpa zoom). Perubahan skala menembak ZoomChanged; baca kapan saja "
-      + "via GetZoom.")
+      + "gambar ber-id (mode cubit-geser; tap biasa tetap dihitung klik). "
+      + "Perubahan skala menembak ZoomChanged; baca kapan saja "
+      + "via GetZoom. Sukses diam; id tidak ada via ErrorOccurred.")
   public void SetZoomEnabled(final int id, final boolean enabled) {
     try {
       form.runOnUiThread(new Runnable() {
@@ -894,7 +1057,9 @@ public class Tools_Image extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "SET: atur lebar + tinggi gambar ber-id. Angka "
       + "SAMA seperti blok bawaan MIT: -2 = isi penuh, -1 = otomatis, positif "
-      + "= pixel. Persen tidak didukung (dianggap otomatis). Tanpa feedback.")
+      + "= pixel. Persen tidak didukung blok ini; resep setengah layar: bungkus "
+      + "dalam 2 Arrangement sejajar (masing-masing -2 = terbagi rata), gambar di "
+      + "dalamnya -2. Sukses diam; id tidak ada via ErrorOccurred.")
   public void SetImageSize(final int id, final int width, final int height) {
     try {
       form.runOnUiThread(new Runnable() {
@@ -902,6 +1067,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
           try {
             ImageView iv = imageOf(id);
             if (iv == null) {
+              Shared.err(Tools_Image.this, "Image", id, "id gambar tidak ada");
               return;
             }
             ViewGroup.LayoutParams lp = iv.getLayoutParams();
@@ -924,18 +1090,22 @@ public class Tools_Image extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "SET: tampil/sembunyi gambar ber-id. "
-      + "false = GONE (hilang total). Tanpa feedback.")
+      + "false = GONE (hilang total). Sukses diam; id tidak ada via ErrorOccurred.")
   public void SetImageVisible(final int id, final boolean visible) {
     try {
       form.runOnUiThread(new Runnable() {
         public void run() {
           try {
             ImageView iv = imageOf(id);
-            if (iv != null) {
-              iv.setVisibility(visible ? View.VISIBLE : View.GONE);
+            if (iv == null) {
+              Shared.err(Tools_Image.this, "Image", id, "id gambar tidak ada");
+              return;
             }
+            iv.setVisibility(visible ? View.VISIBLE : View.GONE);
           } catch (Exception e) {
-            // Set = tanpa feedback
+            String m = e.getMessage();
+            Shared.err(Tools_Image.this, "Image", id,
+                m == null ? "visible gagal" : m);
           }
         }
       });
@@ -947,7 +1117,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
   @SimpleFunction(description = "SET: mode pas gambar ber-id. fit true = "
       + "seluruh gambar muat di dalam (tidak kepotong); false = penuhi "
       + "tampilan (bisa kepotong). Mematikan zoom bila sedang aktif. "
-      + "Tanpa feedback.")
+      + "Sukses diam; id tidak ada via ErrorOccurred.")
   public void SetImageFit(final int id, final boolean fit) {
     try {
       form.runOnUiThread(new Runnable() {
@@ -955,6 +1125,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
           try {
             ImageView iv = imageOf(id);
             if (iv == null) {
+              Shared.err(Tools_Image.this, "Image", id, "id gambar tidak ada");
               return;
             }
             synchronized (viewLock) {
@@ -965,7 +1136,9 @@ public class Tools_Image extends AndroidNonvisibleComponent
                 : ImageView.ScaleType.CENTER_CROP);
             iv.setAdjustViewBounds(fit);
           } catch (Exception e) {
-            // Set = tanpa feedback
+            String m = e.getMessage();
+            Shared.err(Tools_Image.this, "Image", id,
+                m == null ? "fit gagal" : m);
           }
         }
       });
@@ -1088,7 +1261,9 @@ public class Tools_Image extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Lebar gambar ber-id (angka MIT: -2 isi, "
-      + "-1 otomatis, positif pixel). -3 bila id tidak ada.")
+      + "-1 otomatis, positif pixel). -3 bila id tidak ada. PENERJEMAH SATUAN: "
+      + "untuk dipasang ke SetImageSize pakai blok ini (satuan MIT); GetImageSize "
+      + "(pixel) hanya untuk hitung-hitungan.")
   public int GetImageWidth(int id) {
     try {
       ImageView iv = imageOf(id);
@@ -1106,7 +1281,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Tinggi gambar ber-id (angka MIT). "
-      + "-3 bila id tidak ada.")
+      + "-3 bila id tidak ada. Lihat penerjemah satuan di GetImageWidth.")
   public int GetImageHeight(int id) {
     try {
       ImageView iv = imageOf(id);
@@ -1144,6 +1319,10 @@ public class Tools_Image extends AndroidNonvisibleComponent
     }
     try {
       if (s.regionMatches(true, 0, "http", 0, 4)) {
+        byte[] hit = readUrlCache(s);
+        if (hit != null) {
+          return hit;
+        }
         HttpURLConnection c = (HttpURLConnection) new java.net.URL(s)
             .openConnection();
         c.setConnectTimeout(20000);
@@ -1161,7 +1340,11 @@ public class Tools_Image extends AndroidNonvisibleComponent
         }
         InputStream in = c.getInputStream();
         try {
-          return Shared.readAll(in);
+          byte[] data = Shared.readAll(in);
+          if (data != null) {
+            writeUrlCache(s, data);
+          }
+          return data;
         } finally {
           try {
             in.close();
@@ -1240,6 +1423,10 @@ public class Tools_Image extends AndroidNonvisibleComponent
       String s = Shared.clean(src == null ? "" : src);
       String usePath = s.length() > 0 ? s : Shared.clean(fallbackPath);
       if (s.regionMatches(true, 0, "http", 0, 4)) {
+        byte[] hit = readUrlCache(s);
+        if (hit != null) {
+          return boundedDecode(hit);
+        }
         HttpURLConnection c = (HttpURLConnection) new java.net.URL(s)
             .openConnection();
         c.setConnectTimeout(20000);
@@ -1270,6 +1457,9 @@ public class Tools_Image extends AndroidNonvisibleComponent
           c.disconnect();
         } catch (Exception e) {
           // abaikan
+        }
+        if (data != null) {
+          writeUrlCache(s, data);
         }
         return boundedDecode(data);
       }
@@ -1356,10 +1546,13 @@ public class Tools_Image extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "CALL: bikin slider gambar ber-id (geser kanan-kiri "
-      + "bila horizontal=true, atas-bawah bila false — lebih dari Iago/Boson "
-      + "yang cuma kiri-kanan). paths = list gambar langsung (path file/asset, "
-      + "URL http, atau base64; boleh list kosong = isi belakangan via "
-      + "SetSliderImages, maks 20). Geser menembak "
+      + "bila horizontal=true, atas-bawah bila false). paths = list gambar langsung "
+      + "(path file/asset, URL http, atau base64; boleh list kosong = isi belakangan "
+      + "via SetSliderImages). TANPA batas jumlah (dulu maks 20); tiap gambar "
+      + "dikecilkan otomatis bila > 2048px, tapi puluhan gambar besar tetap makan "
+      + "RAM — sesuaikan. URL diunduh sekali lalu di-cache (tak perlu unduh ulang; "
+      + "bersihkan via SetClearImageCache). INGAT: halaman slider mulai dari 0 "
+      + "(bukan 1 seperti daftar id). Geser menembak "
       + "SliderChanged; baca kapan saja via GetSliderIndex.")
   public void CallCreateImageSlider(final AndroidViewComponent container,
       final int id, final boolean horizontal, final Object paths) {
@@ -1372,7 +1565,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
       return;
     }
     final List<String> init = toStrList(paths);
-    final List<String> first = init.size() > 20 ? init.subList(0, 20) : init;
+    final List<String> first = new ArrayList<String>(init);
     synchronized (viewLock) {
       if (sliders.containsKey(Integer.valueOf(id))) {
         Shared.err(this, "Slider", id, "ID " + id + " masih ada "
@@ -1534,12 +1727,14 @@ public class Tools_Image extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "SET: isi slider ber-id dengan daftar gambar "
       + "(list teks: path file/asset, URL http, atau base64 — sama fleksibelnya "
-      + "dengan ShowImage; path dipakai bila item kosong). Maks 20 "
-      + "gambar. Gagal via ErrorOccurred.")
+      + "dengan ShowImage; path dipakai bila item kosong). TANPA batas jumlah. "
+      + "URL diunduh sekali lalu di-cache (tak perlu unduh ulang). "
+      + "List kosong / slider tidak ada = ErrorOccurred. Gagal via ErrorOccurred.")
   public void SetSliderImages(final int sliderId,
       final Object paths) {
     final List<String> list = toStrList(paths);
     if (list.isEmpty()) {
+      Shared.err(this, "Slider", sliderId, "list gambar kosong");
       return;
     }
     Slider s;
@@ -1547,9 +1742,10 @@ public class Tools_Image extends AndroidNonvisibleComponent
       s = sliders.get(Integer.valueOf(sliderId));
     }
     if (s == null) {
+      Shared.err(this, "Slider", sliderId, "slider tidak ada");
       return;
     }
-    final List<String> use = list.size() > 20 ? list.subList(0, 20) : list;
+    final List<String> use = new ArrayList<String>(list);
     fillSliderImages(sliderId, use);
   }
 
@@ -1630,30 +1826,34 @@ public class Tools_Image extends AndroidNonvisibleComponent
     });
   }
 
-  @SimpleFunction(description = "SET: geser slider ke halaman berikut (berputar). Tanpa feedback.")
-  public void SetSliderNext(final int id) {
-    slideTo(id, 1, false);
+  @SimpleFunction(description = "SET: geser slider ke halaman berikut (berputar). "
+      + "Memicu SliderChanged bila halaman berubah (bukan tanpa feedback).")
+  public void SetSliderNext(final int sliderId) {
+    slideTo(sliderId, 1, false);
   }
 
-  @SimpleFunction(description = "SET: geser slider ke halaman sebelum (berputar). Tanpa feedback.")
-  public void SetSliderPrevious(final int id) {
-    slideTo(id, -1, false);
+  @SimpleFunction(description = "SET: geser slider ke halaman sebelum (berputar). "
+      + "Memicu SliderChanged bila halaman berubah (bukan tanpa feedback).")
+  public void SetSliderPrevious(final int sliderId) {
+    slideTo(sliderId, -1, false);
   }
 
-  @SimpleFunction(description = "SET: lompat ke halaman index (0 = pertama). Tanpa feedback.")
-  public void SetSliderGoTo(final int id, final int index) {
+  @SimpleFunction(description = "SET: lompat ke halaman index (INGAT: 0 = pertama, "
+      + "bukan 1). Memicu SliderChanged bila halaman berubah.")
+  public void SetSliderGoTo(final int sliderId, final int index) {
     Slider s;
     synchronized (viewLock) {
-      s = sliders.get(Integer.valueOf(id));
+      s = sliders.get(Integer.valueOf(sliderId));
     }
     if (s == null) {
+      Shared.err(this, "Slider", sliderId, "slider tidak ada");
       return;
     }
     final Slider fS = s;
     try {
       form.runOnUiThread(new Runnable() {
         public void run() {
-          goToLocked(fS, id, index, true);
+          goToLocked(fS, sliderId, index, true);
         }
       });
     } catch (Exception e) {
@@ -1661,20 +1861,21 @@ public class Tools_Image extends AndroidNonvisibleComponent
     }
   }
 
-  private void slideTo(final int id, final int delta, final boolean silent) {
+  private void slideTo(final int sliderId, final int delta, final boolean silent) {
     Slider s;
     synchronized (viewLock) {
-      s = sliders.get(Integer.valueOf(id));
+      s = sliders.get(Integer.valueOf(sliderId));
     }
     if (s == null || s.pages.isEmpty()) {
       return;
     }
     final Slider fS = s;
+    final int fId = sliderId;
     final int target = (s.index + delta + s.pages.size()) % s.pages.size();
     try {
       form.runOnUiThread(new Runnable() {
         public void run() {
-          goToLocked(fS, id, target, !silent);
+          goToLocked(fS, fId, target, !silent);
         }
       });
     } catch (Exception e) {
@@ -1683,16 +1884,18 @@ public class Tools_Image extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "SET: Auto-putar slider tiap intervalMs "
-      + "(0 = mati).")
-  public void SetSliderAutoPlay(final int id, final long intervalMs) {
+      + "(0 = mati). Tiap putaran memicu SliderChanged.")
+  public void SetSliderAutoPlay(final int sliderId, final long intervalMs) {
     Slider s;
     synchronized (viewLock) {
-      s = sliders.get(Integer.valueOf(id));
+      s = sliders.get(Integer.valueOf(sliderId));
     }
     if (s == null) {
+      Shared.err(this, "Slider", sliderId, "slider tidak ada");
       return;
     }
     final Slider fS = s;
+    final int fId = sliderId;
     try {
       form.runOnUiThread(new Runnable() {
         public void run() {
@@ -1711,14 +1914,14 @@ public class Tools_Image extends AndroidNonvisibleComponent
                   try {
                     Slider cur;
                     synchronized (viewLock) {
-                      cur = sliders.get(Integer.valueOf(id));
+                      cur = sliders.get(Integer.valueOf(fId));
                     }
                     if (cur == null || cur != fS) {
                       return;
                     }
                     if (!cur.pages.isEmpty()) {
                       int t = (cur.index + 1) % cur.pages.size();
-                      goToLocked(cur, id, t, true);
+                      goToLocked(cur, fId, t, true);
                     }
                     if (fS.autoTask != null && fS.interval > 0) {
                       fS.auto.postDelayed(fS.autoTask, fS.interval);
@@ -1732,7 +1935,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
             }
           } catch (Exception e) {
             String m = e.getMessage();
-            Shared.err(Tools_Image.this, "Slider", id,
+            Shared.err(Tools_Image.this, "Slider", fId,
                 m == null ? "autoplay gagal" : m);
           }
         }
@@ -1743,19 +1946,37 @@ public class Tools_Image extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Fallback polling untuk event SliderChanged: "
-      + "index halaman aktif (0 = pertama).")
-  public int GetSliderIndex(int id) {
+      + "index halaman aktif (INGAT: 0 = pertama, bukan 1). -1 bila slider tidak ada.")
+  public int GetSliderIndex(int sliderId) {
     synchronized (viewLock) {
-      Slider s = sliders.get(Integer.valueOf(id));
+      Slider s = sliders.get(Integer.valueOf(sliderId));
       return s == null ? -1 : s.index;
     }
   }
 
-  @SimpleFunction(description = "Jumlah halaman slider ber-id.")
-  public int GetSliderCount(int id) {
+  @SimpleFunction(description = "Jumlah halaman slider ber-id (0 bila slider tidak ada).")
+  public int GetSliderCount(int sliderId) {
     synchronized (viewLock) {
-      Slider s = sliders.get(Integer.valueOf(id));
+      Slider s = sliders.get(Integer.valueOf(sliderId));
       return s == null ? 0 : s.pages.size();
+    }
+  }
+
+  @SimpleFunction(description = "True bila autoplay slider ber-id sedang jalan "
+      + "(interval > 0 dan belum dimatikan).")
+  public boolean IsSliderAutoPlay(int sliderId) {
+    synchronized (viewLock) {
+      Slider s = sliders.get(Integer.valueOf(sliderId));
+      return s != null && s.autoTask != null && s.interval > 0;
+    }
+  }
+
+  @SimpleFunction(description = "Interval autoplay slider ber-id (milidetik; "
+      + "0 = mati / slider tidak ada).")
+  public long GetSliderInterval(int sliderId) {
+    synchronized (viewLock) {
+      Slider s = sliders.get(Integer.valueOf(sliderId));
+      return s == null ? 0L : s.interval;
     }
   }
 
@@ -1798,12 +2019,23 @@ public class Tools_Image extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Semua id gambar yang tampil (URUT PEMBUATAN, "
-      + "index 1 = pertama dibuat).")
+      + "index 1 = pertama dibuat). Beda dengan GetActiveImageIds: yang ini HANYA "
+      + "yang sudah tampil; Aktif = termasuk yang masih loading.")
   public List<Integer> GetImageIds() {
     return Ids.idsOf(Ids.IMAGE);
   }
 
-  @SimpleFunction(description = "Id gambar yang sedang tampil/loading (URUT PEMBUATAN).")
+  @SimpleFunction(description = "Jumlah gambar ber-id yang sedang tampil "
+      + "(0 bila tidak ada).")
+  public int GetImageCount() {
+    synchronized (viewLock) {
+      return views.size();
+    }
+  }
+
+  @SimpleFunction(description = "Id gambar yang sedang tampil/loading (URUT PEMBUATAN). "
+      + "Beda dengan GetImageIds: yang ini termasuk yang masih loading; Ids = "
+      + "hanya yang sudah tampil.")
   public List<Integer> GetActiveImageIds() {
     return Ids.activeIdsOf(Ids.IMAGE);
   }
@@ -1888,13 +2120,13 @@ public class Tools_Image extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "Hapus slider: lepas dari layout + lepas id "
       + "(otomatis beres-beres, autoplay mati).")
-  public void RemoveSliderId(int id) {
-    clearSliderStatic(id);
+  public void RemoveSliderId(int sliderId) {
+    clearSliderStatic(sliderId);
   }
 
   @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred: "
-      + "pesan error terakhir operasi ini (Image/Base64/Slider, kosong bila "
-      + "belum ada).")
+      + "pesan error terakhir operasi ini (colok OpImage/OpSlider/OpBase64; "
+      + "kosong bila belum ada).")
   public String LastError(String operation) {
     return Shared.lastError(operation);
   }
@@ -1910,7 +2142,8 @@ public class Tools_Image extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "CALL: decode base64 jadi gambar di cache. Path hasil langsung bisa "
       + "dipasang ke Image.Picture. Hasil lewat AfterPictureBase64Ready. "
-      + "Satu proses per saat.")
+      + "Satu proses per saat: panggilan kedua saat sibuk = DITOLAK "
+      + "(AfterPictureBase64Ready success=false + ErrorOccurred).")
   public void CallBase64ToPicture(final String base64) {
     if (!Shared.claimSlot("b64pic")) {
       Shared.err(this, "Base64", 0, "masih ada proses gambar berjalan");
@@ -2000,9 +2233,11 @@ public class Tools_Image extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Lebar dan tinggi gambar (pixel). SATU pintu: "
-      + "path file/asset, http(s) URL, base64, atau content:// — terdeteksi "
-      + "otomatis. Kembali: list [lebar, tinggi]. [0, 0] bila bukan gambar / "
-      + "tidak ada.")
+      + "path file/asset, http(s) URL (pakai cache bila pernah diunduh), base64, "
+      + "atau content:// — terdeteksi "
+      + "otomatis. Kembali: list [lebar, tinggi] (index 1 = lebar, 2 = tinggi). "
+      + "[0, 0] bila bukan gambar / tidak ada. Pixel hanya untuk hitung-hitungan; "
+      + "untuk dipasang ke SetImageSize pakai GetImageWidth/Height (satuan MIT).")
   public List<Integer> GetImageSize(String path) {
     ArrayList<Integer> out = new ArrayList<Integer>();
     out.add(Integer.valueOf(0));
@@ -2030,9 +2265,39 @@ public class Tools_Image extends AndroidNonvisibleComponent
     return out;
   }
 
+  @SimpleFunction(description = "SET: hapus SEMUA cache unduhan URL gambar "
+      + "(hemat unduh-ulang; maks 50MB, terlama terhapus otomatis). Pakai ini "
+      + "bila gambar URL berubah tapi alamatnya sama (paksa unduh baru). "
+      + "Sukses diam; gagal via ErrorOccurred.")
+  public void SetClearImageCache() {
+    try {
+      File d = imgCacheDir();
+      if (d == null || !d.exists()) {
+        return;
+      }
+      File[] fs = d.listFiles();
+      if (fs == null) {
+        return;
+      }
+      for (int i = 0; i < fs.length; i = i + 1) {
+        try {
+          fs[i].delete();
+        } catch (Exception e) {
+          // abaikan
+        }
+      }
+    } catch (Exception e) {
+      String m = e.getMessage();
+      Shared.err(this, "Image", 0,
+          m == null ? "hapus cache gagal" : m);
+    }
+  }
+
   // ================= EVENTS =================
 
-  @SimpleEvent(description = "Hasil CallShowImage: gambar ber-id tampil. id + path tampil.")
+  @SimpleEvent(description = "Hasil CallShowImage/SetImageSource: gambar ber-id tampil. "
+      + "id + path YANG JADI (URL/base64/content -> file cache; asset/file -> path itu; "
+      + "penting untuk simpan/bagi gambar).")
   public void ImageShown(int id, String path) {
     Shared.fire(this, "ImageShown", Integer.valueOf(id), path);
   }
@@ -2061,19 +2326,21 @@ public class Tools_Image extends AndroidNonvisibleComponent
   }
 
   @SimpleEvent(description = "Halaman slider pindah: id slider + index "
-      + "(0 = pertama). Fallback: GetSliderIndex.")
+      + "(INGAT: 0 = pertama, bukan 1). Dipicu geser manual, GoTo/Next/Previous, "
+      + "dan autoplay. Fallback: GetSliderIndex.")
   public void SliderChanged(int sliderId, int index) {
     Shared.fire(this, "SliderChanged",
         Integer.valueOf(sliderId), Integer.valueOf(index));
   }
 
-  @SimpleEvent(description = "Halaman slider di-klik: id slider + index.")
+  @SimpleEvent(description = "Halaman slider di-klik: id slider + index (0 = pertama).")
   public void SliderClicked(int sliderId, int index) {
     Shared.fire(this, "SliderClicked",
         Integer.valueOf(sliderId), Integer.valueOf(index));
   }
 
-  @SimpleEvent(description = "Proses base64-gambar dimulai.")
+  @SimpleEvent(description = "Proses base64-gambar dimulai (tanpa parameter "
+      + "karena antrean serial: satu proses per saat, id tidak perlu).")
   public void PictureStarted() {
     Shared.fire(this, "PictureStarted");
   }
@@ -2086,7 +2353,8 @@ public class Tools_Image extends AndroidNonvisibleComponent
   }
 
   @SimpleEvent(description = "SATU-SATUNYA error Tools_Image. component = nama operasi "
-      + "(bandingkan dengan blok Op...).")
+      + "(bandingkan dengan blok OpImage/OpSlider/OpBase64; cth: if component = OpSlider "
+      + "berarti error slider). id = id terkait (0 bila umum: Base64/id-pool).")
   public void ErrorOccurred(String component, int id, String message) {
     Shared.fire(this, "ErrorOccurred",
         component, Integer.valueOf(id), message);
@@ -2094,19 +2362,22 @@ public class Tools_Image extends AndroidNonvisibleComponent
 
   // ================= OP =================
 
-  @SimpleProperty(description = "Nama operasi Slider (untuk if di ErrorOccurred).",
+  @SimpleProperty(description = "Nama operasi Slider (untuk if di ErrorOccurred: "
+      + "cth if component = OpSlider berarti error slider).",
       category = PropertyCategory.BEHAVIOR)
   public String OpSlider() {
     return "Slider";
   }
 
-  @SimpleProperty(description = "Nama operasi Image (untuk if di ErrorOccurred).",
+  @SimpleProperty(description = "Nama operasi Image (untuk if di ErrorOccurred: "
+      + "cth if component = OpImage berarti error gambar).",
       category = PropertyCategory.BEHAVIOR)
   public String OpImage() {
     return "Image";
   }
 
-  @SimpleProperty(description = "Nama operasi Base64 (untuk if di ErrorOccurred).",
+  @SimpleProperty(description = "Nama operasi Base64 (untuk if di ErrorOccurred: "
+      + "cth if component = OpBase64 berarti error decode base64).",
       category = PropertyCategory.BEHAVIOR)
   public String OpBase64() {
     return "Base64";

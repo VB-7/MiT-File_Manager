@@ -27,20 +27,22 @@ import java.util.List;
 import java.util.Map;
 
 @DesignerComponent(
-    version = 18,
+    version = 20,
     description = "Tools_Layout: bikin layout dinamis ber-id (Vertical, "
         + "Horizontal, VerticalScroll, HorizontalScroll) di dalam layout yang "
         + "sudah ada atau buatan Tools_Core/Tools_Layout. Id dikelola "
-        + "CreateLayoutId. List id URUT PEMBUATAN. "
-        + "(v18: create +lebar/tinggi/visible/warna; GetLayout + "
-        + "SetLayoutVisible/Size/BackgroundColor/Alignment + "
-        + "IsLayoutExists/IsLayoutVisible/GetLayoutWidth/Height "
-        + "(wajib tipe+id cocok). v17 2026-11-17: tanpa perubahan fungsi; "
-        + "penomoran versi.)",
+        + "CreateLayoutId. List id URUT PEMBUATAN. Konvensi awalan: Is = boolean "
+        + "(colok ke if), Call = async + hasil lewat event, Set = tanpa feedback "
+        + "sukses (gagal via ErrorOccurred), Get = nilai balik sinkron. KAMUS "
+        + "\"TIDAK ADA\": objek = null, angka = -3, id = -1, teks = kosong. "
+        + "Tiga tukang: butuh wadah scroll = Layout; butuh tombol/label dinamis "
+        + "= Core (atau komponen luar bila butuh lebih). Blok kuning = pilihan "
+        + "tetap (colok ke soket yang cocok).",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,
-    iconName = "aiwebres/tools_layout.jpg")
+    iconName = "aiwebres/tools_layout.jpg",
+    helpUrl = "https://github.com/VB-7/MiT-File_Manager")
 @SimpleObject(external = true)
 public class Tools_Layout extends AndroidNonvisibleComponent
     implements OnDestroyListener {
@@ -251,7 +253,8 @@ public class Tools_Layout extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "CALL: Bikin HorizontalArrangement dinamis ber-id di "
       + "dalam layout induk. width/height angka MIT (-2 isi, -1 otomatis, "
-      + "positif pixel); visible false = GONE.")
+      + "positif pixel); visible false = GONE. Sukses menembak LayoutCreated; "
+      + "gagal via ErrorOccurred.")
   public void CallCreateHorizontalLayout(AndroidViewComponent container, int id,
       int width, int height, boolean visible, int backgroundColor) {
     make(container, id, "HorizontalArrangement", width, height, visible,
@@ -260,7 +263,8 @@ public class Tools_Layout extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "CALL: Bikin VerticalScrollArrangement dinamis "
       + "ber-id (bisa scroll atas-bawah) di dalam layout induk. width/height "
-      + "angka MIT; visible false = GONE.")
+      + "angka MIT; visible false = GONE. Sukses menembak LayoutCreated; gagal "
+      + "via ErrorOccurred.")
   public void CallCreateVerticalScrollLayout(AndroidViewComponent container,
       int id, int width, int height, boolean visible, int backgroundColor) {
     make(container, id, "VerticalScrollArrangement", width, height, visible,
@@ -269,16 +273,19 @@ public class Tools_Layout extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "CALL: Bikin HorizontalScrollArrangement dinamis "
       + "ber-id (bisa scroll kiri-kanan) di dalam layout induk. width/height "
-      + "angka MIT; visible false = GONE.")
+      + "angka MIT; visible false = GONE. Sukses menembak LayoutCreated; gagal "
+      + "via ErrorOccurred.")
   public void CallCreateHorizontalScrollLayout(AndroidViewComponent container,
       int id, int width, int height, boolean visible, int backgroundColor) {
     make(container, id, "HorizontalScrollArrangement", width, height, visible,
         backgroundColor);
   }
 
-  @SimpleFunction(description = "Ambil layout dinamis ber-id (untuk dipakai "
-      + "sebagai wadah blok lain). null bila tidak ada.")
-  public Object GetLayoutComponent(int id) {
+  @SimpleFunction(description = "Ambil layout dinamis ber-id TANPA cek tipe "
+      + "(untuk dibaca/dipegang; bebas). null bila tidak ada. Kontras: "
+      + "GetLayoutAs(type, id) = AMAN (tipe wajib cocok; untuk dicolok ke soket "
+      + "container yang menuntut tipe). Pakai As bila dicolok ke soket container.")
+  public Object GetLayout(int id) {
     synchronized (layoutLock) {
       Component c = layouts.get(Integer.valueOf(id));
       if (c == null) {
@@ -338,34 +345,82 @@ public class Tools_Layout extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Hapus layout dinamis: lepas dari induk + "
-      + "lepas id (isi ikut hilang dari layar).")
+      + "lepas id (isi ikut hilang dari layar). CASCADING: isi dinamis di "
+      + "dalamnya (Core/Image/Sheet/nested Tools_Layout) ikut dilepas id-nya. "
+      + "Sukses menembak LayoutRemoved; id tidak ada = diam (tanpa event).")
   public void RemoveLayoutId(int id) {
+    boolean existed;
+    synchronized (layoutLock) {
+      existed = layouts.containsKey(Integer.valueOf(id));
+    }
     clearStatic(id);
+    if (existed) {
+      LayoutRemoved(id);
+    }
   }
 
   @SimpleFunction(description = "SET: Hapus SEMUA layout dinamis Tools_Layout "
-      + "(id ikut dilepas).")
+      + "(id ikut dilepas; cascading seperti RemoveLayoutId). Menembak "
+      + "LayoutRemoved SATU PER SATU id.")
   public void SetClearLayouts() {
     ArrayList<Integer> all;
     synchronized (layoutLock) {
       all = new ArrayList<Integer>(layouts.keySet());
     }
     for (int i = 0; i < all.size(); i = i + 1) {
-      clearStatic(all.get(i).intValue());
+      RemoveLayoutId(all.get(i).intValue());
+    }
+  }
+
+  @SimpleFunction(description = "SET: Hapus HANYA layout dinamis yang ada di "
+      + "dalam container ini (wadah luar/arrangement biasa boleh; isi dinamis "
+      + "di dalamnya cascading seperti RemoveLayoutId). Menembak LayoutRemoved "
+      + "satu per satu id. Kontras: SetClearLayouts = sapu SEMUA.")
+  public void SetClearLayoutsIn(AndroidViewComponent container) {
+    View root = null;
+    try {
+      if (container != null) {
+        root = container.getView();
+      }
+    } catch (Exception e) {
+      root = null;
+    }
+    if (root == null) {
+      Shared.err(this, "Layout", 0, "container tidak valid");
+      return;
+    }
+    ArrayList<Integer> gone = new ArrayList<Integer>();
+    synchronized (layoutLock) {
+      for (Map.Entry<Integer, Component> en : layouts.entrySet()) {
+        Component cc = en.getValue();
+        if (cc instanceof AndroidViewComponent) {
+          try {
+            View v = ((AndroidViewComponent) cc).getView();
+            if (v != null && (v == root || isUnder(v, root))) {
+              gone.add(en.getKey());
+            }
+          } catch (Exception e) {
+            // abaikan
+          }
+        }
+      }
+    }
+    for (int i = 0; i < gone.size(); i = i + 1) {
+      RemoveLayoutId(gone.get(i).intValue());
     }
   }
 
   // ================= TYPE (pembanding, read-only) =================
 
   /** Layout ber-id yang tipenya PERSIS sama dengan yang diminta.
-   *  Null bila id tidak ada, tipe beda, atau input layout kosong. */
-  private Component findTypedLayout(String layout, int id) {
+   *  Null bila id tidak ada, tipe beda, atau input type kosong. */
+  private Component findTypedLayout(String type, int id) {
     synchronized (layoutLock) {
       Component c = layouts.get(Integer.valueOf(id));
       if (c == null) {
         return null;
       }
-      String want = Shared.clean(layout);
+      String want = Shared.clean(type);
       if (want.length() == 0) {
         return null;
       }
@@ -378,14 +433,14 @@ public class Tools_Layout extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "SET: tampil/sembunyi layout dinamis ber-id. "
-      + "layout = colok TypeVertical/TypeHorizontal/TypeVerticalScroll/"
+      + "type = colok TypeVertical/TypeHorizontal/TypeVerticalScroll/"
       + "TypeHorizontalScroll (WAJIB cocok dengan tipe aslinya, biar tidak "
       + "ketuker); id = id layout; visible false = GONE (hilang total, "
       + "ruang ikut ketutup). Tanpa feedback; cek dulu pakai IsLayoutExists "
       + "bila ragu.")
-  public void SetLayoutVisible(String layout, int id, boolean visible) {
+  public void SetLayoutVisible(String type, int id, boolean visible) {
     try {
-      Component c = findTypedLayout(layout, id);
+      Component c = findTypedLayout(type, id);
       if (c instanceof AndroidViewComponent) {
         View v = ((AndroidViewComponent) c).getView();
         if (v != null) {
@@ -398,11 +453,11 @@ public class Tools_Layout extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "True bila layout dinamis ber-id ini ADA dan "
-      + "tipenya PERSIS sama dengan layout yang diminta (colok TypeVertical/"
+      + "tipenya PERSIS sama dengan type yang diminta (colok TypeVertical/"
       + "dll). False bila id tidak ada ATAU tipe beda.")
-  public boolean IsLayoutExists(String layout, int id) {
+  public boolean IsLayoutExists(String type, int id) {
     try {
-      return findTypedLayout(layout, id) != null;
+      return findTypedLayout(type, id) != null;
     } catch (Exception e) {
       return false;
     }
@@ -410,10 +465,10 @@ public class Tools_Layout extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "True bila layout dinamis ber-id ini ADA, "
       + "tipenya cocok (seperti IsLayoutExists), DAN sedang tampil (visible). "
-      + "False bila tidak ada / tipe beda / sedang GONE.")
-  public boolean IsLayoutVisible(String layout, int id) {
+      + "False bila tidak ada / tipe beda / sedang GONE. Kebalikan: IsLayoutGone.")
+  public boolean IsLayoutVisible(String type, int id) {
     try {
-      Component c = findTypedLayout(layout, id);
+      Component c = findTypedLayout(type, id);
       if (c instanceof AndroidViewComponent) {
         View v = ((AndroidViewComponent) c).getView();
         return v != null && v.getVisibility() == View.VISIBLE;
@@ -421,6 +476,22 @@ public class Tools_Layout extends AndroidNonvisibleComponent
       return false;
     } catch (Exception e) {
       return false;
+    }
+  }
+
+  @SimpleFunction(description = "True bila layout dinamis ber-id ini sedang GONE/"
+      + "sembunyi. Kebalikan IsLayoutVisible: true juga bila id tidak ada / tipe "
+      + "beda (ragu? cek IsLayoutExists dulu).")
+  public boolean IsLayoutGone(String type, int id) {
+    try {
+      Component c = findTypedLayout(type, id);
+      if (c instanceof AndroidViewComponent) {
+        View v = ((AndroidViewComponent) c).getView();
+        return v == null || v.getVisibility() != View.VISIBLE;
+      }
+      return true;
+    } catch (Exception e) {
+      return true;
     }
   }
 
@@ -435,25 +506,29 @@ public class Tools_Layout extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleProperty(description = "Pembanding read-only: tipe VerticalArrangement.",
+  @SimpleProperty(description = "BLOK KUNING, pembanding read-only: tipe "
+      + "VerticalArrangement (colok ke soket type).",
       category = PropertyCategory.BEHAVIOR)
   public String TypeVertical() {
     return "VerticalArrangement";
   }
 
-  @SimpleProperty(description = "Pembanding read-only: tipe HorizontalArrangement.",
+  @SimpleProperty(description = "BLOK KUNING, pembanding read-only: tipe "
+      + "HorizontalArrangement (colok ke soket type).",
       category = PropertyCategory.BEHAVIOR)
   public String TypeHorizontal() {
     return "HorizontalArrangement";
   }
 
-  @SimpleProperty(description = "Pembanding read-only: tipe VerticalScrollArrangement.",
+  @SimpleProperty(description = "BLOK KUNING, pembanding read-only: tipe "
+      + "VerticalScrollArrangement (colok ke soket type).",
       category = PropertyCategory.BEHAVIOR)
   public String TypeVerticalScroll() {
     return "VerticalScrollArrangement";
   }
 
-  @SimpleProperty(description = "Pembanding read-only: tipe HorizontalScrollArrangement.",
+  @SimpleProperty(description = "BLOK KUNING, pembanding read-only: tipe "
+      + "HorizontalScrollArrangement (colok ke soket type).",
       category = PropertyCategory.BEHAVIOR)
   public String TypeHorizontalScroll() {
     return "HorizontalScrollArrangement";
@@ -462,11 +537,12 @@ public class Tools_Layout extends AndroidNonvisibleComponent
   // ================= GET + PROPERTI (angka MIT: -2 isi, -1 otomatis) =================
 
   @SimpleFunction(description = "Ambil layout dinamis ber-id yang tipenya PERSIS "
-      + "sama dengan layout yang diminta (untuk dicolok ke soket container, "
-      + "mis. Create button). null bila id tidak ada ATAU tipe beda.")
-  public Object GetLayout(String layout, int id) {
+      + "sama dengan type yang diminta (colok TypeVertical/dll; untuk dicolok ke "
+      + "soket container, mis. Create button). AMAN vs GetLayout(id) yang bebas. "
+      + "null bila id tidak ada ATAU tipe beda.")
+  public Object GetLayoutAs(String type, int id) {
     try {
-      return findTypedLayout(layout, id);
+      return findTypedLayout(type, id);
     } catch (Exception e) {
       return null;
     }
@@ -475,9 +551,9 @@ public class Tools_Layout extends AndroidNonvisibleComponent
   @SimpleFunction(description = "SET: atur lebar + tinggi layout dinamis ber-id "
       + "(tipe wajib cocok). Angka SAMA seperti blok bawaan MIT: -2 = isi "
       + "penuh (fill parent), -1 = otomatis, positif = pixel. Tanpa feedback.")
-  public void SetLayoutSize(String layout, int id, int width, int height) {
+  public void SetLayoutSize(String type, int id, int width, int height) {
     try {
-      Component c = findTypedLayout(layout, id);
+      Component c = findTypedLayout(type, id);
       if (c instanceof AndroidViewComponent) {
         ((AndroidViewComponent) c).Width(width);
         ((AndroidViewComponent) c).Height(height);
@@ -489,9 +565,9 @@ public class Tools_Layout extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "SET: warna latar layout dinamis ber-id (tipe "
       + "wajib cocok). Colok blok warna MIT. Tanpa feedback.")
-  public void SetLayoutBackgroundColor(String layout, int id, int color) {
+  public void SetLayoutBackgroundColor(String type, int id, int color) {
     try {
-      Component c = findTypedLayout(layout, id);
+      Component c = findTypedLayout(type, id);
       if (c instanceof VerticalArrangement) {
         ((VerticalArrangement) c).BackgroundColor(color);
       } else if (c instanceof HorizontalArrangement) {
@@ -509,10 +585,10 @@ public class Tools_Layout extends AndroidNonvisibleComponent
   @SimpleFunction(description = "SET: perataan isi layout dinamis ber-id (tipe "
       + "wajib cocok). Angka SAMA seperti blok bawaan MIT: horizontal 1=kiri, "
       + "2=tengah, 3=kanan; vertikal 1=atas, 2=tengah, 3=bawah. Tanpa feedback.")
-  public void SetLayoutAlignment(String layout, int id, int horizontal,
+  public void SetLayoutAlignment(String type, int id, int horizontal,
       int vertical) {
     try {
-      Component c = findTypedLayout(layout, id);
+      Component c = findTypedLayout(type, id);
       if (c instanceof VerticalArrangement) {
         ((VerticalArrangement) c).AlignHorizontal(horizontal);
         ((VerticalArrangement) c).AlignVertical(vertical);
@@ -533,9 +609,9 @@ public class Tools_Layout extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "Lebar layout dinamis ber-id (angka MIT: -2 isi, "
       + "-1 otomatis, positif pixel). -3 bila id tidak ada / tipe beda.")
-  public int GetLayoutWidth(String layout, int id) {
+  public int GetLayoutWidth(String type, int id) {
     try {
-      Component c = findTypedLayout(layout, id);
+      Component c = findTypedLayout(type, id);
       if (c instanceof AndroidViewComponent) {
         return ((AndroidViewComponent) c).Width();
       }
@@ -547,9 +623,9 @@ public class Tools_Layout extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "Tinggi layout dinamis ber-id (angka MIT). "
       + "-3 bila id tidak ada / tipe beda.")
-  public int GetLayoutHeight(String layout, int id) {
+  public int GetLayoutHeight(String type, int id) {
     try {
-      Component c = findTypedLayout(layout, id);
+      Component c = findTypedLayout(type, id);
       if (c instanceof AndroidViewComponent) {
         return ((AndroidViewComponent) c).Height();
       }
@@ -567,8 +643,15 @@ public class Tools_Layout extends AndroidNonvisibleComponent
         Integer.valueOf(id), typeName);
   }
 
+  @SimpleEvent(description = "Layout dinamis dilepas (RemoveLayoutId/ "
+      + "SetClearLayouts/SetClearLayoutsIn): id yang hilang.")
+  public void LayoutRemoved(int id) {
+    Shared.fire(this, "LayoutRemoved", Integer.valueOf(id));
+  }
+
   @SimpleEvent(description = "SATU-SATUNYA error Tools_Layout. component = nama "
-      + "operasi (bandingkan dengan blok OpLayout).")
+      + "operasi (bandingkan dengan blok OpLayout; cth: if component = OpLayout "
+      + "berarti error Layout). id = id terkait (0 bila umum).")
   public void ErrorOccurred(String component, int id, String message) {
     Shared.fire(this, "ErrorOccurred",
         component, Integer.valueOf(id), message);
@@ -583,7 +666,7 @@ public class Tools_Layout extends AndroidNonvisibleComponent
   // ================= OP =================
 
   @SimpleProperty(description = "Nama operasi Layout (untuk if di "
-      + "ErrorOccurred).",
+      + "ErrorOccurred: cth if component = OpLayout berarti error Layout).",
       category = PropertyCategory.BEHAVIOR)
   public String OpLayout() {
     return "Layout";

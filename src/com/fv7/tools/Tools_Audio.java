@@ -6,12 +6,15 @@ import android.media.MediaPlayer;
 import android.os.Handler;
 
 import com.google.appinventor.components.annotations.DesignerComponent;
+import com.google.appinventor.components.annotations.DesignerProperty;
 import com.google.appinventor.components.annotations.PropertyCategory;
 import com.google.appinventor.components.annotations.SimpleEvent;
 import com.google.appinventor.components.annotations.SimpleFunction;
 import com.google.appinventor.components.annotations.SimpleObject;
 import com.google.appinventor.components.annotations.SimpleProperty;
+import com.google.appinventor.components.annotations.UsesPermissions;
 import com.google.appinventor.components.common.ComponentCategory;
+import com.google.appinventor.components.common.PropertyTypeConstants;
 import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
 import com.google.appinventor.components.runtime.ComponentContainer;
 import com.google.appinventor.components.runtime.EventDispatcher;
@@ -23,16 +26,21 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@UsesPermissions("android.permission.INTERNET")
 @DesignerComponent(
-    version = 17,
+    version = 20,
     description = "Tools_Audio: putar BANYAK audio ber-id (background, tanpa tampilan), kontrol "
         + "pause/resume/seek/maju/mundur, loop, volume. Satu id = satu audio, bisa jalan bareng. "
-        + "Id dikelola CreateAudioId / Tools_Base. List id URUT PEMBUATAN. "
-        + "(v17 2026-11-17: tanpa perubahan fungsi; penomoran versi.)",
+        + "Id dikelola CreateAudioId (atau CreateUniqueId Tools_Base). "
+        + "List id URUT PEMBUATAN (index 1 = pertama dibuat). Streaming URL butuh "
+        + "izin INTERNET (otomatis dibawa komponen ini). Konvensi awalan: Is = cek "
+        + "boolean; Call = async + hasil lewat event; Set = langsung tanpa feedback; "
+        + "Get = nilai balik sinkron.",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,
-    iconName = "aiwebres/tools_audio.jpg")
+    iconName = "aiwebres/tools_audio.jpg",
+    helpUrl = "https://github.com/VB-7/MiT-File_Manager")
 @SimpleObject(external = true)
 public class Tools_Audio extends AndroidNonvisibleComponent
     implements OnDestroyListener {
@@ -44,6 +52,12 @@ public class Tools_Audio extends AndroidNonvisibleComponent
   private int skipSeconds = 10;
   private boolean audioLooping = false;
   private int mediaVolume = 100;
+  private final Map<Integer, Integer> volumes =
+      new HashMap<Integer, Integer>();
+  private final Map<Integer, Boolean> loops =
+      new HashMap<Integer, Boolean>();
+  private final Map<Integer, Float> speeds =
+      new HashMap<Integer, Float>();
 
   private static final Map<Integer, MediaPlayer> players =
       new HashMap<Integer, MediaPlayer>();
@@ -131,8 +145,7 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     }
   }
 
-  private float volFloat() {
-    int v = mediaVolume;
+  private float volFloatV(int v) {
     if (v < 0) {
       v = 0;
     }
@@ -140,6 +153,43 @@ public class Tools_Audio extends AndroidNonvisibleComponent
       v = 100;
     }
     return v / 100.0f;
+  }
+
+  private float effVolFloat(int id) {
+    Integer o;
+    synchronized (audioLock) {
+      o = volumes.get(Integer.valueOf(id));
+    }
+    return volFloatV(o == null ? mediaVolume : o.intValue());
+  }
+
+  private boolean effLoop(int id) {
+    Boolean o;
+    synchronized (audioLock) {
+      o = loops.get(Integer.valueOf(id));
+    }
+    return o == null ? audioLooping : o.booleanValue();
+  }
+
+  private void applySpeed(int id, MediaPlayer mp) {
+    try {
+      if (android.os.Build.VERSION.SDK_INT < 23) {
+        return;
+      }
+      Float s;
+      synchronized (audioLock) {
+        s = speeds.get(Integer.valueOf(id));
+      }
+      if (s != null && mp != null) {
+        try {
+          mp.setPlaybackParams(mp.getPlaybackParams().setSpeed(s.floatValue()));
+        } catch (Exception e) {
+          // abaikan
+        }
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
   }
 
   private void stopInternal(int id) {
@@ -205,11 +255,13 @@ public class Tools_Audio extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "CALL: Putar audio ber-id (background, tanpa tampilan). Bisa jalan bareng "
-      + "(satu id = satu audio). path file (/Download/..., absolut apa adanya), "
-      + "file:/// absolut, atau http(s) URL (streaming). id dari CreateAudioId / "
-      + "Tools_Base CreateUniqueId (reservasi diadopsi). "
-      + "Tampilan (Slider/Label) bikin sendiri dari AudioStarted/ProgressChanged/Finished. "
-      + "Sukses menembak AudioStarted; gagal via ErrorOccurred.")
+      + "(satu id = satu audio). path file (/Download/... atau absolut apa adanya), "
+      + "file:/// absolut, atau http(s) URL (streaming, izin INTERNET otomatis dibawa). "
+      + "id dari CreateAudioId atau CreateUniqueId Tools_Base (reservasi diadopsi). "
+      + "Id yang masih bunyi tidak bisa dipakai ulang (Stop/Pause dulu). Stop lalu Play "
+      + "= mulai dari awal. Tampilan (Slider/Label) bikin sendiri dari "
+      + "AudioStarted/ProgressChanged/Finished. Sukses menembak AudioStarted; gagal via "
+      + "ErrorOccurred.")
   public void CallPlayAudio(final String path, final int id) {
     if (id < 1) {
       Shared.err(this, "Audio", id, "id harus >= 1 (pakai CreateAudioId)");
@@ -286,9 +338,10 @@ public class Tools_Audio extends AndroidNonvisibleComponent
                   readies.put(Integer.valueOf(fId), Boolean.valueOf(true));
                 }
                 try {
-                  p.setLooping(audioLooping);
-                  float v = volFloat();
+                  p.setLooping(effLoop(fId));
+                  float v = effVolFloat(fId);
                   p.setVolume(v, v);
+                  applySpeed(fId, p);
                 } catch (Exception e) {
                   // abaikan
                 }
@@ -360,7 +413,8 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: jeda audio yang sedang bunyi (per id). Tanpa feedback.")
+  @SimpleFunction(description = "SET: Jeda audio yang sedang bunyi. Tanpa feedback. "
+      + "Cek status via IsAudioPaused.")
   public void SetPauseAudio(int id) {
     try {
       MediaPlayer mp;
@@ -381,7 +435,8 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: lanjutkan audio yang dijeda (per id). Tanpa feedback.")
+  @SimpleFunction(description = "SET: Lanjutkan audio yang dijeda. Tanpa feedback. "
+      + "Cek status via IsAudioPaused.")
   public void SetResumeAudio(int id) {
     try {
       MediaPlayer mp;
@@ -402,7 +457,8 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: Hentikan audio (per id). Putar lagi via CallPlayAudio.")
+  @SimpleFunction(description = "SET: Hentikan audio (posisi kembali ke 0, tanpa event). "
+      + "Putar lagi via CallPlayAudio (mulai dari awal). Cek via IsAudioIdActive.")
   public void SetStopAudio(int id) {
     try {
       boolean has;
@@ -419,7 +475,8 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: Lompat audio ke posisi (ms). Bisa dipasang ke Slider. (per id)")
+  @SimpleFunction(description = "SET: Lompat audio ke posisi milidetik. Bisa dipasang ke "
+      + "Slider. Tanpa feedback.")
   public void SetSeekAudio(int id, int position) {
     try {
       MediaPlayer mp;
@@ -438,8 +495,7 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: Maju audio sejauh SkipSeconds detik. (per id)")
-  public void SetForwardAudio(int id) {
+  private void seekBySeconds(int id, int seconds) {
     try {
       MediaPlayer mp;
       boolean ready;
@@ -456,40 +512,45 @@ public class Tools_Audio extends AndroidNonvisibleComponent
         } catch (Exception e) {
           // abaikan
         }
-        int skip = skipSeconds * 1000;
-        if (dur > 0) {
-          mp.seekTo(Math.min(dur, pos + skip));
-        } else {
-          mp.seekTo(pos + skip);
+        int np = pos + seconds * 1000;
+        if (np < 0) {
+          np = 0;
         }
-      } else {
+        if (dur > 0 && np > dur) {
+          np = dur;
+        }
+        mp.seekTo(np);
       }
     } catch (Exception e) {
-      String m = e.getMessage();
+      // abaikan
     }
   }
 
-  @SimpleFunction(description = "SET: Mundur audio sejauh SkipSeconds detik. (per id)")
+  @SimpleFunction(description = "SET: Maju audio sejauh SkipSeconds DETIK. "
+      + "Tanpa feedback.")
+  public void SetForwardAudio(int id) {
+    seekBySeconds(id, skipSeconds);
+  }
+
+  @SimpleFunction(description = "SET: Maju audio sejauh seconds DETIK "
+      + "(tanpa ubah SkipSeconds). Tanpa feedback.")
+  public void SetForwardAudioBy(int id, int seconds) {
+    seekBySeconds(id, seconds);
+  }
+
+  @SimpleFunction(description = "SET: Mundur audio sejauh SkipSeconds DETIK. "
+      + "Tanpa feedback.")
   public void SetBackwardAudio(int id) {
-    try {
-      MediaPlayer mp;
-      boolean ready;
-      synchronized (audioLock) {
-        mp = players.get(Integer.valueOf(id));
-        Boolean r = readies.get(Integer.valueOf(id));
-        ready = r != null && r.booleanValue();
-      }
-      if (mp != null && ready) {
-        int pos = mp.getCurrentPosition();
-        mp.seekTo(Math.max(0, pos - skipSeconds * 1000));
-      } else {
-      }
-    } catch (Exception e) {
-      String m = e.getMessage();
-    }
+    seekBySeconds(id, -skipSeconds);
   }
 
-  @SimpleFunction(description = "Posisi audio sekarang (ms). (per id)")
+  @SimpleFunction(description = "SET: Mundur audio sejauh seconds DETIK "
+      + "(tanpa ubah SkipSeconds). Tanpa feedback.")
+  public void SetBackwardAudioBy(int id, int seconds) {
+    seekBySeconds(id, -seconds);
+  }
+
+  @SimpleFunction(description = "Posisi audio sekarang dalam milidetik. 0 bila belum siap.")
   public int GetAudioPosition(int id) {
     try {
       synchronized (audioLock) {
@@ -505,7 +566,7 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     return 0;
   }
 
-  @SimpleFunction(description = "Durasi audio (ms). 0 bila belum siap. (per id)")
+  @SimpleFunction(description = "Durasi audio dalam milidetik. 0 bila belum siap.")
   public int GetAudioDuration(int id) {
     try {
       synchronized (audioLock) {
@@ -520,19 +581,6 @@ public class Tools_Audio extends AndroidNonvisibleComponent
       // abaikan
     }
     return 0;
-  }
-
-  @SimpleFunction(description = "True bila audio id ini sedang bunyi.")
-  public boolean IsAudioPlaying(int id) {
-    try {
-      synchronized (audioLock) {
-        MediaPlayer mp = players.get(Integer.valueOf(id));
-        Boolean r = readies.get(Integer.valueOf(id));
-        return mp != null && r != null && r.booleanValue() && mp.isPlaying();
-      }
-    } catch (Exception e) {
-      return false;
-    }
   }
 
   // ================= ID =================
@@ -558,7 +606,8 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     return Ids.activeIdsOf(Ids.AUDIO);
   }
 
-  @SimpleFunction(description = "Id audio yang terakhir dibuat/di-start. -1 bila kosong.")
+  @SimpleFunction(description = "Id audio yang terakhir disentuh (dibuat atau di-start). "
+      + "-1 bila kosong. Beda dengan GetLastAudioId (terakhir dibuat).")
   public int CurrentAudioId() {
     return Ids.currentOf(Ids.AUDIO);
   }
@@ -568,7 +617,8 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     return Ids.firstOf(Ids.AUDIO);
   }
 
-  @SimpleFunction(description = "Id TERAKHIR DIBUAT. -1 bila kosong.")
+  @SimpleFunction(description = "Id audio TERAKHIR DIBUAT. -1 bila kosong. Beda dengan "
+      + "CurrentAudioId (terakhir disentuh).")
   public int GetLastAudioId() {
     return Ids.lastOf(Ids.AUDIO);
   }
@@ -578,9 +628,131 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     return Ids.previousOf(Ids.AUDIO, id);
   }
 
-  @SimpleFunction(description = "True bila id audio ini sedang bunyi.")
+  @SimpleFunction(description = "True bila id audio ini sedang bunyi. False = jeda, "
+      + "berhenti, atau belum ada (bedakan jeda vs berhenti via IsAudioPaused).")
   public boolean IsAudioIdActive(int id) {
     return Ids.isActive(Ids.AUDIO, id);
+  }
+
+
+  @SimpleFunction(description = "True bila id audio ini sedang dijeda (Pause tapi "
+      + "belum Stop/selesai). False = bunyi/berhenti/belum ada.")
+  public boolean IsAudioPaused(int id) {
+    try {
+      synchronized (audioLock) {
+        MediaPlayer mp = players.get(Integer.valueOf(id));
+        Boolean r = readies.get(Integer.valueOf(id));
+        return mp != null && r != null && r.booleanValue() && !mp.isPlaying();
+      }
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
+  @SimpleFunction(description = "Volume khusus satu id (0-100). = volume global "
+      + "bila belum diatur via SetAudioVolume.")
+  public int GetAudioVolume(int id) {
+    synchronized (audioLock) {
+      Integer o = volumes.get(Integer.valueOf(id));
+      if (o != null) {
+        return o.intValue();
+      }
+    }
+    return mediaVolume;
+  }
+
+  @SimpleFunction(description = "SET: Volume khusus satu id (0-100). Menimpa "
+      + "volume global untuk id ini. Tanpa feedback.")
+  public void SetAudioVolume(int id, int volume) {
+    if (volume < 0) {
+      volume = 0;
+    }
+    if (volume > 100) {
+      volume = 100;
+    }
+    synchronized (audioLock) {
+      volumes.put(Integer.valueOf(id), Integer.valueOf(volume));
+    }
+    try {
+      MediaPlayer mp;
+      synchronized (audioLock) {
+        mp = players.get(Integer.valueOf(id));
+      }
+      if (mp != null) {
+        float v = effVolFloat(id);
+        mp.setVolume(v, v);
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  @SimpleFunction(description = "Loop khusus satu id. = loop global bila belum "
+      + "diatur via SetAudioLooping.")
+  public boolean GetAudioLooping(int id) {
+    synchronized (audioLock) {
+      Boolean o = loops.get(Integer.valueOf(id));
+      if (o != null) {
+        return o.booleanValue();
+      }
+    }
+    return audioLooping;
+  }
+
+  @SimpleFunction(description = "SET: Loop khusus satu id (true = mengulang bila "
+      + "selesai). Menimpa loop global untuk id ini. Tanpa feedback.")
+  public void SetAudioLooping(int id, boolean loop) {
+    synchronized (audioLock) {
+      loops.put(Integer.valueOf(id), Boolean.valueOf(loop));
+    }
+    try {
+      MediaPlayer mp;
+      synchronized (audioLock) {
+        mp = players.get(Integer.valueOf(id));
+      }
+      if (mp != null) {
+        mp.setLooping(loop);
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  @SimpleFunction(description = "Kecepatan id ini (1.0 = normal). 1.0 bila belum "
+      + "diatur via SetAudioSpeed.")
+  public float GetAudioSpeed(int id) {
+    synchronized (audioLock) {
+      Float o = speeds.get(Integer.valueOf(id));
+      if (o != null) {
+        return o.floatValue();
+      }
+    }
+    return 1.0f;
+  }
+
+  @SimpleFunction(description = "SET: Kecepatan khusus satu id (1.0 = normal, "
+      + "0.5 = setengah, 2.0 = ganda). Butuh Android 6+. Tanpa feedback.")
+  public void SetAudioSpeed(int id, float speed) {
+    if (speed < 0.25f) {
+      speed = 0.25f;
+    }
+    if (speed > 4.0f) {
+      speed = 4.0f;
+    }
+    synchronized (audioLock) {
+      speeds.put(Integer.valueOf(id), Float.valueOf(speed));
+    }
+    try {
+      MediaPlayer mp;
+      synchronized (audioLock) {
+        mp = players.get(Integer.valueOf(id));
+      }
+      if (mp != null) {
+        applySpeed(id, mp);
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
   }
 
   @SimpleFunction(description = "Hapus id audio: hentikan bila bunyi + lepas id "
@@ -589,48 +761,78 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     stopStatic(id);
   }
 
+
+  @SimpleFunction(description = "SET: Hentikan SEMUA audio + buang semua id. "
+      + "Tanpa feedback.")
+  public void SetClearAudios() {
+    try {
+      List<Integer> ids = Ids.idsOf(Ids.AUDIO);
+      for (int i = 0; i < ids.size(); i = i + 1) {
+        try {
+          stopStatic(ids.get(i).intValue());
+        } catch (Exception e) {
+          // abaikan per-id
+        }
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
   // ================= pengaturan =================
 
-  @SimpleProperty(description = "Jeda event AudioProgressChanged dalam milidetik (default 500).",
+  @SimpleProperty(description = "Jeda event AudioProgressChanged dalam milidetik (default 500). "
+      + "Lagu 3 menit = 360 event; HP kentang naikkan ke 1000.",
       category = PropertyCategory.BEHAVIOR)
   public int ProgressInterval() {
     return progressInterval;
   }
 
+  @DesignerProperty(editorType = PropertyTypeConstants.PROPERTY_TYPE_INTEGER,
+      defaultValue = "500")
   @SimpleProperty(category = PropertyCategory.BEHAVIOR)
   public void ProgressInterval(int interval) {
     progressInterval = interval <= 0 ? 500 : interval;
     updateTickState();
   }
 
-  @SimpleProperty(description = "Lompatan Maju/Mundur dalam detik (default 10).",
+  @SimpleProperty(description = "Lompatan Maju/Mundur dalam DETIK (bukan ms). Default 10. "
+      + "Untuk lompatan sekali-sekali pakai SetForwardAudioBy/SetBackwardAudioBy.",
       category = PropertyCategory.BEHAVIOR)
   public int SkipSeconds() {
     return skipSeconds;
   }
 
+  @DesignerProperty(editorType = PropertyTypeConstants.PROPERTY_TYPE_INTEGER,
+      defaultValue = "10")
   @SimpleProperty(category = PropertyCategory.BEHAVIOR)
   public void SkipSeconds(int seconds) {
     skipSeconds = seconds <= 0 ? 10 : seconds;
   }
 
-  @SimpleProperty(description = "Audio mengulang otomatis bila selesai. Default false.",
+  @SimpleProperty(description = "Loop global (default false). Id yang sudah diatur via "
+      + "SetAudioLooping memakai nilainya sendiri.",
       category = PropertyCategory.BEHAVIOR)
   public boolean AudioLooping() {
     return audioLooping;
   }
 
+  @DesignerProperty(editorType = PropertyTypeConstants.PROPERTY_TYPE_BOOLEAN,
+      defaultValue = "False")
   @SimpleProperty(category = PropertyCategory.BEHAVIOR)
   public void AudioLooping(boolean loop) {
     audioLooping = loop;
   }
 
-  @SimpleProperty(description = "Volume audio 0-100 (default 100, berlaku semua id).",
+  @SimpleProperty(description = "Volume global 0-100 (default 100, awal semua id). Id yang "
+      + "sudah diatur via SetAudioVolume memakai nilainya sendiri.",
       category = PropertyCategory.BEHAVIOR)
   public int MediaVolume() {
     return mediaVolume;
   }
 
+  @DesignerProperty(editorType = PropertyTypeConstants.PROPERTY_TYPE_INTEGER,
+      defaultValue = "100")
   @SimpleProperty(category = PropertyCategory.BEHAVIOR)
   public void MediaVolume(int volume) {
     if (volume < 0) {
@@ -641,14 +843,23 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     }
     mediaVolume = volume;
     try {
-      float v = volFloat();
+      ArrayList<Integer> keys;
       synchronized (audioLock) {
-        for (MediaPlayer mp : players.values()) {
-          try {
-            mp.setVolume(v, v);
-          } catch (Exception e) {
-            // abaikan per-id
+        keys = new ArrayList<Integer>(players.keySet());
+      }
+      for (int i = 0; i < keys.size(); i = i + 1) {
+        int aid = keys.get(i).intValue();
+        try {
+          MediaPlayer p2;
+          synchronized (audioLock) {
+            p2 = players.get(Integer.valueOf(aid));
           }
+          if (p2 != null) {
+            float v = effVolFloat(aid);
+            p2.setVolume(v, v);
+          }
+        } catch (Exception e) {
+          // abaikan per-id
         }
       }
     } catch (Exception e) {
@@ -676,20 +887,24 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     Shared.fire(this, "AudioFinished", Integer.valueOf(id));
   }
 
-  @SimpleEvent(description = "SATU-SATUNYA error Tools_Audio.")
+  @SimpleEvent(description = "SATU-SATUNYA error Tools_Audio. component = nama operasi "
+      + "(isi dengan blok kuning OpAudio untuk if). Contoh: jika component = OpAudio "
+      + "maka tampilkan message.")
   public void ErrorOccurred(String component, int id, String message) {
     Shared.fire(this, "ErrorOccurred",
         component, Integer.valueOf(id), message);
   }
 
-  @SimpleProperty(description = "Nama operasi Audio (untuk if di ErrorOccurred).",
+  @SimpleProperty(description = "Nama operasi Audio untuk if di ErrorOccurred. Contoh: "
+      + "colok ke perbandingan = dengan component dari event ErrorOccurred.",
       category = PropertyCategory.BEHAVIOR)
   public String OpAudio() {
     return "Audio";
   }
 
-  @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred: "
-      + "pesan error terakhir operasi ini (kosong bila belum ada).")
+  @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred: pesan error "
+      + "terakhir operasi ini (teks kosong bila belum ada). Isi operation dengan blok "
+      + "kuning (mis. OpAudio).")
   public String LastError(String operation) {
     return Shared.lastError(operation);
   }
