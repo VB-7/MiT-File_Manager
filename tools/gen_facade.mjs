@@ -230,20 +230,32 @@ async function generate(IO) {
         const ops = [];
         for (const oo of OWNERS) {
           for (const x of perOwner[oo]) {
-            if (x.name.indexOf("Op") === 0 && x.ret !== "void"
+            if (x.name.indexOf("Op") === 0 && x.params.length === 0
+                && x.annotations[0].name === "SimpleProperty"
                 && ops.indexOf(x.name) < 0) ops.push(x.name);
           }
         }
         out.push('  @SimpleEvent(description = "SATU-SATUNYA error gabungan 12 pemilik. "');
-        for (let qi = 0; qi < ops.length; qi += 4) {
-          const last = qi + 4 >= ops.length;
-          out.push("      + \"component = nama operasi (isi dengan blok kuning "
-            + (qi === 0 ? "" : ".../") + ops.slice(qi, qi + 4).join("/")
-            + (last ? " untuk if). \""
-              : " .../\""));
+        const opList = ops.join("/");
+        let rest = "component = nama operasi (isi dengan blok kuning " + opList
+          + " untuk if). Contoh: jika component = " + ops[0]
+          + " maka tampilkan message. id = id terkait (0 bila statis). ";
+        let first = true;
+        while (rest.length > 0) {
+          let cut = Math.min(90, rest.length);
+          if (cut < rest.length) {
+            const sp = rest.lastIndexOf(" ", cut);
+            cut = sp > 40 ? sp : cut;
+          }
+          const piece = rest.slice(0, cut);
+          rest = rest.slice(cut).replace(/^ /, "");
+          if (first) {
+            out.push('      + "' + piece + (rest.length > 0 ? "" : '")'));
+            first = false;
+          } else {
+            out.push('      + "' + piece + (rest.length > 0 ? "" : '")'));
+          }
         }
-        out.push("      + \"Contoh: jika component = " + ops[0]
-          + " maka tampilkan message. id = id terkait (0 bila statis). \"");
         mb.__annDone = true;
       } else if (seenSig[key]) {
         const keep = KEEP_OWNER[mb.name];

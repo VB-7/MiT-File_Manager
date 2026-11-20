@@ -45,7 +45,7 @@ import java.util.Map;
         + "CreateUniqueId Tools_Base). List id URUT PEMBUATAN (index 1 = pertama dibuat). "
         + "Streaming URL butuh izin INTERNET (otomatis dibawa komponen ini). Akhiran In = "
         + "butuh wadah layout. Konvensi awalan: Is = cek boolean; Call = async + hasil "
-        + "lewat event; Set = langsung tanpa feedback; Get = nilai balik sinkron."
+        + "lewat event; Set = langsung tanpa feedback; Get = nilai balik sinkron.",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,
