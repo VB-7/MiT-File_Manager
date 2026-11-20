@@ -135,10 +135,18 @@ async function generate(IO) {
   const permSeen = {};
   let minSdk = 21;
   let hasOptions = false;
+  const helperImports = [];
   for (const o of OWNERS) {
     const src = await IO.read(OWNER_PATH(o));
     if (src.indexOf("@Options(") >= 0) {
       hasOptions = true;
+    }
+    const hm = src.match(/^import (com\.fv7\.tools\.helpers\.\w+);/gm) || [];
+    for (const h of hm) {
+      const imp = h.slice(7, -1);
+      if (helperImports.indexOf(imp) < 0) {
+        helperImports.push(imp);
+      }
     }
     perOwner[o] = parseMembers(src);
     const pm = src.match(/@UsesPermissions\(\{([^}]*)\}\)/);
@@ -159,6 +167,9 @@ async function generate(IO) {
   out.push("// Ubah 12 pemilik (Tools_Audio..Tools_Video), lalu jalan ulang --regen.");
   out.push("package com.fv7.tools;");
   out.push("");
+  for (const hi of helperImports) {
+    out.push("import " + hi + ";");
+  }
   out.push("import com.google.appinventor.components.annotations.DesignerComponent;");
   out.push("import com.google.appinventor.components.annotations.DesignerProperty;");
   if (hasOptions) {

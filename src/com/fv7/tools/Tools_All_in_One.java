@@ -2,6 +2,7 @@
 // Ubah 12 pemilik (Tools_Audio..Tools_Video), lalu jalan ulang --regen.
 package com.fv7.tools;
 
+import com.fv7.tools.helpers.Type;
 import com.google.appinventor.components.annotations.DesignerComponent;
 import com.google.appinventor.components.annotations.DesignerProperty;
 import com.google.appinventor.components.annotations.Options;

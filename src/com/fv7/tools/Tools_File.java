@@ -8,6 +8,7 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.util.Base64;
 
+import com.fv7.tools.helpers.Type;
 import com.google.appinventor.components.annotations.DesignerComponent;
 import com.google.appinventor.components.annotations.Options;
 import com.google.appinventor.components.annotations.PropertyCategory;
