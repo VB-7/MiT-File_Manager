@@ -2079,6 +2079,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
                 if (sl == null) {
                   return;
                 }
+                final Slider fsl = sl;
                 sl.box.removeAllViews();
                 sl.pages.clear();
                 sl.loaded.clear();
@@ -2121,16 +2122,16 @@ public class Tools_Image extends AndroidNonvisibleComponent
                 // Di sini juga: restore posisi + pompa jendela awal.
                 sl.root.post(new Runnable() {
                   public void run() {
-                    sizeSliderPages(sl);
+                    sizeSliderPages(fsl);
                     boolean moved = false;
-                    if (sl.rememberPos) {
+                    if (fsl.rememberPos) {
                       int saved = loadSliderPos(sliderId);
-                      if (saved > 0 && saved < sl.pages.size()) {
-                        goToLocked(sl, sliderId, saved, true);
+                      if (saved > 0 && saved < fsl.pages.size()) {
+                        goToLocked(fsl, sliderId, saved, true);
                         moved = true;
                       }
                     }
-                    if (!moved && sl.preloadN > 0) {
+                    if (!moved && fsl.preloadN > 0) {
                       pumpSliderRange(sliderId, false);
                     }
                   }
