@@ -27,7 +27,7 @@ import java.util.List;
 import java.util.Map;
 
 @DesignerComponent(
-    version = 20,
+    version = 22,
     description = "Tools_Layout: bikin layout dinamis ber-id (Vertical, "
         + "Horizontal, VerticalScroll, HorizontalScroll) di dalam layout yang "
         + "sudah ada atau buatan Tools_Core/Tools_Layout. Id dikelola "
@@ -36,8 +36,7 @@ import java.util.Map;
         + "sukses (gagal via ErrorOccurred), Get = nilai balik sinkron. KAMUS "
         + "\"TIDAK ADA\": objek = null, angka = -3, id = -1, teks = kosong. "
         + "Tiga tukang: butuh wadah scroll = Layout; butuh tombol/label dinamis "
-        + "= Core (atau komponen luar bila butuh lebih). Blok kuning = pilihan "
-        + "tetap (colok ke soket yang cocok).",
+        + "= Core (atau komponen luar bila butuh lebih). Pilihan tetap (colok ke soket yang cocok).",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,

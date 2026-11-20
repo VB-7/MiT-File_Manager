@@ -31,7 +31,7 @@ import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 @DesignerComponent(
-    version = 20,
+    version = 22,
     description = "Tools_Compress: bikin ZIP, ekstrak ZIP, intip isi ZIP, dan deteksi "
         + "jenis arsip (zip/rar/7z/tar/gz/...) dari magic-bytes. RAR/7z terdeteksi "
         + "namun belum bisa dibuka (butuh library luar) — ZIP penuh bisa. "
@@ -670,7 +670,7 @@ public class Tools_Compress extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred: "
-      + "pesan error terakhir operasi ini (colok OpZip/OpUnzip: isi dengan blok kuning "
+      + "pesan error terakhir operasi ini (colok OpZip/OpUnzip: isi dengan "
       + "itu, JANGAN ketik manual; kosong bila belum ada).")
   public String LastError(String operation) {
     return Shared.lastError(operation);

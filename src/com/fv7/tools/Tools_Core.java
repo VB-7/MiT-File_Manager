@@ -30,7 +30,7 @@ import java.util.Map;
 import java.util.Set;
 
 @DesignerComponent(
-    version = 20,
+    version = 22,
     description = "Tools_Core: mesin komponen dinamis generik ber-id. Bikin komponen "
         + "MIT apa pun saat aplikasi jalan (Button, Label, TextBox, Image, CheckBox, "
         + "Switch, Slider, Spinner, ListView, DatePicker, TimePicker, Space, "
@@ -625,7 +625,7 @@ public class Tools_Core extends AndroidNonvisibleComponent
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe Button. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan "
+      + "Pilihan tetap, colok ke soket teks perbandingan "
       + "(cth: if GetDynamicType = TypeButton).",
       category = PropertyCategory.BEHAVIOR)
   public String TypeButton() {
@@ -633,105 +633,105 @@ public class Tools_Core extends AndroidNonvisibleComponent
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe Label. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      + "Pilihan tetap, colok ke soket teks perbandingan.",
       category = PropertyCategory.BEHAVIOR)
   public String TypeLabel() {
     return "Label";
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe TextBox. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      + "Pilihan tetap, colok ke soket teks perbandingan.",
       category = PropertyCategory.BEHAVIOR)
   public String TypeTextBox() {
     return "TextBox";
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe Image. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      + "Pilihan tetap, colok ke soket teks perbandingan.",
       category = PropertyCategory.BEHAVIOR)
   public String TypeImage() {
     return "Image";
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe CheckBox. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      + "Pilihan tetap, colok ke soket teks perbandingan.",
       category = PropertyCategory.BEHAVIOR)
   public String TypeCheckBox() {
     return "CheckBox";
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe Switch. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      + "Pilihan tetap, colok ke soket teks perbandingan.",
       category = PropertyCategory.BEHAVIOR)
   public String TypeSwitch() {
     return "Switch";
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe Slider. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      + "Pilihan tetap, colok ke soket teks perbandingan.",
       category = PropertyCategory.BEHAVIOR)
   public String TypeSlider() {
     return "Slider";
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe Spinner. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      + "Pilihan tetap, colok ke soket teks perbandingan.",
       category = PropertyCategory.BEHAVIOR)
   public String TypeSpinner() {
     return "Spinner";
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe ListView. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      + "Pilihan tetap, colok ke soket teks perbandingan.",
       category = PropertyCategory.BEHAVIOR)
   public String TypeListView() {
     return "ListView";
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe DatePicker. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      + "Pilihan tetap, colok ke soket teks perbandingan.",
       category = PropertyCategory.BEHAVIOR)
   public String TypeDatePicker() {
     return "DatePicker";
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe TimePicker. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      + "Pilihan tetap, colok ke soket teks perbandingan.",
       category = PropertyCategory.BEHAVIOR)
   public String TypeTimePicker() {
     return "TimePicker";
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe Space. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      + "Pilihan tetap, colok ke soket teks perbandingan.",
       category = PropertyCategory.BEHAVIOR)
   public String TypeSpace() {
     return "Space";
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe HorizontalArrangement. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      + "Pilihan tetap, colok ke soket teks perbandingan.",
       category = PropertyCategory.BEHAVIOR)
   public String TypeHorizontalArrangement() {
     return "HorizontalArrangement";
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe VerticalArrangement. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      + "Pilihan tetap, colok ke soket teks perbandingan.",
       category = PropertyCategory.BEHAVIOR)
   public String TypeVerticalArrangement() {
     return "VerticalArrangement";
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe HorizontalScrollArrangement. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      + "Pilihan tetap, colok ke soket teks perbandingan.",
       category = PropertyCategory.BEHAVIOR)
   public String TypeHorizontalScrollArrangement() {
     return "HorizontalScrollArrangement";
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe VerticalScrollArrangement. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      + "Pilihan tetap, colok ke soket teks perbandingan.",
       category = PropertyCategory.BEHAVIOR)
   public String TypeVerticalScrollArrangement() {
     return "VerticalScrollArrangement";

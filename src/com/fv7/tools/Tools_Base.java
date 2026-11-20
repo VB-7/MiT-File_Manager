@@ -20,8 +20,8 @@ import java.net.URLEncoder;
 import java.util.List;
 
 @DesignerComponent(
-    version = 21,
-    description = "Fondasi Tools: id pool global + helper Tag untuk id komponen "
+    version = 22,
+    description = "Fondasi Tools: id pool global + util Tag untuk id komponen "
         + "LUAR (auto-konversi teks angka: \"5\" = 5) + util dasar (JSON, URI, "
         + "waktu, byte, mime). Butuh id? CreateUniqueId (global, reservasi "
         + "otomatis). Id komponen luar? RegisterTagId (catat) / CreateTagId "
@@ -87,7 +87,7 @@ public class Tools_Base extends AndroidNonvisibleComponent {
     Ids.release(id);
   }
 
-  // ================= ID TAG (helper komponen LUAR) =================
+  // ================= ID TAG (util komponen LUAR) =================
 
   @SimpleFunction(description = "Buat id unik baru di tag ini (Number, angka terkecil yang belum "
       + "dipakai, langsung di-reservasi). Untuk saat kamulah yang menentukan id-nya "
@@ -253,13 +253,18 @@ public class Tools_Base extends AndroidNonvisibleComponent {
   @SimpleFunction(description = "Versi paket Tools (sama untuk semua Tools_* dalam satu .aix: "
       + "wajib SAMA semua per rilis; beda = bug kemasan).")
   public int ToolsVersion() {
-    return 21;
+    return 22;
   }
 
   @SimpleFunction(description = "Catatan update paket Tools (dibaca lewat blok, "
       + "karena panel info extension tidak bisa diubah manual).")
   public String GetWhatsNew() {
-    return "v21 2026-11-20: BREAKING nilai ukuran: SEMUA soket dp->pixel "
+    return "v22 2026-11-20: File +GetFileHash(path, algorithm) hash isi "
+        + "(MD5/SHA-1/SHA-224/SHA-256/SHA-384/SHA-512) + Helper merah Type "
+        + "(dropdown; soket terima merah/teks manual) + IsDuplicateFileOrDirectory "
+        + "jadi cek nama PERSIS (counter _N/(N) hanya untuk hitungan Many) + "
+        + "sapuan kata: Helper = blok merah. "
+        + "v21 2026-11-20: BREAKING nilai ukuran: SEMUA soket dp->pixel "
         + "mentah (Style 9 blok + Sheet + slider; angka dp lama kali ~2-3). "
         + "Image: slider setara ListView (create +width/height/fit; SetSliderSize/"
         + "Fit/Spacing/Selected/Visible; Get Width/Height/Fit/Spacing/Visible/"
@@ -286,7 +291,7 @@ public class Tools_Base extends AndroidNonvisibleComponent {
         + "GetLayoutAs(type,id), param layout->type di 9 blok (+IsLayoutGone, "
         + "LayoutRemoved, SetClearLayoutsIn); Style SetStroke urutan baru "
         + "(comp,color,widthDp,dashed,dashLen,dashGap) + Orientation*/"
-        + "Direction* kuning + background KHUSUS lokal/asset (BUKAN URL); "
+        + "Direction* + background KHUSUS lokal/asset (BUKAN URL); "
         + "Compress ListZipContents->GetZipEntries + percent 0-100 + cancel "
         + "hapus ZIP sebagian; File success jadi #1 di 10 event + "
         + "IsCopyOrMoveBusy + CallCopyFile/Move/AppendFile + GetLastModified/"
@@ -320,7 +325,7 @@ public class Tools_Base extends AndroidNonvisibleComponent {
         + "CallGuessFileName + FileNameGuessed; versi anotasi 17 + catatan "
         + "update per komponen. v16: gate izin otomatis 16 operasi storage; "
         + "IsAllFilesAccessGranted/OpenAllFilesAccessSettings; "
-        + "Is/CallEnsure*Permission + 10 Helper Permission; "
+        + "Is/CallEnsure*Permission + 10 blok Permission; "
         + "MANAGE_EXTERNAL_STORAGE. v15: aturan Is/Call/Set final. "
         + "v14: direktori Android + notifikasi download. v13: hapus scope, "
         + "root /storage/emulated/0.";

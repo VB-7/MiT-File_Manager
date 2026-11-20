@@ -25,7 +25,7 @@ const FACADE_DESC_LINES = [
   "blok. JANGAN pasang bareng 12 Tools_* dalam satu aplikasi (event dobel + ",
   "boros memori). Konvensi awalan: Is = boolean (colok ke if), Call = async + ",
   "hasil lewat event, Set = tanpa feedback sukses (gagal via ErrorOccurred), ",
-  "Get = nilai balik sinkron. Blok kuning = pilihan tetap (colok ke soket yang ",
+  "Get = nilai balik sinkron. Pilihan tetap (colok ke soket yang ",
   "cocok). FILE INI DIGENERATE OTOMATIS oleh tools/gen_facade.mjs — jangan ",
   "edit manual.",
 ];
@@ -134,8 +134,12 @@ async function generate(IO) {
   const permOrder = [];
   const permSeen = {};
   let minSdk = 21;
+  let hasOptions = false;
   for (const o of OWNERS) {
     const src = await IO.read(OWNER_PATH(o));
+    if (src.indexOf("@Options(") >= 0) {
+      hasOptions = true;
+    }
     perOwner[o] = parseMembers(src);
     const pm = src.match(/@UsesPermissions\(\{([^}]*)\}\)/);
     if (pm) {
@@ -157,6 +161,9 @@ async function generate(IO) {
   out.push("");
   out.push("import com.google.appinventor.components.annotations.DesignerComponent;");
   out.push("import com.google.appinventor.components.annotations.DesignerProperty;");
+  if (hasOptions) {
+    out.push("import com.google.appinventor.components.annotations.Options;");
+  }
   out.push("import com.google.appinventor.components.annotations.PropertyCategory;");
   out.push("import com.google.appinventor.components.annotations.SimpleEvent;");
   out.push("import com.google.appinventor.components.annotations.SimpleFunction;");
@@ -175,7 +182,7 @@ async function generate(IO) {
   out.push("import java.util.List;");
   out.push("");
   out.push("@DesignerComponent(");
-  out.push("    version = 21,");
+  out.push("    version = 22,");
   out.push("    description = \"Tools_All_in_One: SATU komponen berisi SEMUA blok \"");
   for (let li = 0; li < FACADE_DESC_LINES.length; li++) {
     const end = li === FACADE_DESC_LINES.length - 1 ? '",' : '"';
@@ -227,7 +234,7 @@ async function generate(IO) {
         }
         out.push('  @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred "');
         const opList = ops.join("/");
-        let rest = "gabungan 12 pemilik: pesan error terakhir operasi ini (teks kosong bila belum ada). Isi operation dengan blok kuning " + opList
+        let rest = "gabungan 12 pemilik: pesan error terakhir operasi ini (teks kosong bila belum ada). Isi operation dengan " + opList
           + " untuk if. Contoh: simpan LastError(" + ops[0] + ") ke variabel bila ErrorOccurred menembak. ";
         while (rest.length > 0) {
           let cut = Math.min(90, rest.length);
@@ -260,7 +267,7 @@ async function generate(IO) {
         }
         out.push('  @SimpleEvent(description = "SATU-SATUNYA error gabungan 12 pemilik. "');
         const opList = ops.join("/");
-        let rest = "component = nama operasi (isi dengan blok kuning " + opList
+        let rest = "component = nama operasi (isi dengan " + opList
           + " untuk if). Contoh: jika component = " + ops[0]
           + " maka tampilkan message. id = id terkait (0 bila statis). ";
         let first = true;

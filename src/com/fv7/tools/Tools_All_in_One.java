@@ -4,6 +4,7 @@ package com.fv7.tools;
 
 import com.google.appinventor.components.annotations.DesignerComponent;
 import com.google.appinventor.components.annotations.DesignerProperty;
+import com.google.appinventor.components.annotations.Options;
 import com.google.appinventor.components.annotations.PropertyCategory;
 import com.google.appinventor.components.annotations.SimpleEvent;
 import com.google.appinventor.components.annotations.SimpleFunction;
@@ -22,7 +23,7 @@ import com.google.appinventor.components.runtime.util.YailList;
 import java.util.List;
 
 @DesignerComponent(
-    version = 21,
+    version = 22,
     description = "Tools_All_in_One: SATU komponen berisi SEMUA blok "
         + "12 Tools_* (Audio/Base/Compress/Core/Downloader/File/Image/Layout/Sheet/"
         + "Style/Task/Video). Fasad: semua blok diteruskan ke mesin aslinya, semua "
@@ -30,7 +31,7 @@ import java.util.List;
         + "blok. JANGAN pasang bareng 12 Tools_* dalam satu aplikasi (event dobel + "
         + "boros memori). Konvensi awalan: Is = boolean (colok ke if), Call = async + "
         + "hasil lewat event, Set = tanpa feedback sukses (gagal via ErrorOccurred), "
-        + "Get = nilai balik sinkron. Blok kuning = pilihan tetap (colok ke soket yang "
+        + "Get = nilai balik sinkron. Pilihan tetap (colok ke soket yang "
         + "cocok). FILE INI DIGENERATE OTOMATIS oleh tools/gen_facade.mjs — jangan "
         + "edit manual.",
     category = ComponentCategory.EXTENSION,
@@ -334,7 +335,7 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   }
 
   @SimpleEvent(description = "SATU-SATUNYA error gabungan 12 pemilik. "
-      + "component = nama operasi (isi dengan blok kuning"
+      + "component = nama operasi (isi dengan"
       + " OpAudio/OpJson/OpId/OpZip/OpUnzip/OpCore/OpDownload/OpDirectory/OpFile/OpRead/OpBase64/Op"
       + "CopyOrMove/OpPick/OpOpen/OpPermission/OpSlider/OpImage/OpLayout/OpSheet/OpToast/OpNotifica"
       + "tion/OpStyle/OpTask/OpAlarm/OpVar/OpVideo untuk if). Contoh: jika component = OpAudio maka"
@@ -352,7 +353,7 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
 
   @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred "
       + "gabungan 12 pemilik: pesan error terakhir operasi ini (teks kosong bila belum ada). Isi"
-      + " operation dengan blok kuning OpAudio/OpJson/OpId/OpZip/OpUnzip/OpCore/OpDownload/OpDirect"
+      + " operation dengan OpAudio/OpJson/OpId/OpZip/OpUnzip/OpCore/OpDownload/OpDirect"
       + "ory/OpFile/OpRead/OpBase64/OpCopyOrMove/OpPick/OpOpen/OpPermission/OpSlider/OpImage/OpLayo"
       + "ut/OpSheet/OpToast/OpNotification/OpStyle/OpTask/OpAlarm/OpVar/OpVideo untuk if. Contoh:"
       + " simpan LastError(OpAudio) ke variabel bila ErrorOccurred menembak. ")
@@ -756,7 +757,7 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe Button. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan "
+      + "Pilihan tetap, colok ke soket teks perbandingan "
       + "(cth: if GetDynamicType = TypeButton).",
       category = PropertyCategory.BEHAVIOR)
   public String TypeButton() {
@@ -764,98 +765,98 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe Label. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      + "Pilihan tetap, colok ke soket teks perbandingan.",
       category = PropertyCategory.BEHAVIOR)
   public String TypeLabel() {
     return core.TypeLabel();
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe TextBox. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      + "Pilihan tetap, colok ke soket teks perbandingan.",
       category = PropertyCategory.BEHAVIOR)
   public String TypeTextBox() {
     return core.TypeTextBox();
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe CheckBox. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      + "Pilihan tetap, colok ke soket teks perbandingan.",
       category = PropertyCategory.BEHAVIOR)
   public String TypeCheckBox() {
     return core.TypeCheckBox();
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe Switch. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      + "Pilihan tetap, colok ke soket teks perbandingan.",
       category = PropertyCategory.BEHAVIOR)
   public String TypeSwitch() {
     return core.TypeSwitch();
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe Slider. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      + "Pilihan tetap, colok ke soket teks perbandingan.",
       category = PropertyCategory.BEHAVIOR)
   public String TypeSlider() {
     return core.TypeSlider();
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe Spinner. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      + "Pilihan tetap, colok ke soket teks perbandingan.",
       category = PropertyCategory.BEHAVIOR)
   public String TypeSpinner() {
     return core.TypeSpinner();
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe ListView. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      + "Pilihan tetap, colok ke soket teks perbandingan.",
       category = PropertyCategory.BEHAVIOR)
   public String TypeListView() {
     return core.TypeListView();
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe DatePicker. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      + "Pilihan tetap, colok ke soket teks perbandingan.",
       category = PropertyCategory.BEHAVIOR)
   public String TypeDatePicker() {
     return core.TypeDatePicker();
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe TimePicker. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      + "Pilihan tetap, colok ke soket teks perbandingan.",
       category = PropertyCategory.BEHAVIOR)
   public String TypeTimePicker() {
     return core.TypeTimePicker();
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe Space. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      + "Pilihan tetap, colok ke soket teks perbandingan.",
       category = PropertyCategory.BEHAVIOR)
   public String TypeSpace() {
     return core.TypeSpace();
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe HorizontalArrangement. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      + "Pilihan tetap, colok ke soket teks perbandingan.",
       category = PropertyCategory.BEHAVIOR)
   public String TypeHorizontalArrangement() {
     return core.TypeHorizontalArrangement();
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe VerticalArrangement. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      + "Pilihan tetap, colok ke soket teks perbandingan.",
       category = PropertyCategory.BEHAVIOR)
   public String TypeVerticalArrangement() {
     return core.TypeVerticalArrangement();
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe HorizontalScrollArrangement. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      + "Pilihan tetap, colok ke soket teks perbandingan.",
       category = PropertyCategory.BEHAVIOR)
   public String TypeHorizontalScrollArrangement() {
     return core.TypeHorizontalScrollArrangement();
   }
 
   @SimpleProperty(description = "Pembanding read-only: tipe VerticalScrollArrangement. "
-      + "Blok kuning = pilihan tetap, colok ke soket teks perbandingan.",
+      + "Pilihan tetap, colok ke soket teks perbandingan.",
       category = PropertyCategory.BEHAVIOR)
   public String TypeVerticalScrollArrangement() {
     return core.TypeVerticalScrollArrangement();
@@ -1459,32 +1460,44 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     return file.GetFolders(folder);
   }
 
-  @SimpleFunction(description = "True bila file/folder input PUNYA DUPLIKAT "
-      + "di dalam 1 folder yang sama: ada yang namanya sama persis, atau satu "
-      + "keluarga counter (mis. image.jpg dengan image_1.jpg / "
-      + "image (1).jpg). Input satu saja: \"/Download/image.jpg\" = mode "
-      + "file, \"/Download/\" atau path folder = mode folder. Hanya level "
-      + "folder itu, tanpa masuk subfolder. Cocok untuk validasi sebelum "
-      + "simpan/rename.")
+  @SimpleFunction(description = "True bila NAMA PERSIS input sudah dipakai di "
+      + "folder yang sama (nama.jpg vs nama.jpg = duplikat; nama (1).jpg "
+      + "BUKAN duplikatnya — akhiran counter _N/(N) hanya untuk hitungan "
+      + "Many). Inputnya sendiri dihitung, jadi file yang sudah ada selalu "
+      + "true; gunanya untuk cek SEBELUM simpan (true = nama sudah "
+      + "terpakai). Huruf besar-kecil diabaikan. Untuk banding ISI pakai "
+      + "GetFileHash + blok = di if. Hanya 1 level folder, tanpa subfolder.")
   public boolean IsDuplicateFileOrDirectory(String fileOrDirectory) {
     return file.IsDuplicateFileOrDirectory(fileOrDirectory);
   }
 
-  @SimpleFunction(description = "Berapa banyak duplikat file/folder input di "
-      + "dalam 1 folder yang sama (termasuk inputnya sendiri bila ada). 0 = "
-      + "tidak ada duplikat. Keluarga nama sama seperti "
-      + "IsDuplicateFileOrDirectory; hanya level folder itu, tanpa masuk "
-      + "subfolder.")
+  @SimpleFunction(description = "Berapa banyak keluarga counter nama input di "
+      + "folder yang sama (nama.jpg, nama_1.jpg, nama (1).jpg, ...; termasuk "
+      + "inputnya sendiri bila ada). 0 = tidak ada. Ini HITUNGAN Many — "
+      + "untuk cek nama persis pakai IsDuplicateFileOrDirectory. Hanya 1 "
+      + "level folder, tanpa subfolder.")
   public int GetManyDuplicateFileOrDirectory(String fileOrDirectory) {
     return file.GetManyDuplicateFileOrDirectory(fileOrDirectory);
   }
 
-  @SimpleFunction(description = "Daftar path lengkap duplikat file/folder "
-      + "input di dalam 1 folder yang sama (termasuk inputnya sendiri bila "
-      + "ada). Urut abjad. Kosong = tidak ada duplikat. Keluarga nama sama "
-      + "seperti IsDuplicateFileOrDirectory; tanpa masuk subfolder.")
+  @SimpleFunction(description = "Daftar path lengkap keluarga counter nama "
+      + "input di folder yang sama, urut abjad (termasuk inputnya sendiri "
+      + "bila ada; untuk cek nama persis lihat IsDuplicateFileOrDirectory). "
+      + "Kosong = tidak ada; tanpa masuk subfolder.")
   public List<String> GetDuplicateFileOrDirectory(String fileOrDirectory) {
     return file.GetDuplicateFileOrDirectory(fileOrDirectory);
+  }
+
+  @SimpleFunction(description = "Hash isi file (sidik jari konten ala ZArchiver): "
+      + "dua file dgn hash SAMA = isi SAMA walau nama beda (foto (3).jpg vs "
+      + "foto (4).jpg). algorithm: colok Helper merah Type (dropdown MD5/SHA-1/ "
+      + "SHA-224/SHA-256/SHA-384/SHA-512), atau tulis manual dgn blok teks "
+      + "(cth sha256 — soketnya menerima keduanya). Bandingkan hasilnya dgn "
+      + "blok = di if. Path seperti IsFileOrDirectoryExists (asset "
+      + "didukung). File tidak ada/algoritma salah/baca gagal = teks kosong "
+      + "+ ErrorOccurred.")
+  public String GetFileHash(String path, @Options(Type.class) String algorithm) {
+    return file.GetFileHash(path, algorithm);
   }
 
   @SimpleFunction(description = "Kategori file dari nama/path: image, audio, "
@@ -1620,7 +1633,7 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     file.CallEnsureStoragePermission();
   }
 
-  @SimpleProperty(description = "Helper read-only: izin kamera (CADANGAN — belum ada "
+  @SimpleProperty(description = "Pilihan read-only: izin kamera (CADANGAN — belum ada "
       + "bloknya, hadir mulai v21). Colok ke "
       + "IsPermissionGranted / CallEnsurePermission (tanpa ketik string).",
       category = PropertyCategory.BEHAVIOR)
@@ -1628,7 +1641,7 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     return file.PermissionCamera();
   }
 
-  @SimpleProperty(description = "Helper read-only: izin mikrofon, rekam "
+  @SimpleProperty(description = "Pilihan read-only: izin mikrofon, rekam "
       + "suara (CADANGAN — belum ada bloknya, hadir mulai v21). Colok ke "
       + "IsPermissionGranted / CallEnsurePermission.",
       category = PropertyCategory.BEHAVIOR)
@@ -1636,49 +1649,49 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     return file.PermissionMicrophone();
   }
 
-  @SimpleProperty(description = "Helper read-only: izin baca storage. "
+  @SimpleProperty(description = "Pilihan read-only: izin baca storage. "
       + "Colok ke IsPermissionGranted / CallEnsurePermission.",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionReadStorage() {
     return file.PermissionReadStorage();
   }
 
-  @SimpleProperty(description = "Helper read-only: izin tulis storage. "
+  @SimpleProperty(description = "Pilihan read-only: izin tulis storage. "
       + "Colok ke IsPermissionGranted / CallEnsurePermission.",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionWriteStorage() {
     return file.PermissionWriteStorage();
   }
 
-  @SimpleProperty(description = "Helper read-only: izin notifikasi "
+  @SimpleProperty(description = "Pilihan read-only: izin notifikasi "
       + "(Android 13+). Colok ke IsPermissionGranted / CallEnsurePermission.",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionNotifications() {
     return file.PermissionNotifications();
   }
 
-  @SimpleProperty(description = "Helper read-only: izin baca gambar "
+  @SimpleProperty(description = "Pilihan read-only: izin baca gambar "
       + "(Android 13+). Colok ke IsPermissionGranted / CallEnsurePermission.",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionReadImages() {
     return file.PermissionReadImages();
   }
 
-  @SimpleProperty(description = "Helper read-only: izin baca video "
+  @SimpleProperty(description = "Pilihan read-only: izin baca video "
       + "(Android 13+). Colok ke IsPermissionGranted / CallEnsurePermission.",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionReadVideo() {
     return file.PermissionReadVideo();
   }
 
-  @SimpleProperty(description = "Helper read-only: izin baca audio "
+  @SimpleProperty(description = "Pilihan read-only: izin baca audio "
       + "(Android 13+). Colok ke IsPermissionGranted / CallEnsurePermission.",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionReadAudio() {
     return file.PermissionReadAudio();
   }
 
-  @SimpleProperty(description = "Helper read-only: izin lokasi akurat (CADANGAN — "
+  @SimpleProperty(description = "Pilihan read-only: izin lokasi akurat (CADANGAN — "
       + "belum ada bloknya, hadir mulai v21). Colok ke IsPermissionGranted / "
       + "CallEnsurePermission.",
       category = PropertyCategory.BEHAVIOR)
@@ -1686,7 +1699,7 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     return file.PermissionLocationFine();
   }
 
-  @SimpleProperty(description = "Helper read-only: izin lokasi kasar (CADANGAN — "
+  @SimpleProperty(description = "Pilihan read-only: izin lokasi kasar (CADANGAN — "
       + "belum ada bloknya, hadir mulai v21). Colok ke IsPermissionGranted / "
       + "CallEnsurePermission.",
       category = PropertyCategory.BEHAVIOR)
@@ -2642,7 +2655,7 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
       + "tampil; langsung kelihatan bila sedang tampil). gravity angka: 80=bawah, "
       + "48=atas, 17=tengah, 3=kiri, 5=kanan. widthPx/heightPx <= 0 = menyesuaikan "
       + "(lebar penuh bila gravity atas/bawah). dimPercent 0-100 (kegelapan latar). "
-      + "animationType teks: pakai blok kuning SlideFromBottom/SlideFromTop/"
+      + "animationType teks: pakai blok SlideFromBottom/SlideFromTop/"
       + "SlideFromLeft/SlideFromRight/FadeAnim/NoAnim "
       + "(salah ketik = slide-bawah). animationDurationMs 0 = 250. "
       + "cancelable = bisa tutup via tombol back/luar. swipeToDismiss = geser "
@@ -2882,7 +2895,7 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "SET: Atur gradien banyak warna (list warna, "
-      + "minimal 2). arah = colok OrientationTopBottom/dll (blok kuning); "
+      + "minimal 2). arah = colok OrientationTopBottom/dll; "
       + "angka 0-7 = cara lama (0=atas-bawah, 1=kananATAS-kiriBAWAH, "
       + "2=kanan-kiri, 3=kananBAWAH-kiriATAS, 4=bawah-atas, 5=kiriBAWAH-"
       + "kananATAS, 6=kiri-kanan, 7=kiriATAS-kananBAWAH). Background bawaan "
@@ -2950,7 +2963,7 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "SET: Atur bentuk background: colok "
-      + "ShapeRectangle/ShapeOval/ShapeLine/ShapeRing (blok kuning).")
+      + "ShapeRectangle/ShapeOval/ShapeLine/ShapeRing .")
   public void SetShape(AndroidViewComponent comp, int shape) {
     style.SetShape(comp, shape);
   }
@@ -2980,7 +2993,7 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "SET: Atur visibilitas: colok "
-      + "VisibilityVisible/VisibilityInvisible/VisibilityGone (blok kuning). "
+      + "VisibilityVisible/VisibilityInvisible/VisibilityGone . "
       + "Gone = hilang + tempat ikut hilang (≈ Visible=false MIT); Invisible "
       + "= tak terlihat tapi tempat tetap ada.")
   public void SetVisibility(AndroidViewComponent comp, int visibility) {
@@ -3125,8 +3138,7 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "CALL: Animasi geser-masuk: direction = colok "
-      + "DirectionLeft/DirectionRight/DirectionTop/DirectionBottom (blok "
-      + "kuning); teks left/right/top/bottom = cara lama. durationMs mis. "
+      + "DirectionLeft/DirectionRight/DirectionTop/DirectionBottom ; teks left/right/top/bottom = cara lama. durationMs mis. "
       + "300; durationMs<=0 = tanpa set durasi (jalan instan).")
   public void CallAnimateSlideIn(AndroidViewComponent comp, String direction, int durationMs) {
     style.CallAnimateSlideIn(comp, direction, durationMs);

@@ -9,6 +9,7 @@ import android.net.Uri;
 import android.util.Base64;
 
 import com.google.appinventor.components.annotations.DesignerComponent;
+import com.google.appinventor.components.annotations.Options;
 import com.google.appinventor.components.annotations.PropertyCategory;
 import com.google.appinventor.components.annotations.SimpleEvent;
 import com.google.appinventor.components.annotations.SimpleFunction;
@@ -28,6 +29,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -35,9 +37,9 @@ import java.util.List;
 import java.util.Map;
 
 @DesignerComponent(
-    version = 21,
+    version = 22,
     description = "Tools_File: file/folder teks, salin/pindah/hapus/rename, direktori, izin "
-        + "+ 10 helper izin, picker/opener, base64-ke-file, info ruang. Konvensi awalan: "
+        + "+ 10 blok nilai izin, picker/opener, base64-ke-file, info ruang. Konvensi awalan: "
         + "Is = boolean (colok ke if), Call = async + hasil lewat event, Set = tanpa "
         + "feedback, Get = nilai balik sinkron. Semua path otomatis di-root ke "
         + "/storage/emulated/0 (\"/Download/a.jpg\" jadi "
@@ -1882,26 +1884,55 @@ public class Tools_File extends AndroidNonvisibleComponent
     return out;
   }
 
-  @SimpleFunction(description = "True bila file/folder input PUNYA DUPLIKAT "
-      + "di dalam 1 folder yang sama: ada yang namanya sama persis, atau satu "
-      + "keluarga counter (mis. image.jpg dengan image_1.jpg / "
-      + "image (1).jpg). Input satu saja: \"/Download/image.jpg\" = mode "
-      + "file, \"/Download/\" atau path folder = mode folder. Hanya level "
-      + "folder itu, tanpa masuk subfolder. Cocok untuk validasi sebelum "
-      + "simpan/rename.")
+  @SimpleFunction(description = "True bila NAMA PERSIS input sudah dipakai di "
+      + "folder yang sama (nama.jpg vs nama.jpg = duplikat; nama (1).jpg "
+      + "BUKAN duplikatnya — akhiran counter _N/(N) hanya untuk hitungan "
+      + "Many). Inputnya sendiri dihitung, jadi file yang sudah ada selalu "
+      + "true; gunanya untuk cek SEBELUM simpan (true = nama sudah "
+      + "terpakai). Huruf besar-kecil diabaikan. Untuk banding ISI pakai "
+      + "GetFileHash + blok = di if. Hanya 1 level folder, tanpa subfolder.")
   public boolean IsDuplicateFileOrDirectory(String fileOrDirectory) {
     try {
-      return collectDuplicates(fileOrDirectory).size() > 0;
+      String p = Shared.clean(fileOrDirectory);
+      if (p.length() == 0 || wantAsset(p)) {
+        return false;
+      }
+      File t = rootedFile(p);
+      if (t == null) {
+        return false;
+      }
+      File drawer = t.getParentFile();
+      String name = t.getName();
+      if (drawer == null || !drawer.isDirectory() || name.length() == 0) {
+        return false;
+      }
+      String key = Shared.sanitize(Shared.clean(name))
+          .toLowerCase(java.util.Locale.US);
+      File[] fs = drawer.listFiles();
+      if (fs == null) {
+        return false;
+      }
+      for (int i = 0; i < fs.length; i = i + 1) {
+        String en = fs[i].getName();
+        if (en.length() == 0) {
+          continue;
+        }
+        if (key.equals(Shared.sanitize(Shared.clean(en))
+            .toLowerCase(java.util.Locale.US))) {
+          return true;
+        }
+      }
+      return false;
     } catch (Exception e) {
       return false;
     }
   }
 
-  @SimpleFunction(description = "Berapa banyak duplikat file/folder input di "
-      + "dalam 1 folder yang sama (termasuk inputnya sendiri bila ada). 0 = "
-      + "tidak ada duplikat. Keluarga nama sama seperti "
-      + "IsDuplicateFileOrDirectory; hanya level folder itu, tanpa masuk "
-      + "subfolder.")
+  @SimpleFunction(description = "Berapa banyak keluarga counter nama input di "
+      + "folder yang sama (nama.jpg, nama_1.jpg, nama (1).jpg, ...; termasuk "
+      + "inputnya sendiri bila ada). 0 = tidak ada. Ini HITUNGAN Many — "
+      + "untuk cek nama persis pakai IsDuplicateFileOrDirectory. Hanya 1 "
+      + "level folder, tanpa subfolder.")
   public int GetManyDuplicateFileOrDirectory(String fileOrDirectory) {
     try {
       return collectDuplicates(fileOrDirectory).size();
@@ -1913,10 +1944,10 @@ public class Tools_File extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Daftar path lengkap duplikat file/folder "
-      + "input di dalam 1 folder yang sama (termasuk inputnya sendiri bila "
-      + "ada). Urut abjad. Kosong = tidak ada duplikat. Keluarga nama sama "
-      + "seperti IsDuplicateFileOrDirectory; tanpa masuk subfolder.")
+  @SimpleFunction(description = "Daftar path lengkap keluarga counter nama "
+      + "input di folder yang sama, urut abjad (termasuk inputnya sendiri "
+      + "bila ada; untuk cek nama persis lihat IsDuplicateFileOrDirectory). "
+      + "Kosong = tidak ada; tanpa masuk subfolder.")
   public List<String> GetDuplicateFileOrDirectory(String fileOrDirectory) {
     try {
       return collectDuplicates(fileOrDirectory);
@@ -1925,6 +1956,74 @@ public class Tools_File extends AndroidNonvisibleComponent
       Shared.err(this, "Duplicate", 0,
           m == null ? "list duplikat gagal" : m);
       return new ArrayList<String>();
+    }
+  }
+
+  @SimpleFunction(description = "Hash isi file (sidik jari konten ala ZArchiver): "
+      + "dua file dgn hash SAMA = isi SAMA walau nama beda (foto (3).jpg vs "
+      + "foto (4).jpg). algorithm: colok Helper merah Type (dropdown MD5/SHA-1/ "
+      + "SHA-224/SHA-256/SHA-384/SHA-512), atau tulis manual dgn blok teks "
+      + "(cth sha256 — soketnya menerima keduanya). Bandingkan hasilnya dgn "
+      + "blok = di if. Path seperti IsFileOrDirectoryExists (asset "
+      + "didukung). File tidak ada/algoritma salah/baca gagal = teks kosong "
+      + "+ ErrorOccurred.")
+  public String GetFileHash(String path, @Options(Type.class) String algorithm) {
+    try {
+      String algo = Shared.clean(algorithm).toUpperCase(java.util.Locale.US)
+          .replace("-", "").replace(" ", "");
+      if (algo.equals("MD5")) {
+        algo = "MD5";
+      } else if (algo.equals("SHA1") || algo.equals("SHA224")
+          || algo.equals("SHA256") || algo.equals("SHA384")
+          || algo.equals("SHA512")) {
+        algo = "SHA-" + algo.substring(3);
+      } else {
+        Shared.err(this, "Hash", 0, "algoritma harus MD5 / SHA-1 / SHA-224 / "
+            + "SHA-256 / SHA-384 / SHA-512");
+        return "";
+      }
+      MessageDigest md = MessageDigest.getInstance(algo);
+      String p = Shared.clean(path);
+      InputStream in = null;
+      try {
+        if (wantAsset(p)) {
+          in = context.getAssets().open(Shared.assetName(p));
+        } else {
+          File f = rootedFile(p);
+          if (f == null || !f.isFile()) {
+            Shared.err(this, "Hash", 0, "file tidak ada");
+            return "";
+          }
+          in = new FileInputStream(f);
+        }
+        byte[] buf = new byte[8192];
+        int n;
+        while ((n = in.read(buf)) >= 0) {
+          md.update(buf, 0, n);
+        }
+      } finally {
+        if (in != null) {
+          try {
+            in.close();
+          } catch (Exception e) {
+            // abaikan
+          }
+        }
+      }
+      byte[] d = md.digest();
+      StringBuilder sb = new StringBuilder(d.length * 2);
+      for (int i = 0; i < d.length; i = i + 1) {
+        String h = Integer.toHexString(d[i] & 0xFF);
+        if (h.length() < 2) {
+          sb.append('0');
+        }
+        sb.append(h);
+      }
+      return sb.toString();
+    } catch (Exception e) {
+      String m = e.getMessage();
+      Shared.err(this, "Hash", 0, m == null ? "hash gagal" : m);
+      return "";
     }
   }
 
@@ -2256,7 +2355,7 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   // ================= HELPER IZIN =================
 
-  @SimpleProperty(description = "Helper read-only: izin kamera (CADANGAN — belum ada "
+  @SimpleProperty(description = "Pilihan read-only: izin kamera (CADANGAN — belum ada "
       + "bloknya, hadir mulai v21). Colok ke "
       + "IsPermissionGranted / CallEnsurePermission (tanpa ketik string).",
       category = PropertyCategory.BEHAVIOR)
@@ -2264,7 +2363,7 @@ public class Tools_File extends AndroidNonvisibleComponent
     return "android.permission.CAMERA";
   }
 
-  @SimpleProperty(description = "Helper read-only: izin mikrofon, rekam "
+  @SimpleProperty(description = "Pilihan read-only: izin mikrofon, rekam "
       + "suara (CADANGAN — belum ada bloknya, hadir mulai v21). Colok ke "
       + "IsPermissionGranted / CallEnsurePermission.",
       category = PropertyCategory.BEHAVIOR)
@@ -2272,49 +2371,49 @@ public class Tools_File extends AndroidNonvisibleComponent
     return "android.permission.RECORD_AUDIO";
   }
 
-  @SimpleProperty(description = "Helper read-only: izin baca storage. "
+  @SimpleProperty(description = "Pilihan read-only: izin baca storage. "
       + "Colok ke IsPermissionGranted / CallEnsurePermission.",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionReadStorage() {
     return READ_PERM;
   }
 
-  @SimpleProperty(description = "Helper read-only: izin tulis storage. "
+  @SimpleProperty(description = "Pilihan read-only: izin tulis storage. "
       + "Colok ke IsPermissionGranted / CallEnsurePermission.",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionWriteStorage() {
     return WRITE_PERM;
   }
 
-  @SimpleProperty(description = "Helper read-only: izin notifikasi "
+  @SimpleProperty(description = "Pilihan read-only: izin notifikasi "
       + "(Android 13+). Colok ke IsPermissionGranted / CallEnsurePermission.",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionNotifications() {
     return "android.permission.POST_NOTIFICATIONS";
   }
 
-  @SimpleProperty(description = "Helper read-only: izin baca gambar "
+  @SimpleProperty(description = "Pilihan read-only: izin baca gambar "
       + "(Android 13+). Colok ke IsPermissionGranted / CallEnsurePermission.",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionReadImages() {
     return "android.permission.READ_MEDIA_IMAGES";
   }
 
-  @SimpleProperty(description = "Helper read-only: izin baca video "
+  @SimpleProperty(description = "Pilihan read-only: izin baca video "
       + "(Android 13+). Colok ke IsPermissionGranted / CallEnsurePermission.",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionReadVideo() {
     return "android.permission.READ_MEDIA_VIDEO";
   }
 
-  @SimpleProperty(description = "Helper read-only: izin baca audio "
+  @SimpleProperty(description = "Pilihan read-only: izin baca audio "
       + "(Android 13+). Colok ke IsPermissionGranted / CallEnsurePermission.",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionReadAudio() {
     return "android.permission.READ_MEDIA_AUDIO";
   }
 
-  @SimpleProperty(description = "Helper read-only: izin lokasi akurat (CADANGAN — "
+  @SimpleProperty(description = "Pilihan read-only: izin lokasi akurat (CADANGAN — "
       + "belum ada bloknya, hadir mulai v21). Colok ke IsPermissionGranted / "
       + "CallEnsurePermission.",
       category = PropertyCategory.BEHAVIOR)
@@ -2322,7 +2421,7 @@ public class Tools_File extends AndroidNonvisibleComponent
     return "android.permission.ACCESS_FINE_LOCATION";
   }
 
-  @SimpleProperty(description = "Helper read-only: izin lokasi kasar (CADANGAN — "
+  @SimpleProperty(description = "Pilihan read-only: izin lokasi kasar (CADANGAN — "
       + "belum ada bloknya, hadir mulai v21). Colok ke IsPermissionGranted / "
       + "CallEnsurePermission.",
       category = PropertyCategory.BEHAVIOR)
@@ -2667,7 +2766,7 @@ public class Tools_File extends AndroidNonvisibleComponent
   }
 
   @SimpleEvent(description = "SATU-SATUNYA error Tools_File. component = nama "
-      + "operasi (isi dengan blok kuning OpDirectory/OpFile/OpRead/OpBase64/"
+      + "operasi (isi dengan OpDirectory/OpFile/OpRead/OpBase64/"
       + "OpCopyOrMove/OpPick/OpOpen/OpPermission untuk if). Contoh: jika component "
       + "= OpFile maka tampilkan message. id selalu 0 (tanpa id — cek component saja).")
   public void ErrorOccurred(String component, int id, String message) {
@@ -2678,7 +2777,7 @@ public class Tools_File extends AndroidNonvisibleComponent
   @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred: "
       + "pesan error terakhir operasi ini (Directory/File/Read/Base64/"
       + "CopyOrMove/Pick/Open/Permission, teks kosong bila belum ada). Isi operation "
-      + "dengan blok kuning (mis. OpFile). Contoh: simpan LastError(OpCopyOrMove) "
+      + "dengan blok OpFile. Contoh: simpan LastError(OpCopyOrMove) "
       + "ke variabel.")
   public String LastError(String operation) {
     return Shared.lastError(operation);

@@ -34,7 +34,7 @@ import java.util.Map;
 import java.util.HashMap;
 
 @DesignerComponent(
-    version = 21,
+    version = 22,
     description = "Tools_Downloader: unduh paralel ber-id (pause/resume/cancel per id, "
         + "Started/ProgressChanged/Finished) + unduh batch list URL. Id dikelola "
         + "CreateDownloadId (atau CreateUniqueId Tools_Base). List id URUT PEMBUATAN "
@@ -1401,8 +1401,7 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred: pesan error "
-      + "terakhir operasi ini (teks kosong bila belum ada). Isi operation dengan blok "
-      + "kuning (mis. OpDownload).")
+      + "terakhir operasi ini (teks kosong bila belum ada). Isi operation dengan blok OpDownload.")
   public String LastError(String operation) {
     return Shared.lastError(operation);
   }
@@ -1679,7 +1678,7 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
   }
 
   @SimpleEvent(description = "SATU-SATUNYA error Tools_Downloader. component = nama operasi "
-      + "(isi dengan blok kuning OpDownload untuk if). Contoh: jika component = OpDownload "
+      + "(isi dengan OpDownload untuk if). Contoh: jika component = OpDownload "
       + "maka tampilkan message.")
   public void ErrorOccurred(String component, int id, String message) {
     Shared.fire(this, "ErrorOccurred",

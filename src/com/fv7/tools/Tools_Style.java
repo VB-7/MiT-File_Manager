@@ -33,7 +33,7 @@ import java.io.InputStream;
 import java.util.ArrayList;
 
 @DesignerComponent(
-    version = 21,
+    version = 22,
     description = "Tools_Style: percantik komponen/wadah yang kelihatan "
         + "(Button, Label, Arrangement, gambar Tools_Image, komponen dinamis, "
         + "dsb). Radius, border, gradien, elevation, padding, margin, opacity, "
@@ -48,7 +48,7 @@ import java.util.ArrayList;
         + "— yang DIPANGGIL TERAKHIR menang. Konvensi awalan: Is = boolean "
         + "(colok ke if), Call = async + hasil lewat event, Set = tanpa "
         + "feedback sukses (gagal via ErrorOccurred), Get = nilai balik "
-        + "sinkron. Blok kuning = pilihan tetap (colok ke soket yang cocok). "
+        + "sinkron. Pilihan tetap (colok ke soket yang cocok). "
         + "Kamus MakeViewUp: SetRadius = SetCornerRadius di sini; SetImage = "
         + "SetBackgroundImage; SetSpace = SetTextSpace.",
     category = ComponentCategory.EXTENSION,
@@ -127,7 +127,7 @@ public class Tools_Style extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "SET: Atur gradien banyak warna (list warna, "
-      + "minimal 2). arah = colok OrientationTopBottom/dll (blok kuning); "
+      + "minimal 2). arah = colok OrientationTopBottom/dll; "
       + "angka 0-7 = cara lama (0=atas-bawah, 1=kananATAS-kiriBAWAH, "
       + "2=kanan-kiri, 3=kananBAWAH-kiriATAS, 4=bawah-atas, 5=kiriBAWAH-"
       + "kananATAS, 6=kiri-kanan, 7=kiriATAS-kananBAWAH). Background bawaan "
@@ -261,7 +261,7 @@ public class Tools_Style extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "SET: Atur bentuk background: colok "
-      + "ShapeRectangle/ShapeOval/ShapeLine/ShapeRing (blok kuning).")
+      + "ShapeRectangle/ShapeOval/ShapeLine/ShapeRing .")
   public void SetShape(AndroidViewComponent comp, int shape) {
     View v = viewOf(comp, "Shape");
     if (v == null) {
@@ -305,7 +305,7 @@ public class Tools_Style extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "SET: Atur visibilitas: colok "
-      + "VisibilityVisible/VisibilityInvisible/VisibilityGone (blok kuning). "
+      + "VisibilityVisible/VisibilityInvisible/VisibilityGone . "
       + "Gone = hilang + tempat ikut hilang (≈ Visible=false MIT); Invisible "
       + "= tak terlihat tapi tempat tetap ada.")
   public void SetVisibility(AndroidViewComponent comp, int visibility) {
@@ -741,8 +741,7 @@ public class Tools_Style extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "CALL: Animasi geser-masuk: direction = colok "
-      + "DirectionLeft/DirectionRight/DirectionTop/DirectionBottom (blok "
-      + "kuning); teks left/right/top/bottom = cara lama. durationMs mis. "
+      + "DirectionLeft/DirectionRight/DirectionTop/DirectionBottom ; teks left/right/top/bottom = cara lama. durationMs mis. "
       + "300; durationMs<=0 = tanpa set durasi (jalan instan).")
   public void CallAnimateSlideIn(AndroidViewComponent comp, String direction,
       int durationMs) {

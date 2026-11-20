@@ -38,7 +38,7 @@ import java.util.Map;
 
 @UsesPermissions("android.permission.INTERNET")
 @DesignerComponent(
-    version = 20,
+    version = 22,
     description = "Tools_Video: putar BANYAK video ber-id di dalam layout (Arrangement MIT / dinamis), "
         + "kontrol ala VLC (pause/resume/seek/maju/mundur/double-tap), loop, volume. "
         + "Satu id = satu video, bisa jalan bareng. Id dikelola CreateVideoId (atau "
@@ -1078,7 +1078,7 @@ public class Tools_Video extends AndroidNonvisibleComponent
   }
 
   @SimpleEvent(description = "SATU-SATUNYA error Tools_Video. component = nama operasi "
-      + "(isi dengan blok kuning OpVideo untuk if). Contoh: jika component = OpVideo "
+      + "(isi dengan OpVideo untuk if). Contoh: jika component = OpVideo "
       + "maka tampilkan message.")
   public void ErrorOccurred(String component, int id, String message) {
     Shared.fire(this, "ErrorOccurred",
@@ -1093,8 +1093,7 @@ public class Tools_Video extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred: pesan error "
-      + "terakhir operasi ini (teks kosong bila belum ada). Isi operation dengan blok "
-      + "kuning (mis. OpVideo).")
+      + "terakhir operasi ini (teks kosong bila belum ada). Isi operation dengan blok OpVideo.")
   public String LastError(String operation) {
     return Shared.lastError(operation);
   }

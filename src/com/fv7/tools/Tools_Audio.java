@@ -28,7 +28,7 @@ import java.util.Map;
 
 @UsesPermissions("android.permission.INTERNET")
 @DesignerComponent(
-    version = 20,
+    version = 22,
     description = "Tools_Audio: putar BANYAK audio ber-id (background, tanpa tampilan), kontrol "
         + "pause/resume/seek/maju/mundur, loop, volume. Satu id = satu audio, bisa jalan bareng. "
         + "Id dikelola CreateAudioId (atau CreateUniqueId Tools_Base). "
@@ -888,7 +888,7 @@ public class Tools_Audio extends AndroidNonvisibleComponent
   }
 
   @SimpleEvent(description = "SATU-SATUNYA error Tools_Audio. component = nama operasi "
-      + "(isi dengan blok kuning OpAudio untuk if). Contoh: jika component = OpAudio "
+      + "(isi dengan OpAudio untuk if). Contoh: jika component = OpAudio "
       + "maka tampilkan message.")
   public void ErrorOccurred(String component, int id, String message) {
     Shared.fire(this, "ErrorOccurred",
@@ -903,8 +903,7 @@ public class Tools_Audio extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred: pesan error "
-      + "terakhir operasi ini (teks kosong bila belum ada). Isi operation dengan blok "
-      + "kuning (mis. OpAudio).")
+      + "terakhir operasi ini (teks kosong bila belum ada). Isi operation dengan blok OpAudio.")
   public String LastError(String operation) {
     return Shared.lastError(operation);
   }

@@ -39,7 +39,7 @@ import java.util.Map;
 import java.util.Set;
 
 @DesignerComponent(
-    version = 21,
+    version = 22,
     description = "Tools_Sheet: bottom-sheet dialog ber-id (pakai Arrangement "
         + "sebagai konten), toast, dan notifikasi bar status Android. Sheet: "
         + "RegisterSheet (+SetSheetStyle) / ShowSimpleSheet -> CallShowSheet / "
@@ -50,7 +50,7 @@ import java.util.Set;
         + "CreateSheetId (notifikasi: CreateNotificationId). List id URUT "
         + "PEMBUATAN. Konvensi awalan: Is = boolean (colok ke if), Call = async + "
         + "hasil lewat event, Set = tanpa feedback sukses (gagal via ErrorOccurred), "
-        + "Get = nilai balik sinkron. Blok kuning = pilihan tetap (colok ke soket "
+        + "Get = nilai balik sinkron. Pilihan tetap (colok ke soket "
         + "yang cocok).",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
@@ -148,7 +148,7 @@ public class Tools_Sheet extends AndroidNonvisibleComponent
       + "tampil; langsung kelihatan bila sedang tampil). gravity angka: 80=bawah, "
       + "48=atas, 17=tengah, 3=kiri, 5=kanan. widthPx/heightPx <= 0 = menyesuaikan "
       + "(lebar penuh bila gravity atas/bawah). dimPercent 0-100 (kegelapan latar). "
-      + "animationType teks: pakai blok kuning SlideFromBottom/SlideFromTop/"
+      + "animationType teks: pakai blok SlideFromBottom/SlideFromTop/"
       + "SlideFromLeft/SlideFromRight/FadeAnim/NoAnim "
       + "(salah ketik = slide-bawah). animationDurationMs 0 = 250. "
       + "cancelable = bisa tutup via tombol back/luar. swipeToDismiss = geser "
