@@ -45,14 +45,15 @@ import java.util.List;
 import java.util.Map;
 
 @DesignerComponent(
-    version = 20,
+    version = 21,
     description = "Tools_Image: tampilkan BANYAK gambar ber-id ke layout (path/URL/base64 mandiri) + "
         + "gambar dari base64 + info ukuran. Id dikelola CreateImageId / Tools_Base. "
         + "Sukses menembak ImageShown (id + path); gagal via ErrorOccurred. "
         + "List id URUT PEMBUATAN (index 1 = pertama dibuat). INGAT DUA KALENDER: "
         + "daftar id mulai dari 1, TAPI halaman slider mulai dari 0. Slider TANPA "
         + "batas jumlah; URL gambar diunduh sekali lalu di-cache otomatis (maks "
-        + "50MB, terlama dihapus dulu; bersihkan manual via SetClearImageCache). "
+        + "80MB bawaan, atur via SetImageCacheMaxMB; terlama dihapus dulu; "
+        + "bersihkan manual via SetClearImageCache). "
         + "Konvensi awalan: Is = boolean (colok ke if), Call = async + hasil lewat "
         + "event, Set = tanpa feedback sukses (gagal via ErrorOccurred), Get = nilai "
         + "balik sinkron.",
@@ -85,6 +86,17 @@ public class Tools_Image extends AndroidNonvisibleComponent
     ArrayList<ImageView> pages = new ArrayList<ImageView>();
     int index = 0;
     boolean horizontal = true;
+    int width = ViewGroup.LayoutParams.MATCH_PARENT;
+    int height = ViewGroup.LayoutParams.WRAP_CONTENT;
+    boolean fit = true;
+    ArrayList<String> sources = new ArrayList<String>();
+    int spacingPx = 0;
+    int selected = -1;
+    int lastFail = 0;
+    int preloadN = 0;
+    int winGen = 0;
+    boolean rememberPos = false;
+    ArrayList<Boolean> loaded = new ArrayList<Boolean>();
     Handler auto;
     Runnable autoTask;
     long interval = 0;
@@ -170,7 +182,8 @@ public class Tools_Image extends AndroidNonvisibleComponent
 
   // ================= CACHE URL (hemat unduh-ulang) =================
 
-  private static final long IMG_CACHE_MAX = 50L * 1024L * 1024L;
+  /** Batas cache URL (byte). Default 80MB; atur via SetImageCacheMaxMB. */
+  private long imgCacheMaxBytes = 80L * 1024L * 1024L;
 
   private File imgCacheDir() {
     try {
@@ -286,7 +299,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
     }
   }
 
-  private static void pruneImgCache(File dir) {
+  private void pruneImgCache(File dir) {
     try {
       File[] fs = dir.listFiles();
       if (fs == null || fs.length == 0) {
@@ -296,7 +309,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
       for (int i = 0; i < fs.length; i = i + 1) {
         total = total + fs[i].length();
       }
-      if (total <= IMG_CACHE_MAX) {
+      if (total <= imgCacheMaxBytes) {
         return;
       }
       for (int i = 0; i < fs.length; i = i + 1) {
@@ -308,7 +321,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
           }
         }
       }
-      for (int i = 0; i < fs.length && total > IMG_CACHE_MAX; i = i + 1) {
+      for (int i = 0; i < fs.length && total > imgCacheMaxBytes; i = i + 1) {
         total = total - fs[i].length();
         try {
           fs[i].delete();
@@ -330,7 +343,8 @@ public class Tools_Image extends AndroidNonvisibleComponent
       + "Tools_Base CreateUniqueId, reservasi otomatis diadopsi). "
       + "width/height angka MIT: -2 = isi penuh, -1 = otomatis, positif = pixel. "
       + "fit true = seluruh gambar muat (tidak kepotong); false = penuhi tampilan "
-      + "(bisa kepotong). Sukses menembak "
+      + "(bisa kepotong). Catatan kamera: foto hasil kamera bisa tampil miring "
+      + "(orientasi Exif belum dibaca). Sukses menembak "
       + "ImageShown; gagal via ErrorOccurred.")
   public void CallShowImage(final AndroidViewComponent container, final String source,
       final int id, final int width, final int height,
@@ -1309,6 +1323,17 @@ public class Tools_Image extends AndroidNonvisibleComponent
     }
   }
 
+  @SimpleFunction(description = "True bila gambar ber-id masih loading (id aktif "
+      + "tapi belum tampil: masih unduh/decode). False bila sudah tampil, gagal, "
+      + "atau id tidak ada. Pasangan ImageShown.")
+  public boolean IsImageLoading(int id) {
+    try {
+      return Ids.isActive(Ids.IMAGE, id) && imageOf(id) == null;
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
   // ================= SLIDER =================
 
   /** Satu pintu baca byte gambar: http(s) URL, base64 (mentah / data:...),
@@ -1551,11 +1576,16 @@ public class Tools_Image extends AndroidNonvisibleComponent
       + "via SetSliderImages). TANPA batas jumlah (dulu maks 20); tiap gambar "
       + "dikecilkan otomatis bila > 2048px, tapi puluhan gambar besar tetap makan "
       + "RAM — sesuaikan. URL diunduh sekali lalu di-cache (tak perlu unduh ulang; "
-      + "bersihkan via SetClearImageCache). INGAT: halaman slider mulai dari 0 "
+      + "bersihkan via SetClearImageCache). width/height = ukuran WADAH slider di "
+      + "dalam container (angka MIT: -2 = isi penuh, -1 = otomatis, positif = "
+      + "pixel); BUKAN ukuran isi gambar — tiap halaman menyesuaikan wadah. "
+      + "fit true = gambar muat penuh (tidak kepotong); false = penuhi halaman "
+      + "(bisa kepotong). INGAT: halaman slider mulai dari 0 "
       + "(bukan 1 seperti daftar id). Geser menembak "
       + "SliderChanged; baca kapan saja via GetSliderIndex.")
   public void CallCreateImageSlider(final AndroidViewComponent container,
-      final int id, final boolean horizontal, final Object paths) {
+      final int id, final boolean horizontal, final Object paths,
+      final int width, final int height, final boolean fit) {
     if (id < 1) {
       Shared.err(this, "Slider", id, "id harus >= 1 (pakai CreateSliderId)");
       return;
@@ -1584,6 +1614,9 @@ public class Tools_Image extends AndroidNonvisibleComponent
               Shared.err(Tools_Image.this, "Slider", id, "layout tidak valid");
               return;
             }
+            final int fW = mitToAndroidSize(width);
+            final int fH = mitToAndroidSize(height);
+            final boolean fFit = fit;
             final ViewGroup root;
             final LinearLayout box = new LinearLayout(activity);
             if (horizontal) {
@@ -1599,12 +1632,13 @@ public class Tools_Image extends AndroidNonvisibleComponent
               box.setOrientation(LinearLayout.VERTICAL);
               root = sv;
             }
+            root.setClipChildren(false);
+            box.setClipChildren(false);
             root.addView(box, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT));
+                ViewGroup.LayoutParams.MATCH_PARENT));
             vg.addView(root, new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT));
+                fW, fH));
             root.setOnTouchListener(new View.OnTouchListener() {
               public boolean onTouch(View vv, MotionEvent e) {
                 int a = e.getActionMasked();
@@ -1623,6 +1657,9 @@ public class Tools_Image extends AndroidNonvisibleComponent
             s.root = root;
             s.box = box;
             s.horizontal = horizontal;
+            s.width = fW;
+            s.height = fH;
+            s.fit = fFit;
             synchronized (viewLock) {
               sliders.put(Integer.valueOf(id), s);
             }
@@ -1648,6 +1685,253 @@ public class Tools_Image extends AndroidNonvisibleComponent
     }
   }
 
+  /** Samakan tiap halaman dgn ukuran wadah (viewport) + terapkan elevation
+   *  pilihan. WAJIB di UI thread (dipanggil via root.post). */
+  private void sizeSliderPages(final Slider sl) {
+    try {
+      if (sl == null || sl.root == null) {
+        return;
+      }
+      int vw = sl.root.getWidth();
+      int vh = sl.root.getHeight();
+      if (vw > 0 && vh > 0) {
+        for (int i = 0; i < sl.pages.size(); i = i + 1) {
+          View p = sl.pages.get(i);
+          if (p == null) {
+            continue;
+          }
+          ViewGroup.LayoutParams plp = p.getLayoutParams();
+          plp.width = vw;
+          plp.height = vh;
+          p.setLayoutParams(plp);
+        }
+      }
+      applySliderSelection(sl);
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  /** Highlight halaman terpilih (bayangan) + nol-kan sisanya. UI thread. */
+  private void applySliderSelection(Slider sl) {
+    try {
+      int sel = sl.selected;
+      int elev = dp(8);
+      for (int i = 0; i < sl.pages.size(); i = i + 1) {
+        View p = sl.pages.get(i);
+        if (p == null) {
+          continue;
+        }
+        try {
+          p.setElevation(i == sel ? elev : 0);
+        } catch (Exception e) {
+          // abaikan (API lama)
+        }
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  private int dp(int v) {
+    float d = 1.0f;
+    try {
+      d = context.getResources().getDisplayMetrics().density;
+    } catch (Exception e) {
+      // abaikan
+    }
+    if (d <= 0) {
+      d = 1.0f;
+    }
+    return Math.round(v * d);
+  }
+
+  /** Pompa jendela RAM slider: decode hanya halaman aktif±N (atau semua bila
+   *  all=true), lepas bitmap di luar jendela (byte tetap aman di cache disk).
+   *  Dipanggil OTOMATIS tiap pindah halaman bila preloadN > 0. WAJIB UI thread. */
+  private void pumpSliderRange(final int sliderId, final boolean all) {
+    final Slider s;
+    synchronized (viewLock) {
+      s = sliders.get(Integer.valueOf(sliderId));
+    }
+    if (s == null) {
+      return;
+    }
+    final int count = s.pages.size();
+    if (count <= 0) {
+      return;
+    }
+    int lo;
+    int hi;
+    if (all) {
+      lo = 0;
+      hi = count - 1;
+    } else {
+      int n = s.preloadN;
+      if (n <= 0) {
+        return;
+      }
+      int cur = s.index;
+      if (cur < 0) {
+        cur = 0;
+      }
+      if (cur > count - 1) {
+        cur = count - 1;
+      }
+      lo = cur - n;
+      if (lo < 0) {
+        lo = 0;
+      }
+      hi = cur + n;
+      if (hi > count - 1) {
+        hi = count - 1;
+      }
+    }
+    try {
+      for (int i = 0; i < count; i = i + 1) {
+        if (i >= lo && i <= hi) {
+          continue;
+        }
+        ImageView iv = s.pages.get(i);
+        if (iv == null) {
+          continue;
+        }
+        try {
+          android.graphics.drawable.Drawable d = iv.getDrawable();
+          iv.setImageBitmap(null);
+          if (d instanceof android.graphics.drawable.BitmapDrawable) {
+            Bitmap b = ((android.graphics.drawable.BitmapDrawable) d).getBitmap();
+            if (b != null && !b.isRecycled()) {
+              b.recycle();
+            }
+          }
+        } catch (Exception e) {
+          // abaikan
+        }
+        if (i < s.loaded.size()) {
+          s.loaded.set(i, Boolean.FALSE);
+        }
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    final ArrayList<Integer> needIdx = new ArrayList<Integer>();
+    final ArrayList<String> needSrc = new ArrayList<String>();
+    try {
+      for (int i = lo; i <= hi; i = i + 1) {
+        boolean isLoaded = i < s.loaded.size()
+            && s.loaded.get(i).booleanValue();
+        if (!isLoaded && i < s.sources.size()) {
+          needIdx.add(Integer.valueOf(i));
+          needSrc.add(s.sources.get(i));
+        }
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    if (needIdx.isEmpty()) {
+      return;
+    }
+    s.winGen = s.winGen + 1;
+    final int gen = s.winGen;
+    AsynchUtil.runAsynchronously(new Runnable() {
+      public void run() {
+        final ArrayList<Integer> gotIdx = new ArrayList<Integer>();
+        final ArrayList<Bitmap> gotBmp = new ArrayList<Bitmap>();
+        int fail = 0;
+        for (int k = 0; k < needIdx.size(); k = k + 1) {
+          Bitmap b = null;
+          try {
+            b = loadBitmap(needSrc.get(k), "");
+          } catch (Exception e) {
+            b = null;
+          }
+          if (b == null) {
+            fail = fail + 1;
+          } else {
+            gotIdx.add(needIdx.get(k));
+            gotBmp.add(b);
+          }
+        }
+        final int fFail = fail;
+        try {
+          form.runOnUiThread(new Runnable() {
+            public void run() {
+              try {
+                Slider cur2;
+                synchronized (viewLock) {
+                  cur2 = sliders.get(Integer.valueOf(sliderId));
+                }
+                if (cur2 == null || cur2 != s || cur2.winGen != gen) {
+                  for (int k = 0; k < gotBmp.size(); k = k + 1) {
+                    try {
+                      Bitmap b = gotBmp.get(k);
+                      if (b != null && !b.isRecycled()) {
+                        b.recycle();
+                      }
+                    } catch (Exception e) {
+                      // abaikan
+                    }
+                  }
+                  return;
+                }
+                for (int k = 0; k < gotIdx.size(); k = k + 1) {
+                  int ii = gotIdx.get(k).intValue();
+                  if (ii < 0 || ii >= cur2.pages.size()) {
+                    continue;
+                  }
+                  if (ii < cur2.loaded.size()
+                      && cur2.loaded.get(ii).booleanValue()) {
+                    try {
+                      Bitmap dup = gotBmp.get(k);
+                      if (dup != null && !dup.isRecycled()) {
+                        dup.recycle();
+                      }
+                    } catch (Exception e) {
+                      // abaikan
+                    }
+                    continue;
+                  }
+                  ImageView iv = cur2.pages.get(ii);
+                  if (iv != null) {
+                    iv.setImageBitmap(gotBmp.get(k));
+                    while (cur2.loaded.size() <= ii) {
+                      cur2.loaded.add(Boolean.FALSE);
+                    }
+                    cur2.loaded.set(ii, Boolean.TRUE);
+                  }
+                }
+                cur2.lastFail = cur2.lastFail + fFail;
+              } catch (Exception e) {
+                // abaikan
+              }
+            }
+          });
+        } catch (Exception e) {
+          // abaikan
+        }
+      }
+    });
+  }
+
+  private void saveSliderPos(int id, int index) {
+    try {
+      context.getSharedPreferences("Fv7ImageSliderPos",
+          Context.MODE_PRIVATE).edit().putInt("pos_" + id, index).apply();
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  private int loadSliderPos(int id) {
+    try {
+      return context.getSharedPreferences("Fv7ImageSliderPos",
+          Context.MODE_PRIVATE).getInt("pos_" + id, -1);
+    } catch (Exception e) {
+      return -1;
+    }
+  }
+
   private void snapSlider(int id) {
     Slider s;
     synchronized (viewLock) {
@@ -1665,7 +1949,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
         }
         if (pageW > 0) {
           int sx = ((HorizontalScrollView) s.root).getScrollX();
-          target = Math.round((float) sx / pageW);
+          target = Math.round((float) sx / (pageW + s.spacingPx));
         }
       } else if (!s.horizontal && s.root instanceof ScrollView) {
         View first = s.box.getChildCount() > 0 ? s.box.getChildAt(s.index < s.box
@@ -1673,7 +1957,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
         int pageH = first == null ? 0 : first.getHeight();
         if (pageH > 0) {
           int sy = ((ScrollView) s.root).getScrollY();
-          target = Math.round((float) sy / pageH);
+          target = Math.round((float) sy / (pageH + s.spacingPx));
         }
       }
       if (target < 0) {
@@ -1702,14 +1986,15 @@ public class Tools_Image extends AndroidNonvisibleComponent
           pageW = s.box.getChildAt(0).getWidth();
         }
         if (pageW > 0) {
-          ((HorizontalScrollView) s.root).smoothScrollTo(target * pageW, 0);
+          ((HorizontalScrollView) s.root).smoothScrollTo(
+              target * (pageW + s.spacingPx), 0);
         }
       } else if (!s.horizontal && s.root instanceof ScrollView) {
         int y = 0;
         for (int i = 0; i < target && i < s.box.getChildCount(); i = i + 1) {
           View ch = s.box.getChildAt(i);
           if (ch != null) {
-            y = y + ch.getHeight();
+            y = y + ch.getHeight() + s.spacingPx;
           }
         }
         ((ScrollView) s.root).smoothScrollTo(0, y);
@@ -1717,6 +2002,12 @@ public class Tools_Image extends AndroidNonvisibleComponent
       if (fire && target != s.index) {
         s.index = target;
         SliderChanged(id, target);
+        if (s.rememberPos) {
+          saveSliderPos(id, target);
+        }
+        if (s.preloadN > 0) {
+          pumpSliderRange(id, false);
+        }
       } else {
         s.index = target;
       }
@@ -1728,6 +2019,8 @@ public class Tools_Image extends AndroidNonvisibleComponent
   @SimpleFunction(description = "SET: isi slider ber-id dengan daftar gambar "
       + "(list teks: path file/asset, URL http, atau base64 — sama fleksibelnya "
       + "dengan ShowImage; path dipakai bila item kosong). TANPA batas jumlah. "
+      + "Ukuran wadah & mode fit ikut saat pembuatan slider. Mode jendela "
+      + "(SetSliderPreload): halaman dibuat dulu, decode-nya menyusul otomatis. "
       + "URL diunduh sekali lalu di-cache (tak perlu unduh ulang). "
       + "List kosong / slider tidak ada = ErrorOccurred. Gagal via ErrorOccurred.")
   public void SetSliderImages(final int sliderId,
@@ -1753,13 +2046,25 @@ public class Tools_Image extends AndroidNonvisibleComponent
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         final ArrayList<Bitmap> bmps = new ArrayList<Bitmap>();
+        final ArrayList<String> srcs = new ArrayList<String>();
         int fail = 0;
-        for (int i = 0; i < use.size(); i = i + 1) {
-          Bitmap b = loadBitmap(use.get(i), "");
-          if (b == null) {
-            fail = fail + 1;
-          } else {
-            bmps.add(b);
+        Slider q0;
+        synchronized (viewLock) {
+          q0 = sliders.get(Integer.valueOf(sliderId));
+        }
+        final boolean windowMode = q0 != null && q0.preloadN > 0;
+        if (windowMode) {
+          // Hemat RAM: sumber dicatat dulu, decode hanya jendela aktif (pump).
+          srcs.addAll(use);
+        } else {
+          for (int i = 0; i < use.size(); i = i + 1) {
+            Bitmap b = loadBitmap(use.get(i), "");
+            if (b == null) {
+              fail = fail + 1;
+            } else {
+              bmps.add(b);
+              srcs.add(use.get(i));
+            }
           }
         }
         final int fFail = fail;
@@ -1776,37 +2081,66 @@ public class Tools_Image extends AndroidNonvisibleComponent
                 }
                 sl.box.removeAllViews();
                 sl.pages.clear();
+                sl.loaded.clear();
+                sl.sources.clear();
+                sl.sources.addAll(srcs);
+                sl.lastFail = fFail;
+                sl.winGen = sl.winGen + 1;
                 sl.index = 0;
-                for (int i = 0; i < bmps.size(); i = i + 1) {
+                sl.selected = -1;
+                final boolean windowMode = sl.preloadN > 0;
+                final int total = windowMode ? srcs.size() : bmps.size();
+                for (int i = 0; i < total; i = i + 1) {
                   final int idx = i;
                   ImageView iv = new ImageView(activity);
-                  iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
-                  iv.setAdjustViewBounds(true);
-                  iv.setImageBitmap(bmps.get(i));
+                  iv.setScaleType(sl.fit ? ImageView.ScaleType.FIT_CENTER
+                      : ImageView.ScaleType.CENTER_CROP);
+                  iv.setAdjustViewBounds(sl.fit);
+                  if (!windowMode) {
+                    iv.setImageBitmap(bmps.get(i));
+                  }
                   iv.setOnClickListener(new View.OnClickListener() {
                     public void onClick(View vv) {
                       SliderClicked(sliderId, idx);
                     }
                   });
-                  LinearLayout.LayoutParams lp;
+                  LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                      LinearLayout.LayoutParams.MATCH_PARENT,
+                      LinearLayout.LayoutParams.MATCH_PARENT);
                   if (sl.horizontal) {
-                    lp = new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT);
+                    lp.leftMargin = i > 0 ? sl.spacingPx : 0;
                   } else {
-                    lp = new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT);
+                    lp.topMargin = i > 0 ? sl.spacingPx : 0;
                   }
                   sl.box.addView(iv, lp);
                   sl.pages.add(iv);
+                  sl.loaded.add(windowMode ? Boolean.FALSE : Boolean.TRUE);
                 }
+                // Samakan tiap halaman dgn ukuran wadah (viewport) agar isi
+                // benar-benar menyesuaikan width/height + fit saat pembuatan.
+                // Di sini juga: restore posisi + pompa jendela awal.
+                sl.root.post(new Runnable() {
+                  public void run() {
+                    sizeSliderPages(sl);
+                    boolean moved = false;
+                    if (sl.rememberPos) {
+                      int saved = loadSliderPos(sliderId);
+                      if (saved > 0 && saved < sl.pages.size()) {
+                        goToLocked(sl, sliderId, saved, true);
+                        moved = true;
+                      }
+                    }
+                    if (!moved && sl.preloadN > 0) {
+                      pumpSliderRange(sliderId, false);
+                    }
+                  }
+                });
                 if (sl.horizontal && sl.root instanceof HorizontalScrollView) {
                   ((HorizontalScrollView) sl.root).scrollTo(0, 0);
                 } else if (sl.root instanceof ScrollView) {
                   ((ScrollView) sl.root).scrollTo(0, 0);
                 }
-                if (fFail > 0) {
+                if (fFail > 0 && !windowMode) {
                   Shared.err(Tools_Image.this, "Slider", sliderId, fFail
                       + " gambar gagal dimuat");
                 }
@@ -1859,6 +2193,264 @@ public class Tools_Image extends AndroidNonvisibleComponent
     } catch (Exception e) {
       // abaikan
     }
+  }
+
+  @SimpleFunction(description = "SET: tampil/sembunyi slider ber-id yang SUDAH "
+      + "aktif. false = GONE (hilang total; wadah MIT bisa diisi konten lain "
+      + "tanpa ketimpa, tanpa bikin layout baru). Sukses diam; id tidak ada "
+      + "via ErrorOccurred.")
+  public void SetSliderVisible(final int sliderId, final boolean visible) {
+    try {
+      form.runOnUiThread(new Runnable() {
+        public void run() {
+          try {
+            Slider s;
+            synchronized (viewLock) {
+              s = sliders.get(Integer.valueOf(sliderId));
+            }
+            if (s == null || s.root == null) {
+              Shared.err(Tools_Image.this, "Slider", sliderId, "slider tidak ada");
+              return;
+            }
+            s.root.setVisibility(visible ? View.VISIBLE : View.GONE);
+          } catch (Exception e) {
+            String m = e.getMessage();
+            Shared.err(Tools_Image.this, "Slider", sliderId,
+                m == null ? "visible gagal" : m);
+          }
+        }
+      });
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  @SimpleFunction(description = "SET: ubah ukuran WADAH slider ber-id yang SUDAH "
+      + "aktif (angka MIT: -2 = isi penuh, -1 = otomatis, positif = pixel). "
+      + "Isi tiap halaman menyesuaikan ulang. Sukses diam; id tidak ada via "
+      + "ErrorOccurred.")
+  public void SetSliderSize(final int sliderId, final int width,
+      final int height) {
+    try {
+      form.runOnUiThread(new Runnable() {
+        public void run() {
+          try {
+            Slider s;
+            synchronized (viewLock) {
+              s = sliders.get(Integer.valueOf(sliderId));
+            }
+            if (s == null || s.root == null) {
+              Shared.err(Tools_Image.this, "Slider", sliderId, "slider tidak ada");
+              return;
+            }
+            s.width = mitToAndroidSize(width);
+            s.height = mitToAndroidSize(height);
+            ViewGroup.LayoutParams lp = s.root.getLayoutParams();
+            if (lp == null) {
+              lp = new ViewGroup.LayoutParams(s.width, s.height);
+            } else {
+              lp.width = s.width;
+              lp.height = s.height;
+            }
+            s.root.setLayoutParams(lp);
+            final Slider fS = s;
+            s.root.post(new Runnable() {
+              public void run() {
+                sizeSliderPages(fS);
+              }
+            });
+          } catch (Exception e) {
+            String m = e.getMessage();
+            Shared.err(Tools_Image.this, "Slider", sliderId,
+                m == null ? "size gagal" : m);
+          }
+        }
+      });
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  @SimpleFunction(description = "SET: mode pas slider ber-id yang SUDAH aktif. "
+      + "fit true = tiap gambar muat penuh di halamannya (tidak kepotong); "
+      + "false = penuhi halaman (bisa kepotong). Sukses diam; id tidak ada via "
+      + "ErrorOccurred.")
+  public void SetSliderFit(final int sliderId, final boolean fit) {
+    try {
+      form.runOnUiThread(new Runnable() {
+        public void run() {
+          try {
+            Slider s;
+            synchronized (viewLock) {
+              s = sliders.get(Integer.valueOf(sliderId));
+            }
+            if (s == null) {
+              Shared.err(Tools_Image.this, "Slider", sliderId, "slider tidak ada");
+              return;
+            }
+            s.fit = fit;
+            for (int i = 0; i < s.pages.size(); i = i + 1) {
+              ImageView iv = s.pages.get(i);
+              if (iv == null) {
+                continue;
+              }
+              iv.setScaleType(fit ? ImageView.ScaleType.FIT_CENTER
+                  : ImageView.ScaleType.CENTER_CROP);
+              iv.setAdjustViewBounds(fit);
+            }
+          } catch (Exception e) {
+            String m = e.getMessage();
+            Shared.err(Tools_Image.this, "Slider", sliderId,
+                m == null ? "fit gagal" : m);
+          }
+        }
+      });
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  @SimpleFunction(description = "SET: jarak antar halaman slider ber-id (pixel; "
+      + "0 = rapat). Horizontal = jarak kiri-kanan, vertikal = jarak atas-bawah. "
+      + "Paging geser ikut menyesuaikan. Area sela transparan (wadah di belakangnya "
+      + "yang terlihat). Sukses diam; id tidak ada via ErrorOccurred.")
+  public void SetSliderSpacing(final int sliderId, final int spacingPx) {
+    try {
+      form.runOnUiThread(new Runnable() {
+        public void run() {
+          try {
+            Slider s;
+            synchronized (viewLock) {
+              s = sliders.get(Integer.valueOf(sliderId));
+            }
+            if (s == null) {
+              Shared.err(Tools_Image.this, "Slider", sliderId, "slider tidak ada");
+              return;
+            }
+            int gap = Math.max(0, spacingPx);
+            s.spacingPx = gap;
+            for (int i = 0; i < s.pages.size(); i = i + 1) {
+              View p = s.pages.get(i);
+              if (p == null) {
+                continue;
+              }
+              ViewGroup.LayoutParams lp = p.getLayoutParams();
+              if (lp instanceof ViewGroup.MarginLayoutParams) {
+                ViewGroup.MarginLayoutParams mlp =
+                    (ViewGroup.MarginLayoutParams) lp;
+                if (s.horizontal) {
+                  mlp.leftMargin = i > 0 ? gap : 0;
+                } else {
+                  mlp.topMargin = i > 0 ? gap : 0;
+                }
+                p.setLayoutParams(mlp);
+              }
+            }
+          } catch (Exception e) {
+            String m = e.getMessage();
+            Shared.err(Tools_Image.this, "Slider", sliderId,
+                m == null ? "spacing gagal" : m);
+          }
+        }
+      });
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  @SimpleFunction(description = "SET: pilih/fokus halaman slider (0 = pertama). "
+      + "Yang terpilih = berbayang + layar digeser ke sana (SliderChanged ikut "
+      + "menembak). -1 = lepas pilihan. Di luar rentang via ErrorOccurred. "
+      + "Dipakai misal thumbnail ditekan -> tampilkan di ShowImage + fokus di sini.")
+  public void SetSliderSelected(final int sliderId, final int index) {
+    try {
+      form.runOnUiThread(new Runnable() {
+        public void run() {
+          try {
+            Slider s;
+            synchronized (viewLock) {
+              s = sliders.get(Integer.valueOf(sliderId));
+            }
+            if (s == null) {
+              Shared.err(Tools_Image.this, "Slider", sliderId, "slider tidak ada");
+              return;
+            }
+            int n = s.pages.size();
+            if (index < -1 || index >= n) {
+              Shared.err(Tools_Image.this, "Slider", sliderId, "index di luar "
+                  + "0.." + (n - 1) + " (atau -1 pelepas)");
+              return;
+            }
+            s.selected = index;
+            applySliderSelection(s);
+            if (index >= 0) {
+              goToLocked(s, sliderId, index, true);
+            }
+          } catch (Exception e) {
+            String m = e.getMessage();
+            Shared.err(Tools_Image.this, "Slider", sliderId,
+                m == null ? "select gagal" : m);
+          }
+        }
+      });
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  @SimpleFunction(description = "SET: mode hemat RAM slider (jendela preload). "
+      + "jumlah = tetangga yang ikut di-decode di sekitar halaman aktif "
+      + "(mis. 5 = aktif±5); sisanya dilepas dari RAM (byte-nya tetap aman di "
+      + "cache disk, muat ulang murah). Pompa OTOMATIS tiap geser/GoTo/Next/"
+      + "Previous/Selected/autoplay. 0 = mati (semua decode sekaligus seperti "
+      + "dulu; hati-hati OOM bila puluhan gambar besar). Sukses diam; id tidak "
+      + "ada via ErrorOccurred.")
+  public void SetSliderPreload(final int sliderId, final int jumlah) {
+    try {
+      form.runOnUiThread(new Runnable() {
+        public void run() {
+          try {
+            Slider s;
+            synchronized (viewLock) {
+              s = sliders.get(Integer.valueOf(sliderId));
+            }
+            if (s == null) {
+              Shared.err(Tools_Image.this, "Slider", sliderId, "slider tidak ada");
+              return;
+            }
+            int n = jumlah;
+            if (n < 0) {
+              n = 0;
+            }
+            s.preloadN = n;
+            pumpSliderRange(sliderId, n == 0);
+          } catch (Exception e) {
+            String m = e.getMessage();
+            Shared.err(Tools_Image.this, "Slider", sliderId,
+                m == null ? "preload gagal" : m);
+          }
+        }
+      });
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  @SimpleFunction(description = "SET: ingat posisi slider (true = tiap pindah "
+      + "halaman, index disimpan; habis isi slider otomatis lompat ke simpanan). "
+      + "Hanya index yang persist (panggil tiap launch); daftar gambar tetap "
+      + "dari SetSliderImages. Sukses diam; id tidak ada via ErrorOccurred.")
+  public void SetSliderRememberPosition(final int sliderId,
+      final boolean remember) {
+    Slider s;
+    synchronized (viewLock) {
+      s = sliders.get(Integer.valueOf(sliderId));
+    }
+    if (s == null) {
+      Shared.err(this, "Slider", sliderId, "slider tidak ada");
+      return;
+    }
+    s.rememberPos = remember;
   }
 
   private void slideTo(final int sliderId, final int delta, final boolean silent) {
@@ -1959,6 +2551,109 @@ public class Tools_Image extends AndroidNonvisibleComponent
     synchronized (viewLock) {
       Slider s = sliders.get(Integer.valueOf(sliderId));
       return s == null ? 0 : s.pages.size();
+    }
+  }
+
+  @SimpleFunction(description = "Lebar WADAH slider ber-id (angka MIT: -2 = isi "
+      + "penuh, -1 = otomatis, positif = pixel). -1 bila slider tidak ada. "
+      + "Pasangan SetSliderSize.")
+  public int GetSliderWidth(int sliderId) {
+    synchronized (viewLock) {
+      Slider s = sliders.get(Integer.valueOf(sliderId));
+      return s == null ? -1 : androidToMitSize(s.width);
+    }
+  }
+
+  @SimpleFunction(description = "Tinggi WADAH slider ber-id (angka MIT: -2 = isi "
+      + "penuh, -1 = otomatis, positif = pixel). -1 bila slider tidak ada. "
+      + "Pasangan SetSliderSize.")
+  public int GetSliderHeight(int sliderId) {
+    synchronized (viewLock) {
+      Slider s = sliders.get(Integer.valueOf(sliderId));
+      return s == null ? -1 : androidToMitSize(s.height);
+    }
+  }
+
+  @SimpleFunction(description = "Mode pas slider ber-id (true = muat penuh; false "
+      + "= penuhi halaman / slider tidak ada). Pasangan SetSliderFit.")
+  public boolean GetSliderFit(int sliderId) {
+    synchronized (viewLock) {
+      Slider s = sliders.get(Integer.valueOf(sliderId));
+      return s != null && s.fit;
+    }
+  }
+
+  @SimpleFunction(description = "Jarak antar halaman slider ber-id (pixel; -1 bila "
+      + "slider tidak ada). Pasangan SetSliderSpacing.")
+  public int GetSliderSpacing(int sliderId) {
+    synchronized (viewLock) {
+      Slider s = sliders.get(Integer.valueOf(sliderId));
+      return s == null ? -1 : s.spacingPx;
+    }
+  }
+
+  @SimpleFunction(description = "True bila slider ber-id tampil (visible). False "
+      + "bila GONE / tidak ada. Pasangan SetSliderVisible.")
+  public boolean IsSliderVisible(int sliderId) {
+    synchronized (viewLock) {
+      Slider s = sliders.get(Integer.valueOf(sliderId));
+      return s != null && s.root != null
+          && s.root.getVisibility() == View.VISIBLE;
+    }
+  }
+
+  @SimpleFunction(description = "Index halaman slider yang terpilih/fokus "
+      + "(-1 = tidak ada pilihan / slider tidak ada). Pasangan SetSliderSelected.")
+  public int GetSliderSelected(int sliderId) {
+    synchronized (viewLock) {
+      Slider s = sliders.get(Integer.valueOf(sliderId));
+      if (s == null || s.selected < 0 || s.selected >= s.pages.size()) {
+        return -1;
+      }
+      return s.selected;
+    }
+  }
+
+  @SimpleFunction(description = "Sumber gambar halaman slider (path/URL/base64 "
+      + "seperti saat dimasukkan; \"\" bila slider/index tidak ada). Pasangan "
+      + "SliderClicked: dari index yang ditekan ambil sumbernya untuk "
+      + "ditampilkan di ShowImage (SetImageSource).")
+  public String GetSliderImage(int sliderId, int index) {
+    synchronized (viewLock) {
+      Slider s = sliders.get(Integer.valueOf(sliderId));
+      if (s == null || index < 0 || index >= s.sources.size()) {
+        return "";
+      }
+      String v = s.sources.get(index);
+      return v == null ? "" : v;
+    }
+  }
+
+  @SimpleFunction(description = "Jumlah gambar yang GAGAL dimuat pada pengisian "
+      + "slider terakhir (mode jendela: terakumulasi tiap halaman dimuat; 0 = "
+      + "semua ok / slider tidak ada). Pasangan GetSliderCount.")
+  public int GetSliderFailed(int sliderId) {
+    synchronized (viewLock) {
+      Slider s = sliders.get(Integer.valueOf(sliderId));
+      return s == null ? 0 : s.lastFail;
+    }
+  }
+
+  @SimpleFunction(description = "Jendela preload slider (tetangga aktif±N; 0 = "
+      + "mati/semua sekaligus; -1 bila slider tidak ada). Pasangan SetSliderPreload.")
+  public int GetSliderPreload(int sliderId) {
+    synchronized (viewLock) {
+      Slider s = sliders.get(Integer.valueOf(sliderId));
+      return s == null ? -1 : s.preloadN;
+    }
+  }
+
+  @SimpleFunction(description = "True bila slider mengingat posisi (index "
+      + "persist). False bila mati / tidak ada. Pasangan SetSliderRememberPosition.")
+  public boolean IsSliderRememberPosition(int sliderId) {
+    synchronized (viewLock) {
+      Slider s = sliders.get(Integer.valueOf(sliderId));
+      return s != null && s.rememberPos;
     }
   }
 
@@ -2266,7 +2961,8 @@ public class Tools_Image extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "SET: hapus SEMUA cache unduhan URL gambar "
-      + "(hemat unduh-ulang; maks 50MB, terlama terhapus otomatis). Pakai ini "
+      + "(hemat unduh-ulang; batas atur via SetImageCacheMaxMB, terlama "
+      + "terhapus otomatis). Pakai ini "
       + "bila gambar URL berubah tapi alamatnya sama (paksa unduh baru). "
       + "Sukses diam; gagal via ErrorOccurred.")
   public void SetClearImageCache() {
@@ -2290,6 +2986,35 @@ public class Tools_Image extends AndroidNonvisibleComponent
       String m = e.getMessage();
       Shared.err(this, "Image", 0,
           m == null ? "hapus cache gagal" : m);
+    }
+  }
+
+  @SimpleFunction(description = "SET: batas cache unduhan URL gambar (MB, "
+      + "default 80). Di bawah 1 = kembali ke 80. Bila dikecilkan, kelebihan "
+      + "langsung dipangkas (terlama dulu). Sukses diam; gagal via "
+      + "ErrorOccurred.")
+  public void SetImageCacheMaxMB(int mb) {
+    try {
+      int m = mb < 1 ? 80 : mb;
+      imgCacheMaxBytes = ((long) m) * 1024L * 1024L;
+      File d = imgCacheDir();
+      if (d != null) {
+        pruneImgCache(d);
+      }
+    } catch (Exception e) {
+      String m = e.getMessage();
+      Shared.err(this, "Image", 0,
+          m == null ? "set cache gagal" : m);
+    }
+  }
+
+  @SimpleFunction(description = "Batas cache unduhan URL gambar sekarang (MB, "
+      + "default 80).")
+  public int GetImageCacheMaxMB() {
+    try {
+      return (int) (imgCacheMaxBytes / (1024L * 1024L));
+    } catch (Exception e) {
+      return 80;
     }
   }
 
@@ -2319,9 +3044,9 @@ public class Tools_Image extends AndroidNonvisibleComponent
         new Float(scale));
   }
 
-  @SimpleEvent(description = "Slider jadi: id + arah (true = kanan-kiri).")
-  public void SliderCreated(int id, boolean horizontal) {
-    Shared.fire(this, "SliderCreated", Integer.valueOf(id),
+  @SimpleEvent(description = "Slider jadi: id slider + arah (true = kanan-kiri).")
+  public void SliderCreated(int sliderId, boolean horizontal) {
+    Shared.fire(this, "SliderCreated", Integer.valueOf(sliderId),
         Boolean.valueOf(horizontal));
   }
 

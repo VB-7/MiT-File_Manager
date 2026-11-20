@@ -33,7 +33,7 @@ import java.io.InputStream;
 import java.util.ArrayList;
 
 @DesignerComponent(
-    version = 20,
+    version = 21,
     description = "Tools_Style: percantik komponen/wadah yang kelihatan "
         + "(Button, Label, Arrangement, gambar Tools_Image, komponen dinamis, "
         + "dsb). Radius, border, gradien, elevation, padding, margin, opacity, "
@@ -61,22 +61,10 @@ import java.util.ArrayList;
 public class Tools_Style extends AndroidNonvisibleComponent {
 
   private final Context context;
-  private final float density;
 
   public Tools_Style(ComponentContainer container) {
     super(container.$form());
     this.context = container.$context();
-    float d = 1.0f;
-    try {
-      d = context.getResources().getDisplayMetrics().density;
-    } catch (Exception e) {
-      // abaikan
-    }
-    this.density = d <= 0 ? 1.0f : d;
-  }
-
-  private int dp(float v) {
-    return Math.round(v * density);
   }
 
   private View viewOf(AndroidViewComponent comp, String op) {
@@ -108,31 +96,31 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     return new GradientDrawable();
   }
 
-  @SimpleFunction(description = "SET: Atur sudut membulat (radius, dp). Background "
+  @SimpleFunction(description = "SET: Atur sudut membulat (radius, pixel). Background "
       + "bawaan diganti.")
-  public void SetCornerRadius(AndroidViewComponent comp, float radiusDp) {
+  public void SetCornerRadius(AndroidViewComponent comp, float radiusPx) {
     View v = viewOf(comp, "Radius");
     if (v == null) {
       return;
     }
     try {
       GradientDrawable g = currentBg(v);
-      g.setCornerRadius(dp(Math.max(0, radiusDp)));
+      g.setCornerRadius(Math.max(0, Math.round(radiusPx)));
       v.setBackgroundDrawable(g);
     } catch (Exception e) {
     }
   }
 
-  @SimpleFunction(description = "SET: Atur garis tepi: warna + tebal (dp). "
+  @SimpleFunction(description = "SET: Atur garis tepi: warna + tebal (pixel). "
       + "Background bawaan diganti.")
-  public void SetBorder(AndroidViewComponent comp, int color, float widthDp) {
+  public void SetBorder(AndroidViewComponent comp, int color, float widthPx) {
     View v = viewOf(comp, "Border");
     if (v == null) {
       return;
     }
     try {
       GradientDrawable g = currentBg(v);
-      g.setStroke(dp(Math.max(0, widthDp)), color);
+      g.setStroke(Math.max(0, Math.round(widthPx)), color);
       v.setBackgroundDrawable(g);
     } catch (Exception e) {
     }
@@ -255,9 +243,9 @@ public class Tools_Style extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "SET: Atur gradien radial: warna tengah, warna tepi, "
-      + "radius (dp). Background bawaan diganti.")
+      + "radius (pixel). Background bawaan diganti.")
   public void SetRadialGradient(AndroidViewComponent comp, int centerColor,
-      int edgeColor, float radiusDp) {
+      int edgeColor, float radiusPx) {
     View v = viewOf(comp, "RadialGradient");
     if (v == null) {
       return;
@@ -266,7 +254,7 @@ public class Tools_Style extends AndroidNonvisibleComponent {
       GradientDrawable g = currentBg(v);
       g.setColors(new int[] { centerColor, edgeColor });
       g.setGradientType(GradientDrawable.RADIAL_GRADIENT);
-      g.setGradientRadius(dp(Math.max(0, radiusDp)));
+      g.setGradientRadius(Math.max(0, Math.round(radiusPx)));
       v.setBackgroundDrawable(g);
     } catch (Exception e) {
     }
@@ -386,11 +374,11 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "SET: Garis tepi: warna + tebal (dp) dulu, "
-      + "lalu bila dashed=true tambah panjang garis (dp) + jarak garis (dp). "
-      + "dashLengthDp/dashGapDp DIABAIKAN bila dashed=false (= garis penuh).")
+  @SimpleFunction(description = "SET: Garis tepi: warna + tebal (pixel) dulu, "
+      + "lalu bila dashed=true tambah panjang garis (pixel) + jarak garis (pixel). "
+      + "dashLengthPx/dashGapPx DIABAIKAN bila dashed=false (= garis penuh).")
   public void SetStroke(AndroidViewComponent comp, int color,
-      float widthDp, boolean dashed, float dashLengthDp, float dashGapDp) {
+      float widthPx, boolean dashed, float dashLengthPx, float dashGapPx) {
     View v = viewOf(comp, "Stroke");
     if (v == null) {
       return;
@@ -398,10 +386,10 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     try {
       GradientDrawable g = currentBg(v);
       if (dashed) {
-        g.setStroke(dp(Math.max(0, widthDp)), color, dp(Math.max(0, dashLengthDp)),
-            dp(Math.max(0, dashGapDp)));
+        g.setStroke(Math.max(0, Math.round(widthPx)), color,
+            Math.max(0, dashLengthPx), Math.max(0, dashGapPx));
       } else {
-        g.setStroke(dp(Math.max(0, widthDp)), color);
+        g.setStroke(Math.max(0, Math.round(widthPx)), color);
       }
       v.setBackgroundDrawable(g);
     } catch (Exception e) {
@@ -409,8 +397,8 @@ public class Tools_Style extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "SET: Atur spasi teks (khusus Label/TextBox/Button): "
-      + "jarak baris (dp) + jarak huruf (em). Selain teks: error.")
-  public void SetTextSpace(AndroidViewComponent comp, float lineSpaceDp,
+      + "jarak baris (pixel) + jarak huruf (em). Selain teks: error.")
+  public void SetTextSpace(AndroidViewComponent comp, float lineSpacePx,
       float letterSpace) {
     View v = viewOf(comp, "TextSpace");
     if (v == null) {
@@ -423,7 +411,7 @@ public class Tools_Style extends AndroidNonvisibleComponent {
         return;
       }
       android.widget.TextView tv = (android.widget.TextView) v;
-      tv.setLineSpacing(dp(lineSpaceDp), 1.0f);
+      tv.setLineSpacing(Math.max(0, lineSpacePx), 1.0f);
       try {
         tv.setLetterSpacing(letterSpace);
       } catch (Exception e) {
@@ -451,7 +439,7 @@ public class Tools_Style extends AndroidNonvisibleComponent {
   @SimpleFunction(description = "SET: Lingkaran + garis tepi warna (cocok untuk foto "
       + "profil).")
   public void SetCircularBorder(AndroidViewComponent comp, int color,
-      float widthDp) {
+      float widthPx) {
     View v = viewOf(comp, "CircularBorder");
     if (v == null) {
       return;
@@ -459,7 +447,7 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     try {
       GradientDrawable g = currentBg(v);
       g.setShape(GradientDrawable.OVAL);
-      g.setStroke(dp(Math.max(0, widthDp)), color);
+      g.setStroke(Math.max(0, Math.round(widthPx)), color);
       v.setBackgroundDrawable(g);
     } catch (Exception e) {
     }
@@ -600,40 +588,41 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     });
   }
 
-  @SimpleFunction(description = "SET: Atur bayangan/elevasi (dp). Butuh "
+  @SimpleFunction(description = "SET: Atur bayangan/elevasi (pixel). Butuh "
       + "background tidak transparan + ruang kosong di sekitar agar bayangan "
       + "terlihat; di tema gelap bayangan samar.")
-  public void SetElevation(AndroidViewComponent comp, float dp) {
+  public void SetElevation(AndroidViewComponent comp, float px) {
     View v = viewOf(comp, "Elevation");
     if (v == null) {
       return;
     }
     try {
-      v.setElevation(dp(Math.max(0, dp)));
+      v.setElevation(Math.max(0, px));
     } catch (Exception e) {
     }
   }
 
-  @SimpleFunction(description = "SET: Atur jarak dalam/padding (dp): "
+  @SimpleFunction(description = "SET: Atur jarak dalam/padding (pixel): "
       + "kiri, atas, kanan, bawah.")
-  public void SetPadding(AndroidViewComponent comp, float leftDp,
-      float topDp, float rightDp, float bottomDp) {
+  public void SetPadding(AndroidViewComponent comp, float leftPx,
+      float topPx, float rightPx, float bottomPx) {
     View v = viewOf(comp, "Padding");
     if (v == null) {
       return;
     }
     try {
-      v.setPadding(dp(leftDp), dp(topDp), dp(rightDp), dp(bottomDp));
+      v.setPadding(Math.round(leftPx), Math.round(topPx), Math.round(rightPx),
+          Math.round(bottomPx));
     } catch (Exception e) {
     }
   }
 
-  @SimpleFunction(description = "SET: Atur jarak luar/margin (dp): kiri, atas, "
+  @SimpleFunction(description = "SET: Atur jarak luar/margin (pixel): kiri, atas, "
       + "kanan, bawah. Hanya bila induk mendukung margin (Vertical/Horizontal/"
       + "ScrollArrangement BISA; TableArrangement TIDAK — baris tabel "
       + "mengabaikan margin). Induk tak mendukung = ErrorOccurred.")
-  public void SetMargin(AndroidViewComponent comp, float leftDp,
-      float topDp, float rightDp, float bottomDp) {
+  public void SetMargin(AndroidViewComponent comp, float leftPx,
+      float topPx, float rightPx, float bottomPx) {
     View v = viewOf(comp, "Margin");
     if (v == null) {
       return;
@@ -641,8 +630,8 @@ public class Tools_Style extends AndroidNonvisibleComponent {
     try {
       ViewGroup.LayoutParams lp = v.getLayoutParams();
       if (lp instanceof ViewGroup.MarginLayoutParams) {
-        ((ViewGroup.MarginLayoutParams) lp).setMargins(dp(leftDp), dp(topDp),
-            dp(rightDp), dp(bottomDp));
+        ((ViewGroup.MarginLayoutParams) lp).setMargins(Math.round(leftPx),
+            Math.round(topPx), Math.round(rightPx), Math.round(bottomPx));
         v.requestLayout();
       } else {
         Shared.err(this, "Style", 0,

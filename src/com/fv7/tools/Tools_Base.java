@@ -20,7 +20,7 @@ import java.net.URLEncoder;
 import java.util.List;
 
 @DesignerComponent(
-    version = 20,
+    version = 21,
     description = "Fondasi Tools: id pool global + helper Tag untuk id komponen "
         + "LUAR (auto-konversi teks angka: \"5\" = 5) + util dasar (JSON, URI, "
         + "waktu, byte, mime). Butuh id? CreateUniqueId (global, reservasi "
@@ -253,13 +253,24 @@ public class Tools_Base extends AndroidNonvisibleComponent {
   @SimpleFunction(description = "Versi paket Tools (sama untuk semua Tools_* dalam satu .aix: "
       + "wajib SAMA semua per rilis; beda = bug kemasan).")
   public int ToolsVersion() {
-    return 20;
+    return 21;
   }
 
   @SimpleFunction(description = "Catatan update paket Tools (dibaca lewat blok, "
       + "karena panel info extension tidak bisa diubah manual).")
   public String GetWhatsNew() {
-    return "v20 2026-11-20: RILIS BREAKING (pengguna tunggal = pemilik; "
+    return "v21 2026-11-20: BREAKING nilai ukuran: SEMUA soket dp->pixel "
+        + "mentah (Style 9 blok + Sheet + slider; angka dp lama kali ~2-3). "
+        + "Image: slider setara ListView (create +width/height/fit; SetSliderSize/"
+        + "Fit/Spacing/Selected/Visible; Get Width/Height/Fit/Spacing/Visible/"
+        + "Selected/Image/Failed/Preload; lazy SetSliderPreload OTOMATIS + ingat "
+        + "posisi SetSliderRememberPosition; IsImageLoading; SliderCreated pakai "
+        + "sliderId; batas Exif dicatat; cache URL 80MB). Downloader "
+        + "+GetDownloadAttempts. Sheet +GetSheetHeight + beda daftar/Aktif. File "
+        + "GetFileName rujuk CallGuessFileName. Fasad LastError gabungan 12 "
+        + "pemilik. RENCANA: reserves kamera/mic/lokasi jadi blok nyata; 6 uji "
+        + "HP (pemilik). "
+        + "v20 2026-11-20: RILIS BREAKING (pengguna tunggal = pemilik; "
         + "proyek lama wajib pasang ulang blok yang di-rename). HAPUS: 72 "
         + "cermin per-tipe Tools_Base (diet 99->31 blok); IsAudioPlaying/"
         + "IsVideoPlaying; GetPendingTaskIds; Downloader.GetFileName (pakai "
@@ -295,7 +306,7 @@ public class Tools_Base extends AndroidNonvisibleComponent {
         + "v18 2026-11-18: 3 blok duplikat 1-input "
         + "(IsDuplicateFileOrDirectory boolean, GetManyDuplicateFileOr-"
         + "Directory number, GetListDuplicateFileOrDirectory list; keluarga "
-        + "counter _N/(N), 1 laci tanpa subfolder; + IsTagIdExists(tag); "
+        + "counter _N/(N), 1 folder tanpa subfolder; + IsTagIdExists(tag); "
         + "+ SetLayoutVisible/IsLayoutExists/IsLayoutVisible (tipe+id wajib "
         + "cocok); + GetLayout/SetLayoutSize/BackgroundColor/Alignment/"
         + "GetLayoutWidth/Height; create layout +lebar/tinggi/visible/warna; "

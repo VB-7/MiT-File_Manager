@@ -22,7 +22,7 @@ import com.google.appinventor.components.runtime.util.YailList;
 import java.util.List;
 
 @DesignerComponent(
-    version = 20,
+    version = 21,
     description = "Tools_All_in_One: SATU komponen berisi SEMUA blok "
         + "12 Tools_* (Audio/Base/Compress/Core/Downloader/File/Image/Layout/Sheet/"
         + "Style/Task/Video). Fasad: semua blok diteruskan ke mesin aslinya, semua "
@@ -350,9 +350,12 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     return audio.OpAudio();
   }
 
-  @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred: pesan error "
-      + "terakhir operasi ini (teks kosong bila belum ada). Isi operation dengan blok "
-      + "kuning (mis. OpAudio).")
+  @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred "
+      + "gabungan 12 pemilik: pesan error terakhir operasi ini (teks kosong bila belum ada). Isi"
+      + " operation dengan blok kuning OpAudio/OpJson/OpId/OpZip/OpUnzip/OpCore/OpDownload/OpDirect"
+      + "ory/OpFile/OpRead/OpBase64/OpCopyOrMove/OpPick/OpOpen/OpPermission/OpSlider/OpImage/OpLayo"
+      + "ut/OpSheet/OpToast/OpNotification/OpStyle/OpTask/OpAlarm/OpVar/OpVideo untuk if. Contoh:"
+      + " simpan LastError(OpAudio) ke variabel bila ErrorOccurred menembak. ")
   public String LastError(String operation) {
     return Shared.lastError(operation);
   }
@@ -1030,8 +1033,10 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   @SimpleFunction(description = "CALL: Unduh ulang id ini dari awal (byte dihitung ulang "
       + "dari 0). Untuk id yang gagal/dibatalkan/selesai. Id yang masih jalan harus "
       + "di-Cancel dulu. Hasil lewat DownloadFinished seperti biasa.")
-  public void CallRetryDownload(int id) {
-    downloader.CallRetryDownload(id);
+  @SimpleFunction(description = "Jumlah percobaan unduh id ini (tiap mulai/ulang +1, "
+      + "termasuk CallRetryDownload; 0 bila id belum pernah mengunduh).")
+  public int GetDownloadAttempts(int id) {
+    return downloader.GetDownloadAttempts(id);
   }
 
   @SimpleFunction(description = "Total URL batch yang sedang jalan (0 bila tidak ada batch).")
@@ -1344,7 +1349,8 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "Nama file dari sebuah path (buang foldernya). "
-      + "Olah string saja, tanpa scope.")
+      + "Olah string saja, tanpa scope. Butuh tebak nama dari URL? pakai "
+      + "CallGuessFileName (Downloader).")
   public String GetFileName(String path) {
     return file.GetFileName(path);
   }
@@ -1873,7 +1879,8 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
       + "Tools_Base CreateUniqueId, reservasi otomatis diadopsi). "
       + "width/height angka MIT: -2 = isi penuh, -1 = otomatis, positif = pixel. "
       + "fit true = seluruh gambar muat (tidak kepotong); false = penuhi tampilan "
-      + "(bisa kepotong). Sukses menembak "
+      + "(bisa kepotong). Catatan kamera: foto hasil kamera bisa tampil miring "
+      + "(orientasi Exif belum dibaca). Sukses menembak "
       + "ImageShown; gagal via ErrorOccurred.")
   public void CallShowImage(final AndroidViewComponent container, final String source, final int id, final int width, final int height, final boolean fit) {
     image.CallShowImage(container, source, id, width, height, fit);
@@ -1958,22 +1965,35 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     return image.IsImageVisible(id);
   }
 
+  @SimpleFunction(description = "True bila gambar ber-id masih loading (id aktif "
+      + "tapi belum tampil: masih unduh/decode). False bila sudah tampil, gagal, "
+      + "atau id tidak ada. Pasangan ImageShown.")
+  public boolean IsImageLoading(int id) {
+    return image.IsImageLoading(id);
+  }
+
   @SimpleFunction(description = "CALL: bikin slider gambar ber-id (geser kanan-kiri "
       + "bila horizontal=true, atas-bawah bila false). paths = list gambar langsung "
       + "(path file/asset, URL http, atau base64; boleh list kosong = isi belakangan "
       + "via SetSliderImages). TANPA batas jumlah (dulu maks 20); tiap gambar "
       + "dikecilkan otomatis bila > 2048px, tapi puluhan gambar besar tetap makan "
       + "RAM — sesuaikan. URL diunduh sekali lalu di-cache (tak perlu unduh ulang; "
-      + "bersihkan via SetClearImageCache). INGAT: halaman slider mulai dari 0 "
+      + "bersihkan via SetClearImageCache). width/height = ukuran WADAH slider di "
+      + "dalam container (angka MIT: -2 = isi penuh, -1 = otomatis, positif = "
+      + "pixel); BUKAN ukuran isi gambar — tiap halaman menyesuaikan wadah. "
+      + "fit true = gambar muat penuh (tidak kepotong); false = penuhi halaman "
+      + "(bisa kepotong). INGAT: halaman slider mulai dari 0 "
       + "(bukan 1 seperti daftar id). Geser menembak "
       + "SliderChanged; baca kapan saja via GetSliderIndex.")
-  public void CallCreateImageSlider(final AndroidViewComponent container, final int id, final boolean horizontal, final Object paths) {
-    image.CallCreateImageSlider(container, id, horizontal, paths);
+  public void CallCreateImageSlider(final AndroidViewComponent container, final int id, final boolean horizontal, final Object paths, final int width, final int height, final boolean fit) {
+    image.CallCreateImageSlider(container, id, horizontal, paths, width, height, fit);
   }
 
   @SimpleFunction(description = "SET: isi slider ber-id dengan daftar gambar "
       + "(list teks: path file/asset, URL http, atau base64 — sama fleksibelnya "
       + "dengan ShowImage; path dipakai bila item kosong). TANPA batas jumlah. "
+      + "Ukuran wadah & mode fit ikut saat pembuatan slider. Mode jendela "
+      + "(SetSliderPreload): halaman dibuat dulu, decode-nya menyusul otomatis. "
       + "URL diunduh sekali lalu di-cache (tak perlu unduh ulang). "
       + "List kosong / slider tidak ada = ErrorOccurred. Gagal via ErrorOccurred.")
   public void SetSliderImages(final int sliderId, final Object paths) {
@@ -1998,6 +2018,65 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     image.SetSliderGoTo(sliderId, index);
   }
 
+  @SimpleFunction(description = "SET: tampil/sembunyi slider ber-id yang SUDAH "
+      + "aktif. false = GONE (hilang total; wadah MIT bisa diisi konten lain "
+      + "tanpa ketimpa, tanpa bikin layout baru). Sukses diam; id tidak ada "
+      + "via ErrorOccurred.")
+  public void SetSliderVisible(final int sliderId, final boolean visible) {
+    image.SetSliderVisible(sliderId, visible);
+  }
+
+  @SimpleFunction(description = "SET: ubah ukuran WADAH slider ber-id yang SUDAH "
+      + "aktif (angka MIT: -2 = isi penuh, -1 = otomatis, positif = pixel). "
+      + "Isi tiap halaman menyesuaikan ulang. Sukses diam; id tidak ada via "
+      + "ErrorOccurred.")
+  public void SetSliderSize(final int sliderId, final int width, final int height) {
+    image.SetSliderSize(sliderId, width, height);
+  }
+
+  @SimpleFunction(description = "SET: mode pas slider ber-id yang SUDAH aktif. "
+      + "fit true = tiap gambar muat penuh di halamannya (tidak kepotong); "
+      + "false = penuhi halaman (bisa kepotong). Sukses diam; id tidak ada via "
+      + "ErrorOccurred.")
+  public void SetSliderFit(final int sliderId, final boolean fit) {
+    image.SetSliderFit(sliderId, fit);
+  }
+
+  @SimpleFunction(description = "SET: jarak antar halaman slider ber-id (pixel; "
+      + "0 = rapat). Horizontal = jarak kiri-kanan, vertikal = jarak atas-bawah. "
+      + "Paging geser ikut menyesuaikan. Area sela transparan (wadah di belakangnya "
+      + "yang terlihat). Sukses diam; id tidak ada via ErrorOccurred.")
+  public void SetSliderSpacing(final int sliderId, final int spacingPx) {
+    image.SetSliderSpacing(sliderId, spacingPx);
+  }
+
+  @SimpleFunction(description = "SET: pilih/fokus halaman slider (0 = pertama). "
+      + "Yang terpilih = berbayang + layar digeser ke sana (SliderChanged ikut "
+      + "menembak). -1 = lepas pilihan. Di luar rentang via ErrorOccurred. "
+      + "Dipakai misal thumbnail ditekan -> tampilkan di ShowImage + fokus di sini.")
+  public void SetSliderSelected(final int sliderId, final int index) {
+    image.SetSliderSelected(sliderId, index);
+  }
+
+  @SimpleFunction(description = "SET: mode hemat RAM slider (jendela preload). "
+      + "jumlah = tetangga yang ikut di-decode di sekitar halaman aktif "
+      + "(mis. 5 = aktif±5); sisanya dilepas dari RAM (byte-nya tetap aman di "
+      + "cache disk, muat ulang murah). Pompa OTOMATIS tiap geser/GoTo/Next/"
+      + "Previous/Selected/autoplay. 0 = mati (semua decode sekaligus seperti "
+      + "dulu; hati-hati OOM bila puluhan gambar besar). Sukses diam; id tidak "
+      + "ada via ErrorOccurred.")
+  public void SetSliderPreload(final int sliderId, final int jumlah) {
+    image.SetSliderPreload(sliderId, jumlah);
+  }
+
+  @SimpleFunction(description = "SET: ingat posisi slider (true = tiap pindah "
+      + "halaman, index disimpan; habis isi slider otomatis lompat ke simpanan). "
+      + "Hanya index yang persist (panggil tiap launch); daftar gambar tetap "
+      + "dari SetSliderImages. Sukses diam; id tidak ada via ErrorOccurred.")
+  public void SetSliderRememberPosition(final int sliderId, final boolean remember) {
+    image.SetSliderRememberPosition(sliderId, remember);
+  }
+
   @SimpleFunction(description = "SET: Auto-putar slider tiap intervalMs "
       + "(0 = mati). Tiap putaran memicu SliderChanged.")
   public void SetSliderAutoPlay(final int sliderId, final long intervalMs) {
@@ -2013,6 +2092,71 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   @SimpleFunction(description = "Jumlah halaman slider ber-id (0 bila slider tidak ada).")
   public int GetSliderCount(int sliderId) {
     return image.GetSliderCount(sliderId);
+  }
+
+  @SimpleFunction(description = "Lebar WADAH slider ber-id (angka MIT: -2 = isi "
+      + "penuh, -1 = otomatis, positif = pixel). -1 bila slider tidak ada. "
+      + "Pasangan SetSliderSize.")
+  public int GetSliderWidth(int sliderId) {
+    return image.GetSliderWidth(sliderId);
+  }
+
+  @SimpleFunction(description = "Tinggi WADAH slider ber-id (angka MIT: -2 = isi "
+      + "penuh, -1 = otomatis, positif = pixel). -1 bila slider tidak ada. "
+      + "Pasangan SetSliderSize.")
+  public int GetSliderHeight(int sliderId) {
+    return image.GetSliderHeight(sliderId);
+  }
+
+  @SimpleFunction(description = "Mode pas slider ber-id (true = muat penuh; false "
+      + "= penuhi halaman / slider tidak ada). Pasangan SetSliderFit.")
+  public boolean GetSliderFit(int sliderId) {
+    return image.GetSliderFit(sliderId);
+  }
+
+  @SimpleFunction(description = "Jarak antar halaman slider ber-id (pixel; -1 bila "
+      + "slider tidak ada). Pasangan SetSliderSpacing.")
+  public int GetSliderSpacing(int sliderId) {
+    return image.GetSliderSpacing(sliderId);
+  }
+
+  @SimpleFunction(description = "True bila slider ber-id tampil (visible). False "
+      + "bila GONE / tidak ada. Pasangan SetSliderVisible.")
+  public boolean IsSliderVisible(int sliderId) {
+    return image.IsSliderVisible(sliderId);
+  }
+
+  @SimpleFunction(description = "Index halaman slider yang terpilih/fokus "
+      + "(-1 = tidak ada pilihan / slider tidak ada). Pasangan SetSliderSelected.")
+  public int GetSliderSelected(int sliderId) {
+    return image.GetSliderSelected(sliderId);
+  }
+
+  @SimpleFunction(description = "Sumber gambar halaman slider (path/URL/base64 "
+      + "seperti saat dimasukkan; \"\" bila slider/index tidak ada). Pasangan "
+      + "SliderClicked: dari index yang ditekan ambil sumbernya untuk "
+      + "ditampilkan di ShowImage (SetImageSource).")
+  public String GetSliderImage(int sliderId, int index) {
+    return image.GetSliderImage(sliderId, index);
+  }
+
+  @SimpleFunction(description = "Jumlah gambar yang GAGAL dimuat pada pengisian "
+      + "slider terakhir (mode jendela: terakumulasi tiap halaman dimuat; 0 = "
+      + "semua ok / slider tidak ada). Pasangan GetSliderCount.")
+  public int GetSliderFailed(int sliderId) {
+    return image.GetSliderFailed(sliderId);
+  }
+
+  @SimpleFunction(description = "Jendela preload slider (tetangga aktif±N; 0 = "
+      + "mati/semua sekaligus; -1 bila slider tidak ada). Pasangan SetSliderPreload.")
+  public int GetSliderPreload(int sliderId) {
+    return image.GetSliderPreload(sliderId);
+  }
+
+  @SimpleFunction(description = "True bila slider mengingat posisi (index "
+      + "persist). False bila mati / tidak ada. Pasangan SetSliderRememberPosition.")
+  public boolean IsSliderRememberPosition(int sliderId) {
+    return image.IsSliderRememberPosition(sliderId);
   }
 
   @SimpleFunction(description = "True bila autoplay slider ber-id sedang jalan "
@@ -2158,11 +2302,26 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "SET: hapus SEMUA cache unduhan URL gambar "
-      + "(hemat unduh-ulang; maks 50MB, terlama terhapus otomatis). Pakai ini "
+      + "(hemat unduh-ulang; batas atur via SetImageCacheMaxMB, terlama "
+      + "terhapus otomatis). Pakai ini "
       + "bila gambar URL berubah tapi alamatnya sama (paksa unduh baru). "
       + "Sukses diam; gagal via ErrorOccurred.")
   public void SetClearImageCache() {
     image.SetClearImageCache();
+  }
+
+  @SimpleFunction(description = "SET: batas cache unduhan URL gambar (MB, "
+      + "default 80). Di bawah 1 = kembali ke 80. Bila dikecilkan, kelebihan "
+      + "langsung dipangkas (terlama dulu). Sukses diam; gagal via "
+      + "ErrorOccurred.")
+  public void SetImageCacheMaxMB(int mb) {
+    image.SetImageCacheMaxMB(mb);
+  }
+
+  @SimpleFunction(description = "Batas cache unduhan URL gambar sekarang (MB, "
+      + "default 80).")
+  public int GetImageCacheMaxMB() {
+    return image.GetImageCacheMaxMB();
   }
 
   @SimpleEvent(description = "Hasil CallShowImage/SetImageSource: gambar ber-id tampil. "
@@ -2188,9 +2347,9 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     EventDispatcher.dispatchEvent(this, "ZoomChanged", id, scale);
   }
 
-  @SimpleEvent(description = "Slider jadi: id + arah (true = kanan-kiri).")
-  public void SliderCreated(int id, boolean horizontal) {
-    EventDispatcher.dispatchEvent(this, "SliderCreated", id, horizontal);
+  @SimpleEvent(description = "Slider jadi: id slider + arah (true = kanan-kiri).")
+  public void SliderCreated(int sliderId, boolean horizontal) {
+    EventDispatcher.dispatchEvent(this, "SliderCreated", sliderId, horizontal);
   }
 
   @SimpleEvent(description = "Halaman slider pindah: id slider + index "
@@ -2477,7 +2636,7 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
 
   @SimpleFunction(description = "SET: ubah gaya sheet TERDAFTAR (boleh sebelum/sesudah "
       + "tampil; langsung kelihatan bila sedang tampil). gravity angka: 80=bawah, "
-      + "48=atas, 17=tengah, 3=kiri, 5=kanan. widthDp/heightDp <= 0 = menyesuaikan "
+      + "48=atas, 17=tengah, 3=kiri, 5=kanan. widthPx/heightPx <= 0 = menyesuaikan "
       + "(lebar penuh bila gravity atas/bawah). dimPercent 0-100 (kegelapan latar). "
       + "animationType teks: pakai blok kuning SlideFromBottom/SlideFromTop/"
       + "SlideFromLeft/SlideFromRight/FadeAnim/NoAnim "
@@ -2485,8 +2644,8 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
       + "cancelable = bisa tutup via tombol back/luar. swipeToDismiss = geser "
       + "ke arah tutup untuk menutup. Sukses diam; id belum register via "
       + "ErrorOccurred.")
-  public void SetSheetStyle(final int id, final int gravity, final int widthDp, final int heightDp, final int dimPercent, final String animationType, final int animationDurationMs, final boolean cancelable, final boolean swipeToDismiss) {
-    sheet.SetSheetStyle(id, gravity, widthDp, heightDp, dimPercent, animationType, animationDurationMs, cancelable, swipeToDismiss);
+  public void SetSheetStyle(final int id, final int gravity, final int widthPx, final int heightPx, final int dimPercent, final String animationType, final int animationDurationMs, final boolean cancelable, final boolean swipeToDismiss) {
+    sheet.SetSheetStyle(id, gravity, widthPx, heightPx, dimPercent, animationType, animationDurationMs, cancelable, swipeToDismiss);
   }
 
   @SimpleFunction(description = "CALL: tampilkan sheet SEDERHANA dari Arrangement "
@@ -2605,13 +2764,25 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     return sheet.CreateSheetId();
   }
 
-  @SimpleFunction(description = "Semua id sheet (URUT PEMBUATAN, "
-      + "index 1 = pertama dibuat).")
+  @SimpleFunction(description = "Tinggi jendela sheet ber-id (pixel; -2 = isi penuh, "
+      + "-1 = otomatis/belum tampil). -1 juga bila sheet tidak ada. Isinya = "
+      + "Arrangement yang kamu daftarkan (pegang referensinya di variabel; "
+      + "tidak ada blok pengambil karena komponen MIT tidak bisa dibungkus "
+      + "jadi nilai). Pasangan SetSheetStyle.")
+  public int GetSheetHeight(int id) {
+    return sheet.GetSheetHeight(id);
+  }
+
+  @SimpleFunction(description = "Semua id sheet yang terdaftar (URUT PEMBUATAN, "
+      + "index 1 = pertama dibuat). Termasuk yang sedang tidak tampil; beda "
+      + "dengan GetActiveSheetIds.")
   public List<Integer> GetSheetIds() {
     return sheet.GetSheetIds();
   }
 
-  @SimpleFunction(description = "Id sheet yang aktif (URUT PEMBUATAN).")
+  @SimpleFunction(description = "Id sheet yang sedang aktif/tampil (URUT PEMBUATAN). "
+      + "Beda dengan GetSheetIds yang mencatat semua yang terdaftar. "
+      + "Periksa 1 id via IsSheetIdActive.")
   public List<Integer> GetActiveSheetIds() {
     return sheet.GetActiveSheetIds();
   }
@@ -2694,16 +2865,16 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
 
   // ================= Style =================
 
-  @SimpleFunction(description = "SET: Atur sudut membulat (radius, dp). Background "
+  @SimpleFunction(description = "SET: Atur sudut membulat (radius, pixel). Background "
       + "bawaan diganti.")
-  public void SetCornerRadius(AndroidViewComponent comp, float radiusDp) {
-    style.SetCornerRadius(comp, radiusDp);
+  public void SetCornerRadius(AndroidViewComponent comp, float radiusPx) {
+    style.SetCornerRadius(comp, radiusPx);
   }
 
-  @SimpleFunction(description = "SET: Atur garis tepi: warna + tebal (dp). "
+  @SimpleFunction(description = "SET: Atur garis tepi: warna + tebal (pixel). "
       + "Background bawaan diganti.")
-  public void SetBorder(AndroidViewComponent comp, int color, float widthDp) {
-    style.SetBorder(comp, color, widthDp);
+  public void SetBorder(AndroidViewComponent comp, int color, float widthPx) {
+    style.SetBorder(comp, color, widthPx);
   }
 
   @SimpleFunction(description = "SET: Atur gradien banyak warna (list warna, "
@@ -2769,9 +2940,9 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "SET: Atur gradien radial: warna tengah, warna tepi, "
-      + "radius (dp). Background bawaan diganti.")
-  public void SetRadialGradient(AndroidViewComponent comp, int centerColor, int edgeColor, float radiusDp) {
-    style.SetRadialGradient(comp, centerColor, edgeColor, radiusDp);
+      + "radius (pixel). Background bawaan diganti.")
+  public void SetRadialGradient(AndroidViewComponent comp, int centerColor, int edgeColor, float radiusPx) {
+    style.SetRadialGradient(comp, centerColor, edgeColor, radiusPx);
   }
 
   @SimpleFunction(description = "SET: Atur bentuk background: colok "
@@ -2843,17 +3014,17 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     style.SetRipple(comp, color);
   }
 
-  @SimpleFunction(description = "SET: Garis tepi: warna + tebal (dp) dulu, "
-      + "lalu bila dashed=true tambah panjang garis (dp) + jarak garis (dp). "
-      + "dashLengthDp/dashGapDp DIABAIKAN bila dashed=false (= garis penuh).")
-  public void SetStroke(AndroidViewComponent comp, int color, float widthDp, boolean dashed, float dashLengthDp, float dashGapDp) {
-    style.SetStroke(comp, color, widthDp, dashed, dashLengthDp, dashGapDp);
+  @SimpleFunction(description = "SET: Garis tepi: warna + tebal (pixel) dulu, "
+      + "lalu bila dashed=true tambah panjang garis (pixel) + jarak garis (pixel). "
+      + "dashLengthPx/dashGapPx DIABAIKAN bila dashed=false (= garis penuh).")
+  public void SetStroke(AndroidViewComponent comp, int color, float widthPx, boolean dashed, float dashLengthPx, float dashGapPx) {
+    style.SetStroke(comp, color, widthPx, dashed, dashLengthPx, dashGapPx);
   }
 
   @SimpleFunction(description = "SET: Atur spasi teks (khusus Label/TextBox/Button): "
-      + "jarak baris (dp) + jarak huruf (em). Selain teks: error.")
-  public void SetTextSpace(AndroidViewComponent comp, float lineSpaceDp, float letterSpace) {
-    style.SetTextSpace(comp, lineSpaceDp, letterSpace);
+      + "jarak baris (pixel) + jarak huruf (em). Selain teks: error.")
+  public void SetTextSpace(AndroidViewComponent comp, float lineSpacePx, float letterSpace) {
+    style.SetTextSpace(comp, lineSpacePx, letterSpace);
   }
 
   @SimpleFunction(description = "SET: Jadikan lingkaran/oval (cocok untuk foto "
@@ -2864,8 +3035,8 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
 
   @SimpleFunction(description = "SET: Lingkaran + garis tepi warna (cocok untuk foto "
       + "profil).")
-  public void SetCircularBorder(AndroidViewComponent comp, int color, float widthDp) {
-    style.SetCircularBorder(comp, color, widthDp);
+  public void SetCircularBorder(AndroidViewComponent comp, int color, float widthPx) {
+    style.SetCircularBorder(comp, color, widthPx);
   }
 
   @SimpleFunction(description = "SET RESET: hapus animasi; kembalikan "
@@ -2891,25 +3062,25 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     style.SetBackgroundImage(comp, path);
   }
 
-  @SimpleFunction(description = "SET: Atur bayangan/elevasi (dp). Butuh "
+  @SimpleFunction(description = "SET: Atur bayangan/elevasi (pixel). Butuh "
       + "background tidak transparan + ruang kosong di sekitar agar bayangan "
       + "terlihat; di tema gelap bayangan samar.")
-  public void SetElevation(AndroidViewComponent comp, float dp) {
-    style.SetElevation(comp, dp);
+  public void SetElevation(AndroidViewComponent comp, float px) {
+    style.SetElevation(comp, px);
   }
 
-  @SimpleFunction(description = "SET: Atur jarak dalam/padding (dp): "
+  @SimpleFunction(description = "SET: Atur jarak dalam/padding (pixel): "
       + "kiri, atas, kanan, bawah.")
-  public void SetPadding(AndroidViewComponent comp, float leftDp, float topDp, float rightDp, float bottomDp) {
-    style.SetPadding(comp, leftDp, topDp, rightDp, bottomDp);
+  public void SetPadding(AndroidViewComponent comp, float leftPx, float topPx, float rightPx, float bottomPx) {
+    style.SetPadding(comp, leftPx, topPx, rightPx, bottomPx);
   }
 
-  @SimpleFunction(description = "SET: Atur jarak luar/margin (dp): kiri, atas, "
+  @SimpleFunction(description = "SET: Atur jarak luar/margin (pixel): kiri, atas, "
       + "kanan, bawah. Hanya bila induk mendukung margin (Vertical/Horizontal/"
       + "ScrollArrangement BISA; TableArrangement TIDAK — baris tabel "
       + "mengabaikan margin). Induk tak mendukung = ErrorOccurred.")
-  public void SetMargin(AndroidViewComponent comp, float leftDp, float topDp, float rightDp, float bottomDp) {
-    style.SetMargin(comp, leftDp, topDp, rightDp, bottomDp);
+  public void SetMargin(AndroidViewComponent comp, float leftPx, float topPx, float rightPx, float bottomPx) {
+    style.SetMargin(comp, leftPx, topPx, rightPx, bottomPx);
   }
 
   @SimpleFunction(description = "SET: Atur transparansi 0-100 (100 = penuh).")

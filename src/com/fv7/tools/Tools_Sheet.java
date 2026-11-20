@@ -39,7 +39,7 @@ import java.util.Map;
 import java.util.Set;
 
 @DesignerComponent(
-    version = 20,
+    version = 21,
     description = "Tools_Sheet: bottom-sheet dialog ber-id (pakai Arrangement "
         + "sebagai konten), toast, dan notifikasi bar status Android. Sheet: "
         + "RegisterSheet (+SetSheetStyle) / ShowSimpleSheet -> CallShowSheet / "
@@ -146,7 +146,7 @@ public class Tools_Sheet extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "SET: ubah gaya sheet TERDAFTAR (boleh sebelum/sesudah "
       + "tampil; langsung kelihatan bila sedang tampil). gravity angka: 80=bawah, "
-      + "48=atas, 17=tengah, 3=kiri, 5=kanan. widthDp/heightDp <= 0 = menyesuaikan "
+      + "48=atas, 17=tengah, 3=kiri, 5=kanan. widthPx/heightPx <= 0 = menyesuaikan "
       + "(lebar penuh bila gravity atas/bawah). dimPercent 0-100 (kegelapan latar). "
       + "animationType teks: pakai blok kuning SlideFromBottom/SlideFromTop/"
       + "SlideFromLeft/SlideFromRight/FadeAnim/NoAnim "
@@ -154,8 +154,8 @@ public class Tools_Sheet extends AndroidNonvisibleComponent
       + "cancelable = bisa tutup via tombol back/luar. swipeToDismiss = geser "
       + "ke arah tutup untuk menutup. Sukses diam; id belum register via "
       + "ErrorOccurred.")
-  public void SetSheetStyle(final int id, final int gravity, final int widthDp,
-      final int heightDp, final int dimPercent, final String animationType,
+  public void SetSheetStyle(final int id, final int gravity, final int widthPx,
+      final int heightPx, final int dimPercent, final String animationType,
       final int animationDurationMs, final boolean cancelable,
       final boolean swipeToDismiss) {
     final Sheet s = need(id, "Style");
@@ -177,8 +177,8 @@ public class Tools_Sheet extends AndroidNonvisibleComponent
     s.animMs = animationDurationMs > 0 ? animationDurationMs : 250;
     s.swipe = swipeToDismiss;
     final boolean fCancel = cancelable;
-    final int fW = widthDp;
-    final int fH = heightDp;
+    final int fW = widthPx;
+    final int fH = heightPx;
     final int fDim = Math.max(0, Math.min(100, dimPercent));
     try {
       activity.runOnUiThread(new Runnable() {
@@ -195,9 +195,9 @@ public class Tools_Sheet extends AndroidNonvisibleComponent
               w.setGravity(s.gravity);
               w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
               WindowManager.LayoutParams lp = w.getAttributes();
-              lp.width = fW > 0 ? dp(fW)
+              lp.width = fW > 0 ? fW
                   : WindowManager.LayoutParams.MATCH_PARENT;
-              lp.height = fH > 0 ? dp(fH)
+              lp.height = fH > 0 ? fH
                   : WindowManager.LayoutParams.WRAP_CONTENT;
               lp.dimAmount = fDim / 100.0f;
               w.setAttributes(lp);
@@ -238,7 +238,7 @@ public class Tools_Sheet extends AndroidNonvisibleComponent
 
   /** Daftarkan sheet dengan gaya eksplisit (dipakai RegisterSheet/ShowSimpleSheet). */
   private void doRegister(final int id, final AndroidViewComponent content,
-      final int gravity, final int widthDp, final int heightDp,
+      final int gravity, final int widthPx, final int heightPx,
       final int dimPercent, final String animationType,
       final int animationDurationMs, final boolean cancelable,
       final boolean swipeToDismiss) {
@@ -330,9 +330,9 @@ public class Tools_Sheet extends AndroidNonvisibleComponent
           int dim = Math.max(0, Math.min(100, dimPercent));
           w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
           WindowManager.LayoutParams lp = w.getAttributes();
-          lp.width = widthDp > 0 ? dp(widthDp)
+          lp.width = widthPx > 0 ? widthPx
               : WindowManager.LayoutParams.MATCH_PARENT;
-          lp.height = heightDp > 0 ? dp(heightDp)
+          lp.height = heightPx > 0 ? heightPx
               : WindowManager.LayoutParams.WRAP_CONTENT;
           lp.dimAmount = dim / 100.0f;
           w.setAttributes(lp);
@@ -898,13 +898,40 @@ public class Tools_Sheet extends AndroidNonvisibleComponent
     return id;
   }
 
-  @SimpleFunction(description = "Semua id sheet (URUT PEMBUATAN, "
-      + "index 1 = pertama dibuat).")
+  @SimpleFunction(description = "Tinggi jendela sheet ber-id (pixel; -2 = isi penuh, "
+      + "-1 = otomatis/belum tampil). -1 juga bila sheet tidak ada. Isinya = "
+      + "Arrangement yang kamu daftarkan (pegang referensinya di variabel; "
+      + "tidak ada blok pengambil karena komponen MIT tidak bisa dibungkus "
+      + "jadi nilai). Pasangan SetSheetStyle.")
+  public int GetSheetHeight(int id) {
+    try {
+      Sheet s;
+      synchronized (sheetLock) {
+        s = sheets.get(Integer.valueOf(id));
+      }
+      if (s == null || s.dialog == null) {
+        return -1;
+      }
+      Window w = s.dialog.getWindow();
+      if (w == null) {
+        return -1;
+      }
+      return w.getAttributes().height;
+    } catch (Exception e) {
+      return -1;
+    }
+  }
+
+  @SimpleFunction(description = "Semua id sheet yang terdaftar (URUT PEMBUATAN, "
+      + "index 1 = pertama dibuat). Termasuk yang sedang tidak tampil; beda "
+      + "dengan GetActiveSheetIds.")
   public List<Integer> GetSheetIds() {
     return Ids.idsOf(Ids.SHEET);
   }
 
-  @SimpleFunction(description = "Id sheet yang aktif (URUT PEMBUATAN).")
+  @SimpleFunction(description = "Id sheet yang sedang aktif/tampil (URUT PEMBUATAN). "
+      + "Beda dengan GetSheetIds yang mencatat semua yang terdaftar. "
+      + "Periksa 1 id via IsSheetIdActive.")
   public List<Integer> GetActiveSheetIds() {
     return Ids.activeIdsOf(Ids.SHEET);
   }

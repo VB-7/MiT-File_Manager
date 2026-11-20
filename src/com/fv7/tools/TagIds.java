@@ -220,7 +220,7 @@ public final class TagIds {
     return gone;
   }
 
-  /** Buang SELURUH isi satu tag. */
+  /** Hapus SELURUH isi satu tag. */
   public static synchronized void clear(String tag) {
     tags.remove(norm(tag));
   }

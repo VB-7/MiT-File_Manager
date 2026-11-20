@@ -175,7 +175,7 @@ async function generate(IO) {
   out.push("import java.util.List;");
   out.push("");
   out.push("@DesignerComponent(");
-  out.push("    version = 20,");
+  out.push("    version = 21,");
   out.push("    description = \"Tools_All_in_One: SATU komponen berisi SEMUA blok \"");
   for (let li = 0; li < FACADE_DESC_LINES.length; li++) {
     const end = li === FACADE_DESC_LINES.length - 1 ? '",' : '"';
@@ -216,7 +216,30 @@ async function generate(IO) {
       if (mb.name === "LastError") {
         if (seenSig[key]) { skipped.push(o + "." + key + " (LastError)"); continue; }
         seenSig[key] = o;
-        for (const a of mb.annotations) out.push("  " + normAnn(a.text));
+        // 12 fungsi -> 1: deskripsi gabungan (daftar semua Op*), bukan anotasi pemilik pertama.
+        const ops = [];
+        for (const oo of OWNERS) {
+          for (const x of perOwner[oo]) {
+            if (x.name.indexOf("Op") === 0 && x.params.length === 0
+                && x.annotations[0].name === "SimpleProperty"
+                && ops.indexOf(x.name) < 0) ops.push(x.name);
+          }
+        }
+        out.push('  @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred "');
+        const opList = ops.join("/");
+        let rest = "gabungan 12 pemilik: pesan error terakhir operasi ini (teks kosong bila belum ada). Isi operation dengan blok kuning " + opList
+          + " untuk if. Contoh: simpan LastError(" + ops[0] + ") ke variabel bila ErrorOccurred menembak. ";
+        while (rest.length > 0) {
+          let cut = Math.min(90, rest.length);
+          if (cut < rest.length) {
+            const sp = rest.lastIndexOf(" ", cut);
+            cut = sp > 40 ? sp : cut;
+          }
+          const piece = rest.slice(0, cut);
+          rest = rest.slice(cut);
+          const last = rest.length === 0;
+          out.push("      + \"" + piece + "\"" + (last ? ")" : ""));
+        }
         out.push("  public " + mb.ret + " LastError(String operation) {");
         out.push("    return Shared.lastError(operation);");
         out.push("  }");

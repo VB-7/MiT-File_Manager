@@ -35,7 +35,7 @@ import java.util.List;
 import java.util.Map;
 
 @DesignerComponent(
-    version = 20,
+    version = 21,
     description = "Tools_File: file/folder teks, salin/pindah/hapus/rename, direktori, izin "
         + "+ 10 helper izin, picker/opener, base64-ke-file, info ruang. Konvensi awalan: "
         + "Is = boolean (colok ke if), Call = async + hasil lewat event, Set = tanpa "
@@ -1511,7 +1511,8 @@ public class Tools_File extends AndroidNonvisibleComponent
   // ================= GET / query =================
 
   @SimpleFunction(description = "Nama file dari sebuah path (buang foldernya). "
-      + "Olah string saja, tanpa scope.")
+      + "Olah string saja, tanpa scope. Butuh tebak nama dari URL? pakai "
+      + "CallGuessFileName (Downloader).")
   public String GetFileName(String path) {
     return Shared.fileNameOf(path);
   }

@@ -34,7 +34,7 @@ import java.util.Map;
 import java.util.HashMap;
 
 @DesignerComponent(
-    version = 20,
+    version = 21,
     description = "Tools_Downloader: unduh paralel ber-id (pause/resume/cancel per id, "
         + "Started/ProgressChanged/Finished) + unduh batch list URL. Id dikelola "
         + "CreateDownloadId (atau CreateUniqueId Tools_Base). List id URUT PEMBUATAN "
@@ -89,6 +89,7 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     String message = "";
     String url = "";
     String folder = "";
+    int attempts = 0;
   }
 
   private static final Map<Integer, DlInfo> infos = new HashMap<Integer, DlInfo>();
@@ -174,6 +175,7 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     Ids.setActive(Ids.DOWNLOAD, id, true);
     DlInfo ni = infoOf(id);
     ni.status = "jalan";
+    ni.attempts = ni.attempts + 1;
     ni.percent = 0;
     ni.received = 0;
     ni.total = 0;
@@ -1066,6 +1068,15 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
   @SimpleFunction(description = "CALL: Unduh ulang id ini dari awal (byte dihitung ulang "
       + "dari 0). Untuk id yang gagal/dibatalkan/selesai. Id yang masih jalan harus "
       + "di-Cancel dulu. Hasil lewat DownloadFinished seperti biasa.")
+  @SimpleFunction(description = "Jumlah percobaan unduh id ini (tiap mulai/ulang +1, "
+      + "termasuk CallRetryDownload; 0 bila id belum pernah mengunduh).")
+  public int GetDownloadAttempts(int id) {
+    synchronized (lock) {
+      DlInfo i = infos.get(Integer.valueOf(id));
+      return i == null ? 0 : i.attempts;
+    }
+  }
+
   public void CallRetryDownload(int id) {
     String u;
     String fn;
