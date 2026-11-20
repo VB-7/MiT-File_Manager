@@ -334,11 +334,11 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   }
 
   @SimpleEvent(description = "SATU-SATUNYA error gabungan 12 pemilik. "
-      + "component = nama operasi (isi dengan blok kuning
-      + "OpAudio/OpJson/OpId/OpZip/OpUnzip/OpCore/OpDownload/OpDirectory/OpFile/OpRead/OpBase64/OpC
-      + "opyOrMove/OpPick/OpOpen/OpPermission/OpSlider/OpImage/OpLayout/OpSheet/OpToast/OpNotificat
-      + "ion/OpStyle/OpTask/OpAlarm/OpVar/OpVideo untuk if). Contoh: jika component = OpAudio maka
-      + "tampilkan message. id = id terkait (0 bila statis). ")
+      + "component = nama operasi (isi dengan blok kuning"
+      + " OpAudio/OpJson/OpId/OpZip/OpUnzip/OpCore/OpDownload/OpDirectory/OpFile/OpRead/OpBase64/Op"
+      + "CopyOrMove/OpPick/OpOpen/OpPermission/OpSlider/OpImage/OpLayout/OpSheet/OpToast/OpNotifica"
+      + "tion/OpStyle/OpTask/OpAlarm/OpVar/OpVideo untuk if). Contoh: jika component = OpAudio maka"
+      + " tampilkan message. id = id terkait (0 bila statis). ")
   public void ErrorOccurred(String component, int id, String message) {
     EventDispatcher.dispatchEvent(this, "ErrorOccurred", component, id, message);
   }

@@ -248,13 +248,10 @@ async function generate(IO) {
             cut = sp > 40 ? sp : cut;
           }
           const piece = rest.slice(0, cut);
-          rest = rest.slice(cut).replace(/^ /, "");
-          if (first) {
-            out.push('      + "' + piece + (rest.length > 0 ? "" : '")'));
-            first = false;
-          } else {
-            out.push('      + "' + piece + (rest.length > 0 ? "" : '")'));
-          }
+          rest = rest.slice(cut);
+          const last = rest.length === 0;
+          out.push("      + \"" + piece + "\"" + (last ? ")" : ""));
+          first = false;
         }
         mb.__annDone = true;
       } else if (seenSig[key]) {
