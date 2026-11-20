@@ -335,11 +335,11 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
   }
 
   @SimpleEvent(description = "SATU-SATUNYA error gabungan 12 pemilik. "
-      + "component = nama operasi (isi dengan"
-      + " OpAudio/OpJson/OpId/OpZip/OpUnzip/OpCore/OpDownload/OpDirectory/OpFile/OpRead/OpBase64/Op"
-      + "CopyOrMove/OpPick/OpOpen/OpPermission/OpSlider/OpImage/OpLayout/OpSheet/OpToast/OpNotifica"
-      + "tion/OpStyle/OpTask/OpAlarm/OpVar/OpVideo untuk if). Contoh: jika component = OpAudio maka"
-      + " tampilkan message. id = id terkait (0 bila statis). ")
+      + "component = nama operasi (isi dengan OpAudio/OpJson/OpId/OpZip/OpUnzip/OpCore/OpDownload/O"
+      + "pDirectory/OpFile/OpRead/OpBase64/OpCopyOrMove/OpPick/OpOpen/OpPermission/OpSlider/OpImage"
+      + "/OpLayout/OpSheet/OpToast/OpNotification/OpStyle/OpTask/OpAlarm/OpVar/OpVideo untuk if)."
+      + " Contoh: jika component = OpAudio maka tampilkan message. id = id terkait (0 bila statis)."
+      + " ")
   public void ErrorOccurred(String component, int id, String message) {
     EventDispatcher.dispatchEvent(this, "ErrorOccurred", component, id, message);
   }
@@ -353,10 +353,10 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
 
   @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred "
       + "gabungan 12 pemilik: pesan error terakhir operasi ini (teks kosong bila belum ada). Isi"
-      + " operation dengan OpAudio/OpJson/OpId/OpZip/OpUnzip/OpCore/OpDownload/OpDirect"
-      + "ory/OpFile/OpRead/OpBase64/OpCopyOrMove/OpPick/OpOpen/OpPermission/OpSlider/OpImage/OpLayo"
-      + "ut/OpSheet/OpToast/OpNotification/OpStyle/OpTask/OpAlarm/OpVar/OpVideo untuk if. Contoh:"
-      + " simpan LastError(OpAudio) ke variabel bila ErrorOccurred menembak. ")
+      + " operation dengan OpAudio/OpJson/OpId/OpZip/OpUnzip/OpCore/OpDownload/OpDirectory/OpFile/O"
+      + "pRead/OpBase64/OpCopyOrMove/OpPick/OpOpen/OpPermission/OpSlider/OpImage/OpLayout/OpSheet/O"
+      + "pToast/OpNotification/OpStyle/OpTask/OpAlarm/OpVar/OpVideo untuk if. Contoh: simpan"
+      + " LastError(OpAudio) ke variabel bila ErrorOccurred menembak. ")
   public String LastError(String operation) {
     return Shared.lastError(operation);
   }
