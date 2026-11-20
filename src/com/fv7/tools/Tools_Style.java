@@ -517,6 +517,12 @@ public class Tools_Style extends AndroidNonvisibleComponent {
       Shared.err(this, "Style", 0, "BackgroundImage: path kosong");
       return;
     }
+    if (Shared.isRemotePath(p)) {
+      Shared.err(this, "Style", 0, "BackgroundImage: URL tidak didukung "
+          + "(KHUSUS file lokal/asset; unduh dulu pakai Tools_Image/"
+          + "Downloader)");
+      return;
+    }
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         Bitmap bmp = null;
