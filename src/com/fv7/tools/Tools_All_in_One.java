@@ -1030,13 +1030,17 @@ public class Tools_All_in_One extends AndroidNonvisibleComponent {
     return downloader.GetDownloadFileName(id);
   }
 
-  @SimpleFunction(description = "CALL: Unduh ulang id ini dari awal (byte dihitung ulang "
-      + "dari 0). Untuk id yang gagal/dibatalkan/selesai. Id yang masih jalan harus "
-      + "di-Cancel dulu. Hasil lewat DownloadFinished seperti biasa.")
   @SimpleFunction(description = "Jumlah percobaan unduh id ini (tiap mulai/ulang +1, "
       + "termasuk CallRetryDownload; 0 bila id belum pernah mengunduh).")
   public int GetDownloadAttempts(int id) {
     return downloader.GetDownloadAttempts(id);
+  }
+
+  @SimpleFunction(description = "CALL: Unduh ulang id ini dari awal (byte dihitung ulang "
+      + "dari 0). Untuk id yang gagal/dibatalkan/selesai. Id yang masih jalan harus "
+      + "di-Cancel dulu. Hasil lewat DownloadFinished seperti biasa.")
+  public void CallRetryDownload(int id) {
+    downloader.CallRetryDownload(id);
   }
 
   @SimpleFunction(description = "Total URL batch yang sedang jalan (0 bila tidak ada batch).")

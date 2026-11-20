@@ -1065,9 +1065,6 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "CALL: Unduh ulang id ini dari awal (byte dihitung ulang "
-      + "dari 0). Untuk id yang gagal/dibatalkan/selesai. Id yang masih jalan harus "
-      + "di-Cancel dulu. Hasil lewat DownloadFinished seperti biasa.")
   @SimpleFunction(description = "Jumlah percobaan unduh id ini (tiap mulai/ulang +1, "
       + "termasuk CallRetryDownload; 0 bila id belum pernah mengunduh).")
   public int GetDownloadAttempts(int id) {
@@ -1077,6 +1074,9 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     }
   }
 
+  @SimpleFunction(description = "CALL: Unduh ulang id ini dari awal (byte dihitung ulang "
+      + "dari 0). Untuk id yang gagal/dibatalkan/selesai. Id yang masih jalan harus "
+      + "di-Cancel dulu. Hasil lewat DownloadFinished seperti biasa.")
   public void CallRetryDownload(int id) {
     String u;
     String fn;
