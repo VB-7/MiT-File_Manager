@@ -9,18 +9,22 @@ import com.google.appinventor.components.annotations.SimpleEvent;
 import com.google.appinventor.components.annotations.SimpleFunction;
 import com.google.appinventor.components.annotations.SimpleObject;
 import com.google.appinventor.components.annotations.SimpleProperty;
+import com.google.appinventor.components.annotations.UsesPermissions;
 import com.google.appinventor.components.common.ComponentCategory;
 import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
 import com.google.appinventor.components.runtime.ComponentContainer;
 import com.google.appinventor.components.runtime.EventDispatcher;
+import com.google.appinventor.components.runtime.PermissionResultHandler;
+import com.google.appinventor.components.runtime.util.YailList;
 import com.google.appinventor.components.runtime.util.JsonUtil;
 
 import java.net.URLDecoder;
 import java.net.URLEncoder;
+import java.util.ArrayList;
 import java.util.List;
 
 @DesignerComponent(
-    version = 22,
+    version = 23,
     description = "Fondasi Tools: id pool global + util Tag untuk id komponen "
         + "LUAR (auto-konversi teks angka: \"5\" = 5) + util dasar (JSON, URI, "
         + "waktu, byte, mime). Butuh id? CreateUniqueId (global, reservasi "
@@ -29,13 +33,26 @@ import java.util.List;
         + "JANGAN dipakai dua tempat). Id per tipe (Download/Image/dll) ada "
         + "di komponen pemiliknya masing-masing, bukan di sini. Konvensi "
         + "awalan: Is = boolean (colok ke if), Call = async + hasil lewat "
-        + "event, Set = tanpa feedback, Get = nilai balik sinkron.",
+        + "event, Set = tanpa feedback, Get = nilai balik sinkron. Izin generik "
+        + "(manual + luar): CallRequestPermission(s) + IsPermissionGranted + "
+        + "GetGranted/DeniedPermissions + 10 Pilihan izin + GotPermission.",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
     androidMinSdk = 21,
     iconName = "aiwebres/tools_base.jpg",
     helpUrl = "https://github.com/VB-7/MiT-File_Manager")
 @SimpleObject(external = true)
+@UsesPermissions({"android.permission.READ_EXTERNAL_STORAGE",
+    "android.permission.WRITE_EXTERNAL_STORAGE",
+    "android.permission.MANAGE_EXTERNAL_STORAGE",
+    "android.permission.CAMERA",
+    "android.permission.RECORD_AUDIO",
+    "android.permission.POST_NOTIFICATIONS",
+    "android.permission.READ_MEDIA_IMAGES",
+    "android.permission.READ_MEDIA_VIDEO",
+    "android.permission.READ_MEDIA_AUDIO",
+    "android.permission.ACCESS_FINE_LOCATION",
+    "android.permission.ACCESS_COARSE_LOCATION"})
 public class Tools_Base extends AndroidNonvisibleComponent {
 
   private final Context context;
@@ -178,185 +195,7 @@ public class Tools_Base extends AndroidNonvisibleComponent {
     return TagIds.allTags();
   }
 
-  // ================= JSON =================
 
-  @SimpleFunction(description = "Encode list/dictionary/teks/angka/boolean jadi JSON.")
-  public String JsonEncode(Object value) {
-    try {
-      return JsonUtil.getJsonRepresentation(value);
-    } catch (Exception e) {
-      String m = e.getMessage();
-      Shared.err(this, "Json", 0, m == null ? "encode gagal" : m);
-      return "";
-    }
-  }
+  // ================= IZIN GENERIK (manual + luar) =================
 
-  @SimpleFunction(description = "Decode teks JSON jadi dictionary/list. "
-      + "Gagal = \"\" + error (cek LastError(\"Json\"); pola guard: if hasil = \"\" berarti gagal).")
-  public Object JsonDecode(String json) {
-    try {
-      return JsonUtil.getObjectFromJson(json == null ? "" : json);
-    } catch (Exception e) {
-      String m = e.getMessage();
-      Shared.err(this, "Json", 0, m == null ? "decode gagal" : m);
-      return "";
-    }
-  }
-
-  // ================= URI =================
-
-  @SimpleFunction(description = "Encode teks untuk URL (spasi jadi %20).")
-  public String UriEncode(String text) {
-    try {
-      String s = URLEncoder.encode(text == null ? "" : text, "UTF-8");
-      StringBuilder sb = new StringBuilder();
-      for (int i = 0; i < s.length(); i = i + 1) {
-        char ch = s.charAt(i);
-        if (ch == '+') {
-          sb.append("%20");
-        } else {
-          sb.append(ch);
-        }
-      }
-      return sb.toString();
-    } catch (Exception e) {
-      return text == null ? "" : text;
-    }
-  }
-
-  @SimpleFunction(description = "Decode teks URL-encoded.")
-  public String UriDecode(String text) {
-    try {
-      return URLDecoder.decode(text == null ? "" : text, "UTF-8");
-    } catch (Exception e) {
-      return text == null ? "" : text;
-    }
-  }
-
-  // ================= FORMAT =================
-
-  @SimpleFunction(description = "Ubah milidetik jadi teks jam (m:ss / h:mm:ss) untuk Label.")
-  public String FormatTime(int millis) {
-    return Shared.formatTime(millis);
-  }
-
-  @SimpleFunction(description = "Ubah angka byte jadi teks (B/KB/MB/GB).")
-  public String ConvertBytes(long bytes) {
-    return Shared.convertBytes(bytes);
-  }
-
-  @SimpleFunction(description = "Tebak mime dari nama file/ekstensi. Tidak perlu file-nya ada.")
-  public String GetMimeType(String fileName) {
-    return Shared.mimeFor(fileName);
-  }
-
-  @SimpleFunction(description = "Versi paket Tools (sama untuk semua Tools_* dalam satu .aix: "
-      + "wajib SAMA semua per rilis; beda = bug kemasan).")
-  public int ToolsVersion() {
-    return 22;
-  }
-
-  @SimpleFunction(description = "Catatan update paket Tools (dibaca lewat blok, "
-      + "karena panel info extension tidak bisa diubah manual).")
-  public String GetWhatsNew() {
-    return "v22 2026-11-20: File +GetFileHash(path, algorithm) hash isi "
-        + "(MD5/SHA-1/SHA-224/SHA-256/SHA-384/SHA-512) + Helper merah Type "
-        + "(dropdown; soket terima merah/teks manual) + IsDuplicateFileOrDirectory "
-        + "jadi cek nama PERSIS (counter _N/(N) hanya untuk hitungan Many) + "
-        + "sapuan kata: Helper = blok merah. "
-        + "v21 2026-11-20: BREAKING nilai ukuran: SEMUA soket dp->pixel "
-        + "mentah (Style 9 blok + Sheet + slider; angka dp lama kali ~2-3). "
-        + "Image: slider setara ListView (create +width/height/fit; SetSliderSize/"
-        + "Fit/Spacing/Selected/Visible; Get Width/Height/Fit/Spacing/Visible/"
-        + "Selected/Image/Failed/Preload; lazy SetSliderPreload OTOMATIS + ingat "
-        + "posisi SetSliderRememberPosition; IsImageLoading; SliderCreated pakai "
-        + "sliderId; batas Exif dicatat; cache URL 80MB). Downloader "
-        + "+GetDownloadAttempts. Sheet +GetSheetHeight + beda daftar/Aktif. File "
-        + "GetFileName rujuk CallGuessFileName. Fasad LastError gabungan 12 "
-        + "pemilik. RENCANA: reserves kamera/mic/lokasi jadi blok nyata; 6 uji "
-        + "HP (pemilik). "
-        + "v20 2026-11-20: RILIS BREAKING (pengguna tunggal = pemilik; "
-        + "proyek lama wajib pasang ulang blok yang di-rename). HAPUS: 72 "
-        + "cermin per-tipe Tools_Base (diet 99->31 blok); IsAudioPlaying/"
-        + "IsVideoPlaying; GetPendingTaskIds; Downloader.GetFileName (pakai "
-        + "CallGuessFileName); SaveTagId->RegisterTagId; ReleaseId->"
-        + "SetForceReleaseId; ClearTag/ClearVars/ClearTaskExtras->SetClearTag/"
-        + "SetClearVars/SetClearTaskExtras; File GetPermission->"
-        + "CallRequestPermission; CallSetAlarm/CallSetRepeatingAlarm->"
-        + "CallScheduleAlarm/CallScheduleRepeatingAlarm (+CallScheduleDailyAt); "
-        + "Sheet SetShowToast/SetShowNotification->CallShowToast/"
-        + "CallSetNotification (+event ToastShown/NotificationShown); "
-        + "RegisterSheet pecah: RegisterSheet(id,content)+SetSheetStyle (+"
-        + "ShowSimpleSheet, CreateNotificationId); Layout GetLayout(id)+"
-        + "GetLayoutAs(type,id), param layout->type di 9 blok (+IsLayoutGone, "
-        + "LayoutRemoved, SetClearLayoutsIn); Style SetStroke urutan baru "
-        + "(comp,color,widthDp,dashed,dashLen,dashGap) + Orientation*/"
-        + "Direction* + background KHUSUS lokal/asset (BUKAN URL); "
-        + "Compress ListZipContents->GetZipEntries + percent 0-100 + cancel "
-        + "hapus ZIP sebagian; File success jadi #1 di 10 event + "
-        + "IsCopyOrMoveBusy + CallCopyFile/Move/AppendFile + GetLastModified/"
-        + "IsFileReadable; Core Set* diam->lapor ErrorOccurred + "
-        + "InvokeDynamic->CallInvokeDynamic + GetDynamicType/16 Type*/"
-        + "IsDynamicVisible; Image slider TANPA batas jumlah + cache URL 50MB "
-        + "MD5 (+SetClearImageCache) + IsSliderAutoPlay/GetSliderInterval/"
-        + "GetImageCount; Task IsTaskPaused/GetTaskElapsed/GetTaskRemaining + "
-        + "AlarmsRestored; Audio/Video IsAudioPaused/IsVideoPaused + "
-        + "SetForward/Backward*By + volume/loop/speed per-id + 4 designer "
-        + "props; Downloader IsDownloadPaused + Get* + CallRetryDownload. "
-        + "ALIAS pindah (tetap jalan): tipe file 'vidio'->video. RENCANA v21: "
-        + "paket migrasi event besar (CoreClicked dkk); reserves kamera/mic/"
-        + "lokasi di File (dicadangkan 2026-11-20) jadi blok nyata. "
-        + "v19: Image ShowImage +width/height/fit, slider +paths, +"
-        + "SetImageSource; fasad satu pintu. "
-        + "v18 2026-11-18: 3 blok duplikat 1-input "
-        + "(IsDuplicateFileOrDirectory boolean, GetManyDuplicateFileOr-"
-        + "Directory number, GetListDuplicateFileOrDirectory list; keluarga "
-        + "counter _N/(N), 1 folder tanpa subfolder; + IsTagIdExists(tag); "
-        + "+ SetLayoutVisible/IsLayoutExists/IsLayoutVisible (tipe+id wajib "
-        + "cocok); + GetLayout/SetLayoutSize/BackgroundColor/Alignment/"
-        + "GetLayoutWidth/Height; create layout +lebar/tinggi/visible/warna; "
-        + "Core create Button/Label/TextBox/Image +lebar/tinggi + "
-        + "SetDynamicSize/Visible/Text/TextColor/BackgroundColor + "
-        + "GetDynamicWidth/Height; Image +SetImageSize/Visible/Fit + "
-        + "GetImageWidth/Height +IsImageVisible (BREAKING: proyek lama yang "
-        + "pakai create di atas wajib pasang ulang bloknya); + Tools_All_in_One "
-        + "(fasad 460 blok 12 tools + ikon, event dicerminkan via bus)). "
-        + "v17 2026-11-17: CallDownload 4 pintu (http/data:/content:/file:); "
-        + "CallGuessFileName + FileNameGuessed; versi anotasi 17 + catatan "
-        + "update per komponen. v16: gate izin otomatis 16 operasi storage; "
-        + "IsAllFilesAccessGranted/OpenAllFilesAccessSettings; "
-        + "Is/CallEnsure*Permission + 10 blok Permission; "
-        + "MANAGE_EXTERNAL_STORAGE. v15: aturan Is/Call/Set final. "
-        + "v14: direktori Android + notifikasi download. v13: hapus scope, "
-        + "root /storage/emulated/0.";
-  }
-
-  // ================= OP + ERROR =================
-
-  @SimpleProperty(description = "Nama operasi Json (untuk if di ErrorOccurred).",
-      category = PropertyCategory.BEHAVIOR)
-  public String OpJson() {
-    return "Json";
-  }
-
-  @SimpleProperty(description = "Nama operasi Id (untuk if di ErrorOccurred).",
-      category = PropertyCategory.BEHAVIOR)
-  public String OpId() {
-    return "Id";
-  }
-
-  @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred: "
-      + "pesan error terakhir operasi ini (colok OpId/OpJson, kosong bila belum ada). "
-      + "Cth: JsonDecode gagal -> LastError(OpJson) berisi sebabnya.")
-  public String LastError(String operation) {
-    return Shared.lastError(operation);
-  }
-
-  @SimpleEvent(description = "SATU-SATUNYA error Tools_Base. component = nama operasi "
-      + "(bandingkan dengan blok OpId/OpJson; cth: if component = OpJson berarti error JSON). "
-      + "id = id terkait (0 bila umum).")
-  public void ErrorOccurred(String component, int id, String message) {
-    Shared.fire(this, "ErrorOccurred",
-        component, Integer.valueOf(id), message);
-  }
-}
+  private void fireOnUi(final Runnable r) 
