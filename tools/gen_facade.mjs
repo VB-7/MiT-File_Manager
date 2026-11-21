@@ -202,4 +202,190 @@ async function generate(IO) {
   out.push("    category = ComponentCategory.EXTENSION,");
   out.push("    nonVisible = true,");
   out.push("    androidMinSdk = " + minSdk + ",");
-  out.push(
+  out.push('    iconName = "aiwebres/tools_all_in_one.jpg",');
+  out.push('    helpUrl = "https://github.com/VB-7/MiT-File_Manager")');
+  out.push("@SimpleObject(external = true)");
+  if (permOrder.length > 0) {
+    out.push("@UsesPermissions({");
+    out.push("    " + permOrder.join(",\n    "));
+    out.push("})");
+  }
+  out.push("public class Tools_All_in_One extends AndroidNonvisibleComponent {");
+  out.push("");
+  for (const o of OWNERS) {
+    out.push("  private final Tools_" + o + " " + FIELD[o] + ";");
+  }
+  out.push("");
+  out.push("  public Tools_All_in_One(ComponentContainer container) {");
+  out.push("    super(container.$form());");
+  for (const o of OWNERS) {
+    out.push("    " + FIELD[o] + " = new Tools_" + o + "(container);");
+  }
+  out.push("    Shared.registerAllInOne(this);");
+  out.push("  }");
+  out.push("");
+
+  for (const o of OWNERS) {
+    out.push("  // ================= " + o + " =================");
+    out.push("");
+    for (const mb of perOwner[o]) {
+      const key = sigKey(mb);
+      const ann0 = mb.annotations[0].name;
+      if (mb.name === "LastError") {
+        if (seenSig[key]) { skipped.push(o + "." + key + " (LastError)"); continue; }
+        seenSig[key] = o;
+        // 12 fungsi -> 1: deskripsi gabungan (daftar semua Op*), bukan anotasi pemilik pertama.
+        const ops = [];
+        for (const oo of OWNERS) {
+          for (const x of perOwner[oo]) {
+            if (x.name.indexOf("Op") === 0 && x.params.length === 0
+                && x.annotations[0].name === "SimpleProperty"
+                && ops.indexOf(x.name) < 0) ops.push(x.name);
+          }
+        }
+        out.push('  @SimpleFunction(description = "Fallback polling untuk event ErrorOccurred "');
+        const opList = ops.join("/");
+        let rest = "gabungan 12 pemilik: pesan error terakhir operasi ini (teks kosong bila belum ada). Isi operation dengan " + opList
+          + " untuk if. Contoh: simpan LastError(" + ops[0] + ") ke variabel bila ErrorOccurred menembak. ";
+        while (rest.length > 0) {
+          let cut = Math.min(90, rest.length);
+          if (cut < rest.length) {
+            const sp = rest.lastIndexOf(" ", cut);
+            cut = sp > 40 ? sp : cut;
+          }
+          const piece = rest.slice(0, cut);
+          rest = rest.slice(cut);
+          const last = rest.length === 0;
+          out.push("      + \"" + piece + "\"" + (last ? ")" : ""));
+        }
+        out.push("  public " + mb.ret + " LastError(String operation) {");
+        out.push("    return Shared.lastError(operation);");
+        out.push("  }");
+        out.push("");
+        continue;
+      }
+      if (mb.name === "ErrorOccurred") {
+        if (seenSig[key]) { skipped.push(o + "." + key + " (ErrorOccurred)"); continue; }
+        seenSig[key] = o;
+        // 12 event -> 1: tulis deskripsi gabungan (daftar semua Op*), bukan anotasi pemilik.
+        const ops = [];
+        for (const oo of OWNERS) {
+          for (const x of perOwner[oo]) {
+            if (x.name.indexOf("Op") === 0 && x.params.length === 0
+                && x.annotations[0].name === "SimpleProperty"
+                && ops.indexOf(x.name) < 0) ops.push(x.name);
+          }
+        }
+        out.push('  @SimpleEvent(description = "SATU-SATUNYA error gabungan 12 pemilik. "');
+        const opList = ops.join("/");
+        let rest = "component = nama operasi (isi dengan " + opList
+          + " untuk if). Contoh: jika component = " + ops[0]
+          + " maka tampilkan message. id = id terkait (0 bila statis). ";
+        let first = true;
+        while (rest.length > 0) {
+          let cut = Math.min(90, rest.length);
+          if (cut < rest.length) {
+            const sp = rest.lastIndexOf(" ", cut);
+            cut = sp > 40 ? sp : cut;
+          }
+          const piece = rest.slice(0, cut);
+          rest = rest.slice(cut);
+          const last = rest.length === 0;
+          out.push("      + \"" + piece + "\"" + (last ? ")" : ""));
+          first = false;
+        }
+        mb.__annDone = true;
+      } else if (seenSig[key]) {
+        const keep = KEEP_OWNER[mb.name];
+        if (!(keep && o === keep)) {
+          skipped.push(o + "." + key + " (kalah vs " + seenSig[key] + ")");
+          continue;
+        }
+        // override: ganti pemilik sebelumnya — tandai, render yang ini
+        skipped.push(seenSig[key] + "." + key + " (diganti " + o + ")");
+        seenSig[key] = o;
+      } else {
+        seenSig[key] = o;
+        if (KEEP_OWNER[mb.name] && KEEP_OWNER[mb.name] !== o) {
+          // pemilik ini bukan pilihan — lewati, tunggu pemilik benar
+          skipped.push(o + "." + key + " (tunggu " + KEEP_OWNER[mb.name] + ")");
+          // jangan tandai seen agar pemilik benar bisa masuk — kembalikan
+          delete seenSig[key];
+          continue;
+        }
+      }
+      const isEvent = ann0 === "SimpleEvent";
+      const isSetter = !isEvent && mb.ret === "void" && mb.params.length === 1
+        && mb.annotations.some(a => a.name === "SimpleProperty");
+      // anotasi: untuk setter pakai DesignerProperty pemilik pertama + SimpleProperty
+      if (!mb.__annDone) {
+        for (const a of mb.annotations) out.push("  " + normAnn(a.text));
+      }
+      const pdecl = mb.params.map(p => p.full).join(", ");
+      out.push("  public " + mb.ret + " " + mb.name + "(" + pdecl + ") {");
+      const args = mb.params.map(p => p.name).join(", ");
+      if (isEvent) {
+        out.push('    EventDispatcher.dispatchEvent(this, "' + mb.name + '"'
+          + (args.length > 0 ? ", " + args : "") + ");");
+      } else if (isSetter) {
+        // fan-out ke SEMUA pemilik yang punya setter ini
+        const who = OWNERS.filter(
+          oo => perOwner[oo].some(
+            x => x.name === mb.name && x.ret === "void" && x.params.length === 1));
+        for (const w of who) {
+          out.push("    " + FIELD[w] + "." + mb.name + "(" + args + ");");
+        }
+      } else if (mb.ret === "void") {
+        out.push("    " + FIELD[o] + "." + mb.name + "(" + args + ");");
+      } else {
+        out.push("    return " + FIELD[o] + "." + mb.name + "(" + args + ");");
+      }
+      out.push("  }");
+      out.push("");
+    }
+  }
+  out.push("}");
+  out.push("");
+  return { text: out.join("\n"), skipped };
+}
+
+let IO = null;
+if (typeof process !== "undefined" && process.versions && process.versions.node) {
+  const fs = await import("node:fs");
+  IO = {
+    read: p => fs.readFileSync(p, "utf8"),
+    write: (p, c) => fs.writeFileSync(p, c),
+    args: process.argv.slice(2),
+  };
+} else {
+  IO = globalThis.__FACADE_IO__;
+}
+
+const args = IO.args || [];
+const { text, skipped } = await generate(IO);
+if (args.includes("--check")) {
+  const cur = await IO.read(FACADE_PATH);
+  if (cur === text) {
+    if (typeof process !== "undefined" && process.versions
+        && process.versions.node) process.exit(0);
+  } else {
+    const a = cur.split("\n"), b = text.split("\n");
+    let i = 0;
+    while (i < a.length && i < b.length && a[i] === b[i]) i++;
+    const msg = "FACADE BASI: beda di baris " + (i + 1) + "\n- " + (a[i] || "")
+      + "\n+ " + (b[i] || "") + "\nskipped: " + skipped.join("; ");
+    if (typeof process !== "undefined" && process.versions
+        && process.versions.node) {
+      console.error(msg);
+      process.exit(1);
+    } else {
+      throw new Error(msg);
+    }
+  }
+} else {
+  await IO.write(FACADE_PATH, text);
+}
+if (!(typeof process !== "undefined" && process.versions
+    && process.versions.node)) {
+  globalThis.__FACADE_RESULT__ = { chars: text.length, skipped };
+}
