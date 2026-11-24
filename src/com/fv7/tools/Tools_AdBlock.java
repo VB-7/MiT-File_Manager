@@ -737,7 +737,7 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
     return out;
   }
 
-  private static void doRefresh(Tools_AdBlock me, boolean fireEvent) {
+  private static void doRefresh(final Tools_AdBlock me, boolean fireEvent) {
     boolean ok = false;
     String msg = "";
     int nHost = 0;

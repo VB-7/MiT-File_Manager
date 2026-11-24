@@ -21,6 +21,7 @@ import android.webkit.JsResult;
 import android.webkit.PermissionRequest;
 import android.webkit.SslErrorHandler;
 import android.webkit.ValueCallback;
+import android.webkit.URLUtil;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -217,7 +218,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
         int wid = holderId(w);
         String name = "";
         try {
-          name = URLConnection.guessFileName(url, contentDisposition,
+          name = URLUtil.guessFileName(url, contentDisposition,
               mimeType);
         } catch (Exception e) {
           name = "";
@@ -562,7 +563,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
         WebView v = null;
         // console tidak bawa view; kirim ke current
         int cur = Ids.currentOf(Ids.WEBVIEW);
-        ConsoleMessage(msg.getMessage() == null ? "" : msg.getMessage(),
+        Tools_Webview.this.ConsoleMessage(msg.getMessage() == null ? "" : msg.getMessage(),
             cur, msg.lineNumber(),
             msg.sourceId() == null ? "" : msg.sourceId());
       } catch (Exception e) {
