@@ -3600,7 +3600,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
               rq.setDescription("Downloading file...");
               rq.setTitle(name);
               rq.setNotificationVisibility(DownloadManager.Request
-                  .VISIBILITY_VISIBLE_NOTIFY_COMPLETE);
+                  .VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
               java.io.File expect;
               if (dir.startsWith("~")) {
                 String sub = dir.substring(1);
