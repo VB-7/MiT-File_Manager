@@ -1,6 +1,6 @@
 # Fv7 Tools Manager
 
-Ekstensi App Inventor (`.aix`) — **12 komponen dalam 1 paket** (`com.fv7.tools`) untuk membangun aplikasi file manager, downloader, pemutar media, UI dinamis, penjadwal, dan notifikasi — semuanya bekerja dengan **sistem id** sehingga banyak pekerjaan bisa jalan bareng tanpa tabrakan.
+Ekstensi App Inventor (`.aix`) — **14 komponen dalam 1 paket** (`com.fv7.tools`) untuk membangun aplikasi file manager, downloader, pemutar media, UI dinamis, penjadwal, dan notifikasi — semuanya bekerja dengan **sistem id** sehingga banyak pekerjaan bisa jalan bareng tanpa tabrakan.
 
 **Unduh file `.aix` terbaru:** halaman [Releases](https://github.com/VB-7/MiT-File_Manager/releases) — buka rilis paling atas, link download ada di paling atas deskripsi rilis (file dilampirkan di chat rilis bila tersedia).
 
@@ -12,6 +12,7 @@ Ekstensi App Inventor (`.aix`) — **12 komponen dalam 1 paket** (`com.fv7.tools
 - [Sistem id](#sistem-id)
 - [Izin Android](#izin-android)
 - [Riwayat versi](#riwayat-versi)
+- [Tools_AdBlock](#tools-adblock)
 - [Tools_Audio](#tools-audio)
 - [Tools_Base](#tools-base)
 - [Tools_Compress](#tools-compress)
@@ -24,12 +25,13 @@ Ekstensi App Inventor (`.aix`) — **12 komponen dalam 1 paket** (`com.fv7.tools
 - [Tools_Style](#tools-style)
 - [Tools_Task](#tools-task)
 - [Tools_Video](#tools-video)
+- [Tools_Webview](#tools-webview)
 
 ## Perkenalan
 
 ### Projek apa ini?
 
-Fv7 Tools Manager adalah kumpulan 12 ekstensi App Inventor yang saling terhubung: File, Downloader, Compress (ZIP), Audio, Video, Image, Core (komponen dinamis), Layout, Style, Sheet (bottom-sheet + toast + notifikasi), Task (penjadwal + alarm), dan Base (fondasi utilitas + id). Satu file `.aix`, satu paket, satu sistem id.
+Fv7 Tools Manager adalah kumpulan 14 ekstensi App Inventor yang saling terhubung: File, Downloader, Compress (ZIP), Audio, Video, Image, Core (komponen dinamis), Layout, Style, Sheet (bottom-sheet + toast + notifikasi), Task (penjadwal + alarm), Base (fondasi utilitas + id), Webview (browser ber-id), dan AdBlock (mesin filter global). Satu file `.aix`, satu paket, satu sistem id.
 
 ### Untuk apa?
 
@@ -43,6 +45,10 @@ Untuk membuat aplikasi seperti file manager, pengunduh, galeri audio/video, toko
 - **Tiap event ada fallback polling:** `GetLast*`, `IsBusy`, `Get*Status/Result/Progress` — bila event terlewat, status tetap bisa dibaca.
 - **Satu pintu download:** `CallDownload` menerima `http(s)`, `data:` URL (base64), `content:` URI, dan `file:`/path lokal; nama file bisa ditebak otomatis (`CallGuessFileName`).
 - **Butuh Android 5.0 (API 21) ke atas.**
+
+### Catatan pembuat
+
+Semua ekstensi Tools di sini saya buat berdasarkan pengalaman dan kebutuhan saya sendiri, sehingga mungkin tidak sepenuhnya sesuai dengan kebutuhan atau harapan siapa pun yang memakainya. Saran dan kritik sangat diterima agar proyek ini bisa berkembang jauh lebih baik.
 
 ## Cara pasang
 
@@ -69,6 +75,7 @@ Operasi file otomatis meminta izin sebelum jalan (sudah granted = lanjut tanpa d
 
 ## Riwayat versi
 
+- **v24** — + `Tools_Webview` v1 (webview ber-id ala Sunny v13: JS bridge, upload/download, izin, geolokasi, dialog JS, SSL, HTTP-auth, deep-link, aset MIT, AdBlock otomatis) + `Tools_AdBlock` v1 (mesin filter global AUTO ala 1DM: 27 sumber bawaan, 4 ember terpisah hosts/rules/whitelist/cosmetic, mode Manual/TiapBuka/Harian/Mingguan/Auto); `Tools_All_in_One` dihapus dari repo (pisah repo sendiri); tools lain tidak berubah.
 - **v17** — `CallDownload` 4 pintu (http/data:/content:/file:); `CallGuessFileName` + `FileNameGuessed`; versi anotasi 17 + catatan update per komponen; blok `GetWhatsNew`.
 - **v16** — gate izin otomatis 16 operasi storage; `IsAllFilesAccessGranted`/`OpenAllFilesAccessSettings`; `Is/CallEnsure*Permission` + 10 Helper Permission; `MANAGE_EXTERNAL_STORAGE`.
 - **v15** — aturan final: Is=boolean, Call=void+event, Set=tanpa feedback.
@@ -80,6 +87,27 @@ Operasi file otomatis meminta izin sebelum jalan (sudah granted = lanjut tanpa d
 - **v6–v7** — komponen Core/Layout/Style/Sheet + Task (penjadwal & alarm).
 - **v4–v5** — sistem id ber-id + Base64 ke file.
 - **v1–v3** — rilis awal paket.
+
+## Tools_AdBlock
+
+> Tools_AdBlock: mesin AdBlock global OTOMATIS ala 1DM — banyak filter beda tipe dipakai SEKALIGUS dalam satu mesin gabungan (bukan per-id). 27 sumber bawaan (EasyList, uAssets, AdGuard, Fanboy, ABPindo, oisd, 1Hosts/Lite, yoyo, anti-adblock). Download + parse + pisah OTOMATIS ke 4 ember: hosts, network rules, whitelist (`@@`), cosmetic (`##`). Event `AdBlockUpdated` membawa var TERPISAH yang sudah tersaring (var adhost = pasti host, tidak campur rules). Keluaran teks newline langsung colok Sunny (`AdHosts`/`AddFilterRules`) + format umum list. Update: Manual / TiapBuka / Harian / Mingguan / Auto-ikut-pembuat (`! Expires:`, fallback Harian). Global tanpa id. (v1 2026-11-24: rilis awal.)
+
+Versi anotasi: **1**. Jumlah blok: 28 fungsi, 3 event, 1 properti.
+
+### Fungsi (Tools_AdBlock)
+
+- `CallRefreshAdBlock` — CALL: download + gabung SEMUA sumber + pisah ke 4 ember. Hasil lewat `AdBlockUpdated`, progres lewat `AdBlockProgressChanged`.
+- `SetAdBlockSources(sources)` — SET: ganti sumber download (list ATAU teks multi-separator `,`/newline/`;`). Kosong = kembali ke 27 bawaan.
+- `SetAdBlockUpdateMode(mode)` — SET: Manual / TiapBuka / Harian / Mingguan / Auto. Salah ketik via `ErrorOccurred`.
+- `SetAdBlockEnabled(enabled)` / `IsAdBlockEnabled()` — nyala/mati mesin global.
+- `AddAdBlockHosts(...)`, `AddAdBlockRules(...)`, `AddAdBlockWhitelist(...)` — tambah manual per ember.
+- `GetAdBlockHostsText/List`, `GetAdBlockRulesText/List`, `GetAdBlockWhitelistText/List`, `GetAdBlockCosmetics/List` — keluaran ganda: teks newline (Sunny-ready) + list (diolah di MIT).
+
+### Event (Tools_AdBlock)
+
+- `AdBlockUpdated(success, totalHost, totalRule, totalWhite, totalCosmetic, message)` — hasil refresh.
+- `AdBlockProgressChanged(done, total)` — progres download.
+- `ErrorOccurred(component, id, message)` — satu-satunya jalur error (pesan dari kejadian nyata di aplikasi).
 
 ## Tools_Audio
 
@@ -3838,3 +3866,23 @@ Video mulai main: id + durasi (ms) diketahui.
 ---
 
 *Dokumen ini digenerate otomatis dari `components.json` v17 — tiap blok di atas persis seperti di dalam `.aix`.*
+
+## Tools_Webview
+
+> Tools_Webview: webview ber-id ala Sunny Gupta v13 (blueprint ditulis ulang bersih, bukan fork). ID NUMBER dua arah (masuk/keluar number, tanpa `+0`), simpan URUT PEMBUATAN + Current/Previous/First/Last/List. WebViewClient/WebChromeClient, JS bridge `AppInventor`, upload file, download, izin, geolokasi, dialog JS, SSL, HTTP-auth, deep-link, aset MIT. AdBlock OTOMATIS via `Tools_AdBlock` (network + whitelist + injeksi cosmetic saat PageLoaded). Input fleksibel: list ATAU teks. (v1 2026-11-24: rilis awal.)
+
+Versi anotasi: **1**. Jumlah blok: 45 fungsi, 19 event, 1 properti.
+
+### Fungsi (Tools_Webview)
+
+- `CallShowWebview(container, source, id, width, height)` — CALL: tampilkan webview ber-id. Source fleksibel: URL http(s), `www...`, `//aset`, path file, atau string HTML.
+- `SetWebviewSource(id, source)` / `CallLoadHtml(id, html)` / `ReloadWebview` / `GoBack` / `GoForward` / `StopWebview` — navigasi.
+- `CallEvaluateJavascript(id, script)` — CALL: hasil string lewat `AfterJavascriptEvaluated`.
+- `SetWebviewString` / `GetWebviewString` — jembatan string JS <-> MIT.
+- `SetWebviewAdBlock(id, use)` / `IsWebviewAdBlock(id)` — ikut mesin AdBlock global atau tidak.
+- `GetWebviewIds/Active/Current/First/Last/Previous` — id URUT PEMBUATAN.
+
+### Event (Tools_Webview)
+
+- `WebviewShown`, `WebviewRemoved`, `PageStarted`, `PageLoaded`, `ProgressChanged`, `ErrorReceived`, `AfterJavascriptEvaluated`, `WebViewStringChanged`, `FileUploadNeeded`, `DownloadNeeded`, `ConsoleMessage`, `OnJsAlert/Confirm/Prompt`, `OnWebPermissionRequest`, `OnGeolocationRequested`, `OnSslError`, `OnHttpAuthRequest`, `ErrorOccurred`.
+

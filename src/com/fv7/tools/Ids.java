@@ -28,6 +28,7 @@ public final class Ids {
   public static final String SHEET = "Sheet";
   public static final String SLIDER = "Slider";
   public static final String TASK = "Task";
+  public static final String WEBVIEW = "Webview";
   public static final String RESERVED = "Reserved";
 
   private static final Set<Integer> claimed = new LinkedHashSet<Integer>();
@@ -48,6 +49,7 @@ public final class Ids {
     sets.put(SHEET, new LinkedHashSet<Integer>());
     sets.put(SLIDER, new LinkedHashSet<Integer>());
     sets.put(TASK, new LinkedHashSet<Integer>());
+    sets.put(WEBVIEW, new LinkedHashSet<Integer>());
     sets.put(RESERVED, new LinkedHashSet<Integer>());
     actives.put(DOWNLOAD, new LinkedHashSet<Integer>());
     actives.put(IMAGE, new LinkedHashSet<Integer>());
@@ -58,6 +60,7 @@ public final class Ids {
     actives.put(SHEET, new LinkedHashSet<Integer>());
     actives.put(SLIDER, new LinkedHashSet<Integer>());
     actives.put(TASK, new LinkedHashSet<Integer>());
+    actives.put(WEBVIEW, new LinkedHashSet<Integer>());
     currents.put(DOWNLOAD, Integer.valueOf(-1));
     currents.put(IMAGE, Integer.valueOf(-1));
     currents.put(AUDIO, Integer.valueOf(-1));
@@ -67,6 +70,7 @@ public final class Ids {
     currents.put(SHEET, Integer.valueOf(-1));
     currents.put(SLIDER, Integer.valueOf(-1));
     currents.put(TASK, Integer.valueOf(-1));
+    currents.put(WEBVIEW, Integer.valueOf(-1));
   }
 
   private Ids() {
@@ -81,7 +85,7 @@ public final class Ids {
         && !AUDIO.equals(type) && !VIDEO.equals(type)
         && !CORE.equals(type) && !LAYOUT.equals(type)
         && !SHEET.equals(type) && !SLIDER.equals(type)
-        && !TASK.equals(type);
+        && !TASK.equals(type) && !WEBVIEW.equals(type);
   }
 
   private static Integer lastOfSet(LinkedHashSet<Integer> s) {
