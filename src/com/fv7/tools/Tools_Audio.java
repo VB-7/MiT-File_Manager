@@ -28,7 +28,7 @@ import java.util.Map;
 
 @UsesPermissions("android.permission.INTERNET")
 @DesignerComponent(
-    version = 22,
+    version = 23,
     description = "Tools_Audio: putar BANYAK audio ber-id (background, tanpa tampilan), kontrol "
         + "pause/resume/seek/maju/mundur, loop, volume. Satu id = satu audio, bisa jalan bareng. "
         + "Id dikelola CreateAudioId (atau CreateUniqueId Tools_Base). "
@@ -413,9 +413,9 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: Jeda audio yang sedang bunyi. Tanpa feedback. "
+  @SimpleProperty(description = "SET: Jeda audio yang sedang bunyi. Tanpa feedback. "
       + "Cek status via IsAudioPaused.")
-  public void SetPauseAudio(int id) {
+  public void PauseAudio(int id) {
     try {
       MediaPlayer mp;
       boolean ready;
@@ -435,9 +435,9 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: Lanjutkan audio yang dijeda. Tanpa feedback. "
+  @SimpleProperty(description = "SET: Lanjutkan audio yang dijeda. Tanpa feedback. "
       + "Cek status via IsAudioPaused.")
-  public void SetResumeAudio(int id) {
+  public void ResumeAudio(int id) {
     try {
       MediaPlayer mp;
       boolean ready;
@@ -457,9 +457,9 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: Hentikan audio (posisi kembali ke 0, tanpa event). "
+  @SimpleProperty(description = "SET: Hentikan audio (posisi kembali ke 0, tanpa event). "
       + "Putar lagi via CallPlayAudio (mulai dari awal). Cek via IsAudioIdActive.")
-  public void SetStopAudio(int id) {
+  public void StopAudio(int id) {
     try {
       boolean has;
       synchronized (audioLock) {
@@ -526,9 +526,9 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: Maju audio sejauh SkipSeconds DETIK. "
+  @SimpleProperty(description = "SET: Maju audio sejauh SkipSeconds DETIK. "
       + "Tanpa feedback.")
-  public void SetForwardAudio(int id) {
+  public void ForwardAudio(int id) {
     seekBySeconds(id, skipSeconds);
   }
 
@@ -538,9 +538,9 @@ public class Tools_Audio extends AndroidNonvisibleComponent
     seekBySeconds(id, seconds);
   }
 
-  @SimpleFunction(description = "SET: Mundur audio sejauh SkipSeconds DETIK. "
+  @SimpleProperty(description = "SET: Mundur audio sejauh SkipSeconds DETIK. "
       + "Tanpa feedback.")
-  public void SetBackwardAudio(int id) {
+  public void BackwardAudio(int id) {
     seekBySeconds(id, -skipSeconds);
   }
 

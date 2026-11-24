@@ -30,7 +30,7 @@ import java.util.List;
 import java.util.Set;
 
 @DesignerComponent(
-    version = 1,
+    version = 3,
     description = "Tools_AdBlock: mesin AdBlock AUTO ala 1DM — banyak list beda "
         + "tipe dipakai SEKALIGUS dalam satu mesin gabungan (bukan per-id). "
         + "Sumber bawaan 27 URL (EasyList, uAssets, AdGuard, Fanboy, ABPindo, "
@@ -100,7 +100,9 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
   private static final ArrayList<String> netRules = new ArrayList<String>();
   private static final ArrayList<String> whitelist = new ArrayList<String>();
   private static final ArrayList<String> cosmetics = new ArrayList<String>();
-  private static boolean enabled = true;
+  private static boolean enabled = false;
+  private static long blockedCount = 0;
+  private static long allowedCount = 0;
   private static String updateMode = MODE_HARIAN;
   private static long lastUpdate = 0;
   private static boolean refreshing = false;
@@ -610,6 +612,28 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
 
   /** Cek gabungan (dipakai Webview tiap request): whitelist dulu, baru blokir. */
   public static boolean shouldBlock(String url) {
+    boolean r = decideBlock(url);
+    if (r) {
+      synchronized (lock) {
+        blockedCount = blockedCount + 1;
+      }
+    } else {
+      try {
+        String u = url == null ? "" : url.trim();
+        if (enabled && (u.startsWith("http://")
+            || u.startsWith("https://"))) {
+          synchronized (lock) {
+            allowedCount = allowedCount + 1;
+          }
+        }
+      } catch (Exception e) {
+        // abaikan
+      }
+    }
+    return r;
+  }
+
+  private static boolean decideBlock(String url) {
     try {
       if (!enabled) {
         return false;
@@ -648,6 +672,341 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
       // abaikan = jangan blokir
     }
     return false;
+  }
+
+  // ================= jembatan statik (dipakai Tools_Webview) =================
+
+  /** Nyala/mati global dari luar (properti BlockAds Webview). */
+  public static void setEnabled(boolean on) {
+    enabled = on;
+  }
+
+  public static boolean isEnabled() {
+    return enabled;
+  }
+
+  /** Jumlah host (tanpa marker internal @@:). */
+  public static int hostCount() {
+    synchronized (lock) {
+      int n = 0;
+      for (String h : hosts) {
+        if (!h.startsWith("@@:")) {
+          n = n + 1;
+        }
+      }
+      return n;
+    }
+  }
+
+  public static int ruleCount() {
+    synchronized (lock) {
+      return netRules.size();
+    }
+  }
+
+  public static int whiteCount() {
+    synchronized (lock) {
+      return whitelist.size();
+    }
+  }
+
+  /** True bila URL/host ini di-whitelist (dipakai blok IsWhitelisted Webview). */
+  public static boolean isWhitelistedUrl(String url) {
+    String h = hostOfUrl(url == null ? "" : url);
+    return hostWhitelisted(h);
+  }
+
+  // ================= scriptlet: popup/antiadblock/overlay/redirect =================
+
+  private static final String[] SCRIPTLET_NAMES = {"popup", "antiadblock",
+      "overlay", "redirect", "privacy"};
+  private static final LinkedHashSet<String> scriptletsOn =
+      new LinkedHashSet<String>();
+
+  static {
+    scriptletsOn.add("popup");
+    scriptletsOn.add("antiadblock");
+    scriptletsOn.add("overlay");
+    scriptletsOn.add("redirect");
+    scriptletsOn.add("privacy");
+  }
+
+  /** Nyalakan/matikan satu scriptlet (nama bebas kapital, tidak dikenal = false). */
+  public static boolean setScriptlet(String name, boolean on) {
+    try {
+      String n = name == null ? "" : name.trim().toLowerCase();
+      boolean known = false;
+      for (int i = 0; i < SCRIPTLET_NAMES.length; i = i + 1) {
+        if (SCRIPTLET_NAMES[i].equals(n)) {
+          known = true;
+        }
+      }
+      if (!known) {
+        return false;
+      }
+      synchronized (lock) {
+        if (on) {
+          scriptletsOn.add(n);
+        } else {
+          scriptletsOn.remove(n);
+        }
+      }
+      return true;
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
+  public static boolean isScriptletOn(String name) {
+    try {
+      String n = name == null ? "" : name.trim().toLowerCase();
+      synchronized (lock) {
+        return scriptletsOn.contains(n);
+      }
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
+  private static boolean scOn(String name) {
+    synchronized (lock) {
+      return scriptletsOn.contains(name);
+    }
+  }
+
+  /** JS injeksi awal-load (dipanggil Webview di onPageStarted). Kosong = mati. */
+  public static String scriptletJsFor(String url) {
+    try {
+      if (!enabled) {
+        return "";
+      }
+      StringBuilder js = new StringBuilder();
+      js.append("(function(){try{");
+      if (scOn("popup") || scOn("redirect")) {
+        js.append("if(!window.__fv7pop){window.__fv7pop=1;window.__fv7g=0;");
+        js.append("['click','touchstart','keydown'].forEach(function(e){");
+        js.append("document.addEventListener(e,function(){window.__fv7g=Date.now();},true);});");
+        js.append("var __open=window.open;window.open=function(){");
+        js.append("try{if(Date.now()-window.__fv7g>1500){return null;}}catch(e){}");
+        js.append("try{return __open.apply(window,arguments);}catch(e){return null;}};}");
+      }
+      if (scOn("antiadblock")) {
+        js.append("try{if(typeof window.adsbygoogle==='undefined'){window.adsbygoogle={loaded:true};}");
+        js.append("if(typeof window.canRunAds==='undefined'){window.canRunAds=true;}");
+        js.append("if(typeof window.fuckAdBlock==='undefined'){window.fuckAdBlock={on:function(){},check:function(){return false;}};}");
+        js.append("if(typeof window.BlockAdBlock==='undefined'){window.BlockAdBlock={};}catch(e){}");
+      }
+      if (scOn("redirect")) {
+        js.append("try{var __m=document.querySelectorAll('meta[http-equiv]');");
+        js.append("for(var i=0;i<__m.length;i++){try{var h=__m[i].getAttribute('http-equiv');");
+        js.append("if(h&&h.toLowerCase()==='refresh'){__m[i].parentNode.removeChild(__m[i]);}}catch(e){}}}catch(e){}");
+      }
+      if (scOn("overlay")) {
+        js.append("if(!window.__fv7ov){window.__fv7ov=1;");
+        js.append("var __kill=function(){try{var els=document.querySelectorAll('body div');");
+        js.append("for(var i=0;i<els.length;i++){try{var s=window.getComputedStyle(els[i]);");
+        js.append("if(s&&(s.position==='fixed'||s.position==='sticky')){");
+        js.append("var r=els[i].getBoundingClientRect();");
+        js.append("if(r.width>innerWidth*0.8&&r.height>innerHeight*0.5&&parseInt(s.zIndex||'0',10)>=999){");
+        js.append("els[i].style.setProperty('display','none','important');}}}}catch(e){}};");
+        js.append("try{new MutationObserver(function(){__kill();}).observe(document.documentElement,{childList:true,subtree:true});}catch(e){}");
+        js.append("__kill();}");
+      }
+      if (scOn("privacy")) {
+        js.append("try{var __c=window.CanvasRenderingContext2D;");
+        js.append("if(__c&&__c.prototype){var __g=__c.prototype.getImageData;");
+        js.append("__c.prototype.getImageData=function(){");
+        js.append("var d=__g.apply(this,arguments);try{var a=d.data;");
+        js.append("for(var i=0;i<a.length;i+=401){a[i]=(a[i]+(i%5))%256;}}");
+        js.append("catch(e){}return d;};}}catch(e){}");
+        js.append("try{Object.defineProperty(window.navigator,'webdriver',");
+        js.append("{get:function(){return false;},configurable:true});}");
+        js.append("catch(e){}");
+        js.append("try{Object.defineProperty(window.navigator,");
+        js.append("'hardwareConcurrency',{get:function(){return 4;},");
+        js.append("configurable:true});}catch(e){}");
+        js.append("try{Object.defineProperty(window.navigator,'deviceMemory',");
+        js.append("{get:function(){return 4;},configurable:true});}");
+        js.append("catch(e){}");
+      }
+      js.append("}catch(e){}}") ;
+      String out = js.toString();
+      if (out.length() < 60) {
+        return "";
+      }
+      return out;
+    } catch (Exception e) {
+      return "";
+    }
+  }
+
+  /** Tulis cache bila ada instance (dipanggil tiap ada perubahan ember). */
+  private static void persistIfReady() {
+    try {
+      Tools_AdBlock m = last;
+      if (m != null) {
+        m.persistCache();
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  /** Muat cache bila ember kosong (dipakai InitAdBlocker). */
+  public static void ensureLoaded() {
+    try {
+      synchronized (lock) {
+        if (!hosts.isEmpty() || !netRules.isEmpty()
+            || !whitelist.isEmpty() || !cosmetics.isEmpty()) {
+          return;
+        }
+      }
+      Tools_AdBlock m = last;
+      if (m != null) {
+        m.loadCache();
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  /** Masukkan teks filter campuran (ABP/hosts/whitelist/cosmetic).
+   *  Kembali: jumlah entri BARU yang masuk ember. */
+  public static int addFilterText(String text) {
+    int before = 0;
+    int after = 0;
+    try {
+      synchronized (lock) {
+        before = hosts.size() + netRules.size() + whitelist.size()
+            + cosmetics.size();
+      }
+      if (text != null) {
+        String t = text.replace("\r\n", "\n").replace("\r", "\n");
+        String[] lines = t.split("\n");
+        for (int i = 0; i < lines.length; i = i + 1) {
+          classifyLine(lines[i]);
+        }
+      }
+      synchronized (lock) {
+        after = hosts.size() + netRules.size() + whitelist.size()
+            + cosmetics.size();
+      }
+      persistIfReady();
+    } catch (Exception e) {
+      // abaikan
+    }
+    return after - before;
+  }
+
+  /** Tambah 1 host whitelist (ala Sunny AddToWhitelist). */
+  public static boolean addWhiteHost(String host) {
+    boolean added = false;
+    try {
+      String h = lowerHost(host == null ? "" : host);
+      if (!looksDomain(h)) {
+        return false;
+      }
+      synchronized (lock) {
+        if (!hosts.contains("@@:" + h)) {
+          hosts.add("@@:" + h);
+          added = true;
+        }
+        String rule = "@@||" + h + "^";
+        if (!whitelist.contains(rule)) {
+          whitelist.add(rule);
+          added = true;
+        }
+      }
+      if (added) {
+        persistIfReady();
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    return added;
+  }
+
+  /** Buang 1 host dari whitelist (ala Sunny RemoveFromWhitelist). */
+  public static boolean removeWhiteHost(String host) {
+    boolean out = false;
+    try {
+      String h = lowerHost(host == null ? "" : host);
+      if (h.length() == 0) {
+        return false;
+      }
+      synchronized (lock) {
+        if (hosts.remove("@@:" + h)) {
+          out = true;
+        }
+        for (int i = whitelist.size() - 1; i >= 0; i = i - 1) {
+          String w = whitelist.get(i);
+          if (w.equals("@@||" + h + "^") || w.equals("@@" + h)
+              || w.indexOf(h) >= 0 && w.startsWith("@@")) {
+            whitelist.remove(i);
+            out = true;
+          }
+        }
+      }
+      if (out) {
+        persistIfReady();
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    return out;
+  }
+
+  /** Buang SEMUA network rule (whitelist + setting tetap). */
+  public static void clearRulesOnly() {
+    try {
+      synchronized (lock) {
+        netRules.clear();
+      }
+      persistIfReady();
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  /** Hapus file cache saja (ember tetap). */
+  public static void clearCachesOnly() {
+    try {
+      Tools_AdBlock m = last;
+      if (m == null) {
+        return;
+      }
+      File d = m.cacheDir();
+      if (d != null) {
+        File[] fs = d.listFiles();
+        if (fs != null) {
+          for (int i = 0; i < fs.length; i = i + 1) {
+            try {
+              fs[i].delete();
+            } catch (Exception e) {
+              // abaikan
+            }
+          }
+        }
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  /** Buang SEMUA hasil + cache (ala Sunny ClearAdBlockerData). */
+  public static void clearAllData() {
+    try {
+      synchronized (lock) {
+        hosts.clear();
+        netRules.clear();
+        whitelist.clear();
+        cosmetics.clear();
+      }
+      persistIfReady();
+      clearCachesOnly();
+    } catch (Exception e) {
+      // abaikan
+    }
   }
 
   private static boolean matchRule(String rule, String url, String host) {
@@ -828,7 +1187,7 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
     }
   }
 
-  private static String downloadText(String urlStr) {
+  public static String downloadText(String urlStr) {
     HttpURLConnection c = null;
     try {
       URL url = new URL(urlStr);
@@ -870,10 +1229,16 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
 
   // ================= blok: mode + refresh =================
 
-  @SimpleFunction(description = "SET: mode update (Manual / TiapBuka / Harian / "
-      + "Mingguan / Auto-ikut-pembuat). Auto = hormati `! Expires:` tiap list, "
-      + "fallback Harian. Tanpa feedback; salah via ErrorOccurred.")
-  public void SetAdBlockUpdateMode(String mode) {
+  @SimpleProperty(description = "Mode update (Manual/TiapBuka/Harian/"
+      + "Mingguan/Auto).")
+  public String AdBlockUpdateMode() {
+    return updateMode;
+  }
+
+  @SimpleProperty(description = "SET hijau: mode update (Manual / TiapBuka / "
+      + "Harian / Mingguan / Auto-ikut-pembuat). Auto = hormati `! Expires:` "
+      + "tiap list, fallback Harian. Salah via ErrorOccurred.")
+  public void AdBlockUpdateMode(String mode) {
     String t = mode == null ? "" : mode.trim().toLowerCase();
     boolean known = t.equals("manual") || t.equals("tiapbuka")
         || t.equals("tiap buka") || t.equals("setiap buka")
@@ -891,18 +1256,25 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "Mode update sekarang (Manual/TiapBuka/Harian/"
-      + "Mingguan/Auto).")
+      + "Mingguan/Auto). Sama isi dengan properti AdBlockUpdateMode.")
   public String GetAdBlockUpdateMode() {
     return updateMode;
   }
 
-  @SimpleFunction(description = "SET: nyala/mati mesin AdBlock global. Mati = "
-      + "shouldBlock selalu false (webview tidak blokir). Tanpa feedback.")
-  public void SetAdBlockEnabled(boolean enabledNow) {
-    enabled = enabledNow;
+  @SimpleProperty(description = "True bila mesin AdBlock global sedang nyala. "
+      + "Default MATI — set true untuk aktif.")
+  public boolean AdBlock() {
+    return enabled;
   }
 
-  @SimpleFunction(description = "True bila mesin AdBlock global sedang nyala.")
+  @SimpleProperty(description = "SET hijau: nyala/mati mesin AdBlock global. "
+      + "Mati = shouldBlock selalu false (webview tidak blokir).")
+  public void AdBlock(boolean on) {
+    enabled = on;
+  }
+
+  @SimpleFunction(description = "True bila mesin AdBlock global sedang "
+      + "nyala. Sama isi dengan properti AdBlock.")
   public boolean IsAdBlockEnabled() {
     return enabled;
   }
@@ -934,10 +1306,16 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "SET: ganti sumber download (list ATAU teks "
-      + "multi-separator \",\"/newline/\";\"). Kosong = kembali ke 27 bawaan. "
-      + "Tanpa feedback; lalu panggil CallRefreshAdBlock.")
-  public void SetAdBlockSources(Object sources) {
+  @SimpleProperty(description = "Sumber download aktif (list URL). Bawaan = "
+      + "27 URL bila belum di-custom.")
+  public List<String> AdBlockSources() {
+    return activeSources();
+  }
+
+  @SimpleProperty(description = "SET hijau: ganti sumber download (list ATAU "
+      + "teks multi-separator \",\"/newline/\";\"). Kosong = kembali ke 27 "
+      + "bawaan. Lalu panggil CallRefreshAdBlock.")
+  public void AdBlockSources(Object sources) {
     try {
       ArrayList<String> list = toStrList(sources);
       SharedPreferences p = context.getSharedPreferences(PREFS,
@@ -960,10 +1338,91 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "Sumber download aktif (list URL). Bawaan = "
-      + "27 URL bila belum di-custom.")
+  @SimpleFunction(description = "Sumber download aktif (list URL). Sama isi "
+      + "dengan properti AdBlockSources.")
   public List<String> GetAdBlockSources() {
     return activeSources();
+  }
+
+  private static long updateIntervalMs(String m) {
+    if (MODE_TIAPBUKA.equals(m)) {
+      return 0;
+    }
+    if (MODE_MINGGUAN.equals(m)) {
+      return 7L * 24L * 3600L * 1000L;
+    }
+    return 24L * 3600L * 1000L;
+  }
+
+  private static String ageText(long ms) {
+    long s = ms / 1000L;
+    if (s < 60L) {
+      return s + " dtk";
+    }
+    long m = s / 60L;
+    if (m < 60L) {
+      return m + " mnt";
+    }
+    long h = m / 60L;
+    if (h < 48L) {
+      return h + " jam";
+    }
+    return (h / 24L) + " hari";
+  }
+
+  @SimpleFunction(description = "Refresh terakhir (ms epoch). 0 = belum "
+      + "pernah. Tersimpan permanen (tahan tutup aplikasi).")
+  public long GetAdBlockLastUpdate() {
+    synchronized (lock) {
+      return lastUpdate;
+    }
+  }
+
+  @SimpleFunction(description = "Sisa ms menuju refresh terjadwal. -1 = "
+      + "Manual/TiapBuka (tak terjadwal); 0 = jatuh tempo / belum pernah.")
+  public long GetAdBlockNextUpdateIn() {
+    synchronized (lock) {
+      if (MODE_MANUAL.equals(updateMode)
+          || MODE_TIAPBUKA.equals(updateMode)) {
+        return -1;
+      }
+      if (lastUpdate <= 0) {
+        return 0;
+      }
+      long rem = (lastUpdate + updateIntervalMs(updateMode))
+          - System.currentTimeMillis();
+      return rem < 0 ? 0 : rem;
+    }
+  }
+
+  @SimpleFunction(description = "Ringkasan jadwal update sebagai teks "
+      + "(mode, terakhir, berikutnya). Jadwal ikut tersimpan walau aplikasi "
+      + "ditutup.")
+  public String GetAdBlockUpdateInfo() {
+    synchronized (lock) {
+      StringBuilder sb = new StringBuilder();
+      sb.append("mode=").append(updateMode).append("; ");
+      if (lastUpdate <= 0) {
+        sb.append("terakhir=belum pernah; ");
+      } else {
+        sb.append("terakhir=").append(ageText(
+            System.currentTimeMillis() - lastUpdate)).append(" lalu; ");
+      }
+      if (MODE_MANUAL.equals(updateMode)) {
+        sb.append("berikutnya=-");
+      } else if (MODE_TIAPBUKA.equals(updateMode)) {
+        sb.append("berikutnya=tiap buka");
+      } else {
+        long rem = (lastUpdate + updateIntervalMs(updateMode))
+            - System.currentTimeMillis();
+        if (rem <= 0) {
+          sb.append("berikutnya=jatuh tempo");
+        } else {
+          sb.append("berikutnya=").append(ageText(rem)).append(" lagi");
+        }
+      }
+      return sb.toString();
+    }
   }
 
   @SimpleFunction(description = "SET: hapus SEMUA hasil (hosts/rules/whitelist/"
@@ -1101,6 +1560,43 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
         sb.append(netRules.get(i));
       }
       return sb.toString();
+    }
+  }
+
+  @SimpleFunction(description = "Total request yang DIBLOKIR sejak nyala.")
+  public long GetBlockedRequestsCount() {
+    synchronized (lock) {
+      return blockedCount;
+    }
+  }
+
+  @SimpleFunction(description = "Total request yang DIIZINKAN sejak nyala.")
+  public long GetAllowedRequestsCount() {
+    synchronized (lock) {
+      return allowedCount;
+    }
+  }
+
+  @SimpleFunction(description = "Ringkasan cache: hosts/rules/white/cosmetic "
+      + "+ blocked/allowed.")
+  public String GetAdBlockerStats() {
+    synchronized (lock) {
+      return "hosts=" + hosts.size() + " rules=" + netRules.size()
+          + " white=" + whitelist.size() + " cos=" + cosmetics.size()
+          + " blocked=" + blockedCount + " allowed=" + allowedCount;
+    }
+  }
+
+  @SimpleFunction(description = "Rincian cache per baris (hosts, rules, "
+      + "whitelist, cosmetic, blocked, allowed).")
+  public String GetAdBlockerDetailedStats() {
+    synchronized (lock) {
+      return "hosts: " + hosts.size() + "\n"
+          + "rules: " + netRules.size() + "\n"
+          + "whitelist: " + whitelist.size() + "\n"
+          + "cosmetic: " + cosmetics.size() + "\n"
+          + "blocked: " + blockedCount + "\n"
+          + "allowed: " + allowedCount;
     }
   }
 
@@ -1243,6 +1739,38 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
     } catch (Exception e) {
       return "";
     }
+  }
+
+  // ================= blok: scriptlet =================
+
+  @SimpleFunction(description = "SET: nyala/mati satu scriptlet global (nama: "
+      + "popup, antiadblock, overlay, redirect, privacy. bebas kapital). "
+      + "popup = cegat window.open tanpa gestur; antiadblock = jinakkan "
+      + "detektor generik; overlay = sapu div fixed raksasa; redirect = "
+      + "cabut meta-refresh; privacy = acak sidik kanvas + samarkan "
+      + "navigator (ala Brave Shields). Disuntik tiap halaman mulai dimuat. "
+      + "Nama tidak dikenal via ErrorOccurred.")
+  public void SetScriptletEnabled(String name, boolean on) {
+    if (!setScriptlet(name, on)) {
+      Shared.err(this, "AdBlock", 0,
+          "scriptlet tidak dikenal: " + (name == null ? "" : name));
+    }
+  }
+
+  @SimpleFunction(description = "True bila scriptlet ini sedang nyala "
+      + "(popup/antiadblock/overlay/redirect).")
+  public boolean IsScriptletEnabled(String name) {
+    return isScriptletOn(name);
+  }
+
+  @SimpleFunction(description = "Daftar nama scriptlet yang tersedia "
+      + "(popup, antiadblock, overlay, redirect). URUT TETAP.")
+  public List<String> GetScriptletNames() {
+    ArrayList<String> out = new ArrayList<String>();
+    for (int i = 0; i < SCRIPTLET_NAMES.length; i = i + 1) {
+      out.add(SCRIPTLET_NAMES[i]);
+    }
+    return out;
   }
 
   // ================= events =================

@@ -38,7 +38,7 @@ import java.util.Map;
 
 @UsesPermissions("android.permission.INTERNET")
 @DesignerComponent(
-    version = 22,
+    version = 23,
     description = "Tools_Video: putar BANYAK video ber-id di dalam layout (Arrangement MIT / dinamis), "
         + "kontrol ala VLC (pause/resume/seek/maju/mundur/double-tap), loop, volume. "
         + "Satu id = satu video, bisa jalan bareng. Id dikelola CreateVideoId (atau "
@@ -533,9 +533,9 @@ public class Tools_Video extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: Jeda video yang sedang main. Tanpa feedback. "
+  @SimpleProperty(description = "SET: Jeda video yang sedang main. Tanpa feedback. "
       + "Cek status via IsVideoPaused.")
-  public void SetPauseVideo(int id) {
+  public void PauseVideo(int id) {
     try {
       VideoView vv = viewOf(id);
       if (vv != null && readyOf(id) && vv.isPlaying()) {
@@ -549,9 +549,9 @@ public class Tools_Video extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: Lanjutkan video yang dijeda. Tanpa feedback. "
+  @SimpleProperty(description = "SET: Lanjutkan video yang dijeda. Tanpa feedback. "
       + "Cek status via IsVideoPaused.")
-  public void SetResumeVideo(int id) {
+  public void ResumeVideo(int id) {
     try {
       VideoView vv = viewOf(id);
       if (vv != null && readyOf(id) && !vv.isPlaying()) {
@@ -565,10 +565,10 @@ public class Tools_Video extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: Hentikan video + lepas dari layout. "
+  @SimpleProperty(description = "SET: Hentikan video + lepas dari layout. "
       + "Id tetap tercatat (Play lagi langsung bisa, mulai dari awal). Tanpa event. "
       + "Bersih total via RemoveVideoId.")
-  public void SetStopVideo(int id) {
+  public void StopVideo(int id) {
     try {
       VideoView vv = viewOf(id);
       if (vv != null) {
@@ -636,15 +636,15 @@ public class Tools_Video extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: Maju video sejauh SkipSeconds DETIK. "
+  @SimpleProperty(description = "SET: Maju video sejauh SkipSeconds DETIK. "
       + "Tanpa feedback.")
-  public void SetForwardVideo(int id) {
+  public void ForwardVideo(int id) {
     seekBySeconds(id, skipSeconds);
   }
 
-  @SimpleFunction(description = "SET: Mundur video sejauh SkipSeconds DETIK. "
+  @SimpleProperty(description = "SET: Mundur video sejauh SkipSeconds DETIK. "
       + "Tanpa feedback.")
-  public void SetBackwardVideo(int id) {
+  public void BackwardVideo(int id) {
     seekBySeconds(id, -skipSeconds);
   }
 

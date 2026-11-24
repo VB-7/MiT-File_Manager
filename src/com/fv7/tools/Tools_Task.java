@@ -35,7 +35,7 @@ import java.util.Map;
 import java.util.Set;
 
 @DesignerComponent(
-    version = 23,
+    version = 24,
     description = "Tools_Task: penjadwal full-stack ber-id. Tugas dalam-aplikasi "
         + "(sekali/berulang/terjadwal) + alarm sistem via AlarmManager (buka "
         + "aplikasi saat bunyi) + notifikasi ongoing + wake-lock + variabel/extra "
@@ -718,10 +718,10 @@ public class Tools_Task extends AndroidNonvisibleComponent
     scheduleKind(id, "once", delay, 0, 1, payload);
   }
 
-  @SimpleFunction(description = "SET: Jeda tugas ber-id (berlaku untuk once/repeating "
+  @SimpleProperty(description = "SET: Jeda tugas ber-id (berlaku untuk once/repeating "
       + "yang belum selesai). Lanjut via SetResumeTask. Bukan jeda/jalan = ErrorOccurred. "
       + "Sukses diam.")
-  public void SetPauseTask(int id) {
+  public void PauseTask(int id) {
     synchronized (lock) {
       Task t = tasks.get(Integer.valueOf(id));
       if (t == null || !"jalan".equals(t.status)) {
@@ -744,9 +744,9 @@ public class Tools_Task extends AndroidNonvisibleComponent
     updateActive(id);
   }
 
-  @SimpleFunction(description = "SET: Lanjutkan tugas yang dijeda (SetPauseTask). "
+  @SimpleProperty(description = "SET: Lanjutkan tugas yang dijeda (SetPauseTask). "
       + "Bukan jeda = ErrorOccurred. Sukses diam.")
-  public void SetResumeTask(int id) {
+  public void ResumeTask(int id) {
     Task t;
     synchronized (lock) {
       t = tasks.get(Integer.valueOf(id));
@@ -1096,8 +1096,8 @@ public class Tools_Task extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Hapus SEMUA extra tugas ber-id.")
-  public void SetClearTaskExtras(int id) {
+  @SimpleProperty(description = "Hapus SEMUA extra tugas ber-id.")
+  public void ClearTaskExtras(int id) {
     synchronized (lock) {
       Task t = tasks.get(Integer.valueOf(id));
       if (t != null) {
@@ -1368,9 +1368,9 @@ public class Tools_Task extends AndroidNonvisibleComponent
     CallScheduleRepeatingAlarm(id, epoch, 86400000L, payload);
   }
 
-  @SimpleFunction(description = "SET: Cabut alarm sistem ber-id (tugas dalam-aplikasi "
+  @SimpleProperty(description = "SET: Cabut alarm sistem ber-id (tugas dalam-aplikasi "
       + "dengan id sama tidak ikut; pakai CallCancelTask bila perlu).")
-  public void SetCancelAlarm(int id) {
+  public void CancelAlarm(int id) {
     cancelStatic(context, id);
     unpersistAlarm(id);
     synchronized (lock) {
@@ -1386,7 +1386,7 @@ public class Tools_Task extends AndroidNonvisibleComponent
       all = new ArrayList<Integer>(alarms.keySet());
     }
     for (int i = 0; i < all.size(); i = i + 1) {
-      SetCancelAlarm(all.get(i).intValue());
+      CancelAlarm(all.get(i).intValue());
     }
   }
 
@@ -1639,8 +1639,8 @@ public class Tools_Task extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: Hapus notifikasi ongoing ber-id.")
-  public void SetHideOngoingNotification(int id) {
+  @SimpleProperty(description = "SET: Hapus notifikasi ongoing ber-id.")
+  public void HideOngoingNotification(int id) {
     try {
       NotificationManager nm = (NotificationManager) context
           .getSystemService(Context.NOTIFICATION_SERVICE);

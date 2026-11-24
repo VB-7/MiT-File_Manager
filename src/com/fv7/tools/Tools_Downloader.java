@@ -34,7 +34,7 @@ import java.util.Map;
 import java.util.HashMap;
 
 @DesignerComponent(
-    version = 23,
+    version = 24,
     description = "Tools_Downloader: unduh paralel ber-id (pause/resume/cancel per id, "
         + "Started/ProgressChanged/Finished) + unduh batch list URL. Id dikelola "
         + "CreateDownloadId (atau CreateUniqueId Tools_Base). List id URUT PEMBUATAN "
@@ -971,9 +971,9 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     return out;
   }
 
-  @SimpleFunction(description = "SET: Batalkan unduhan berjalan. File sebagian dihapus. "
+  @SimpleProperty(description = "SET: Batalkan unduhan berjalan. File sebagian dihapus. "
       + "Umpan balik via DownloadFinished(success=false). Tanpa event sendiri.")
-  public void SetCancelDownload(int id) {
+  public void CancelDownload(int id) {
     cancelStatic(id);
   }
 
@@ -994,10 +994,10 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: Jeda unduhan berjalan. Unduhan berhenti menulis, "
+  @SimpleProperty(description = "SET: Jeda unduhan berjalan. Unduhan berhenti menulis, "
       + "lanjut dari posisi sama saat Resume (BUKAN ulang dari 0). Verifikasi via "
       + "IsDownloadPaused / GetDownloadStatus (status jadi jeda). Tanpa feedback.")
-  public void SetPauseDownload(int id) {
+  public void PauseDownload(int id) {
     DlOp op;
     synchronized (lock) {
       op = downloads.get(Integer.valueOf(id));
@@ -1010,10 +1010,10 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     infoOf(id).status = "jeda";
   }
 
-  @SimpleFunction(description = "SET: Lanjutkan unduhan yang dijeda (lanjut dari posisi "
+  @SimpleProperty(description = "SET: Lanjutkan unduhan yang dijeda (lanjut dari posisi "
       + "jeda, tanpa unduh ulang). Verifikasi via IsDownloadPaused / GetDownloadStatus "
       + "(status kembali jalan). Tanpa feedback.")
-  public void SetResumeDownload(int id) {
+  public void ResumeDownload(int id) {
     DlOp op;
     synchronized (lock) {
       op = downloads.get(Integer.valueOf(id));

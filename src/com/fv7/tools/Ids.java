@@ -152,6 +152,7 @@ public final class Ids {
     sets.get(SHEET).remove(k);
     sets.get(SLIDER).remove(k);
     sets.get(TASK).remove(k);
+    sets.get(WEBVIEW).remove(k);
     sets.get(RESERVED).remove(k);
     actives.get(DOWNLOAD).remove(k);
     actives.get(IMAGE).remove(k);
@@ -162,6 +163,7 @@ public final class Ids {
     actives.get(SHEET).remove(k);
     actives.get(SLIDER).remove(k);
     actives.get(TASK).remove(k);
+    actives.get(WEBVIEW).remove(k);
     fixCurrent(DOWNLOAD);
     fixCurrent(IMAGE);
     fixCurrent(AUDIO);
@@ -171,6 +173,7 @@ public final class Ids {
     fixCurrent(SHEET);
     fixCurrent(SLIDER);
     fixCurrent(TASK);
+    fixCurrent(WEBVIEW);
   }
 
   public static synchronized boolean isBusy(int id) {
@@ -260,7 +263,7 @@ public final class Ids {
         && !sets.get(AUDIO).contains(k) && !sets.get(VIDEO).contains(k)
         && !sets.get(CORE).contains(k) && !sets.get(LAYOUT).contains(k)
         && !sets.get(SHEET).contains(k) && !sets.get(SLIDER).contains(k)
-        && !sets.get(TASK).contains(k)
+        && !sets.get(TASK).contains(k) && !sets.get(WEBVIEW).contains(k)
         && !sets.get(RESERVED).contains(k)) {
       claimed.remove(k);
     }
@@ -322,6 +325,20 @@ public final class Ids {
     }
     Integer c = currents.get(type);
     return c == null ? -1 : c.intValue();
+  }
+
+  /** Jadikan id ini yang terakhir disentuh untuk tipe itu.
+   *  False bila tipe/id tidak dikenal. */
+  public static synchronized boolean setCurrent(String type, int id) {
+    if (badType(type) || badId(id)) {
+      return false;
+    }
+    Integer k = Integer.valueOf(id);
+    if (!sets.get(type).contains(k)) {
+      return false;
+    }
+    currents.put(type, k);
+    return true;
   }
 
   /** Id index 1 = PERTAMA DIBUAT untuk tipe ini. -1 bila kosong. */

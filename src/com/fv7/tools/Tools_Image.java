@@ -45,7 +45,7 @@ import java.util.List;
 import java.util.Map;
 
 @DesignerComponent(
-    version = 23,
+    version = 24,
     description = "Tools_Image: tampilkan BANYAK gambar ber-id ke layout (path/URL/base64 mandiri) + "
         + "gambar dari base64 + info ukuran. Id dikelola CreateImageId / Tools_Base. "
         + "Sukses menembak ImageShown (id + path); gagal via ErrorOccurred. "
@@ -1008,8 +1008,8 @@ public class Tools_Image extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: kembalikan zoom gambar ber-id ke pas (1.0). Tanpa feedback.")
-  public void SetResetZoom(final int id) {
+  @SimpleProperty(description = "SET: kembalikan zoom gambar ber-id ke pas (1.0). Tanpa feedback.")
+  public void ResetZoom(final int id) {
     try {
       form.runOnUiThread(new Runnable() {
         public void run() {
@@ -2164,15 +2164,15 @@ public class Tools_Image extends AndroidNonvisibleComponent
     });
   }
 
-  @SimpleFunction(description = "SET: geser slider ke halaman berikut (berputar). "
+  @SimpleProperty(description = "SET: geser slider ke halaman berikut (berputar). "
       + "Memicu SliderChanged bila halaman berubah (bukan tanpa feedback).")
-  public void SetSliderNext(final int sliderId) {
+  public void SliderNext(final int sliderId) {
     slideTo(sliderId, 1, false);
   }
 
-  @SimpleFunction(description = "SET: geser slider ke halaman sebelum (berputar). "
+  @SimpleProperty(description = "SET: geser slider ke halaman sebelum (berputar). "
       + "Memicu SliderChanged bila halaman berubah (bukan tanpa feedback).")
-  public void SetSliderPrevious(final int sliderId) {
+  public void SliderPrevious(final int sliderId) {
     slideTo(sliderId, -1, false);
   }
 
@@ -2993,11 +2993,11 @@ public class Tools_Image extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: batas cache unduhan URL gambar (MB, "
+  @SimpleProperty(description = "SET: batas cache unduhan URL gambar (MB, "
       + "default 80). Di bawah 1 = kembali ke 80. Bila dikecilkan, kelebihan "
       + "langsung dipangkas (terlama dulu). Sukses diam; gagal via "
       + "ErrorOccurred.")
-  public void SetImageCacheMaxMB(int mb) {
+  public void ImageCacheMaxMB(int mb) {
     try {
       int m = mb < 1 ? 80 : mb;
       imgCacheMaxBytes = ((long) m) * 1024L * 1024L;

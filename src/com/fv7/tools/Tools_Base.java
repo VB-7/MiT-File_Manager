@@ -24,7 +24,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @DesignerComponent(
-    version = 23,
+    version = 24,
     description = "Fondasi Tools: id pool global + util Tag untuk id komponen "
         + "LUAR (auto-konversi teks angka: \"5\" = 5) + util dasar (JSON, URI, "
         + "waktu, byte, mime). Butuh id? CreateUniqueId (global, reservasi "
@@ -96,11 +96,11 @@ public class Tools_Base extends AndroidNonvisibleComponent {
     return Ids.busyList();
   }
 
-  @SimpleFunction(description = "SET: lepas paksa id yang macet (ruang UGD). "
+  @SimpleProperty(description = "SET: lepas paksa id yang macet (ruang UGD). "
       + "Resep urut: Cancel/Stop/Remove pemiliknya DULU, SetForceReleaseId "
       + "TERAKHIR. Id macet bila cancel tidak melepas / crash di tengah. "
       + "Tanpa feedback.")
-  public void SetForceReleaseId(int id) {
+  public void ForceReleaseId(int id) {
     Ids.release(id);
   }
 
@@ -185,8 +185,8 @@ public class Tools_Base extends AndroidNonvisibleComponent {
     }
   }
 
-  @SimpleFunction(description = "SET: hapus SELURUH isi satu tag. Tanpa feedback.")
-  public void SetClearTag(String tag) {
+  @SimpleProperty(description = "SET: hapus SELURUH isi satu tag. Tanpa feedback.")
+  public void ClearTag(String tag) {
     TagIds.clear(tag);
   }
 

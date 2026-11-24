@@ -40,7 +40,7 @@ import java.util.Map;
 import java.util.Set;
 
 @DesignerComponent(
-    version = 23,
+    version = 24,
     description = "Tools_Sheet: bottom-sheet dialog ber-id (pakai Arrangement "
         + "sebagai konten), toast, dan notifikasi bar status Android. Sheet: "
         + "RegisterSheet (+SetSheetStyle) / ShowSimpleSheet -> CallShowSheet / "
@@ -883,8 +883,8 @@ public class Tools_Sheet extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: Hapus notifikasi ber-id.")
-  public void SetCancelNotification(int id) {
+  @SimpleProperty(description = "SET: Hapus notifikasi ber-id.")
+  public void CancelNotification(int id) {
     try {
       NotificationManager nm = (NotificationManager) context
           .getSystemService(Context.NOTIFICATION_SERVICE);
