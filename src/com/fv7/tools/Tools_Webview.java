@@ -563,7 +563,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
         WebView v = null;
         // console tidak bawa view; kirim ke current
         int cur = Ids.currentOf(Ids.WEBVIEW);
-        Tools_Webview.this.ConsoleMessage(msg.getMessage() == null ? "" : msg.getMessage(),
+        Tools_Webview.this.ConsoleMessage(msg.message() == null ? "" : msg.message(),
             cur, msg.lineNumber(),
             msg.sourceId() == null ? "" : msg.sourceId());
       } catch (Exception e) {
