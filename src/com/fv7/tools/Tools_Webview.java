@@ -48,6 +48,7 @@ import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.widget.FrameLayout;
 
+import com.google.appinventor.components.annotations.DesignerComponent;
 import com.google.appinventor.components.annotations.DesignerProperty;
 import com.google.appinventor.components.common.PropertyTypeConstants;
 import com.google.appinventor.components.annotations.PropertyCategory;
@@ -75,7 +76,7 @@ import java.util.List;
 import java.util.Map;
 
 @DesignerComponent(
-    version = 3,
+    version = 4,
     description = "Tools_Webview: webview ber-id ala Sunny Gupta v13 (blueprint "
         + "dicuri + disempurnakan, bukan fork). ID NUMBER dua arah (masuk/keluar "
         + "number, tanpa +0), simpan URUT PEMBUATAN + Current/Previous/First/"
@@ -1757,7 +1758,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: mundur 1 halaman. Tanpa feedback.")
+  @SimpleProperty(description = "SET: mundur 1 halaman. Tanpa feedback.")
   public void GoBack(final int id) {
     final WebView w = viewOf(id);
     if (w == null) {
@@ -1781,7 +1782,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: maju 1 halaman. Tanpa feedback.")
+  @SimpleProperty(description = "SET: maju 1 halaman. Tanpa feedback.")
   public void GoForward(final int id) {
     final WebView w = viewOf(id);
     if (w == null) {
@@ -1805,7 +1806,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: muat ulang halaman. Tanpa feedback.")
+  @SimpleProperty(description = "SET: muat ulang halaman. Tanpa feedback.")
   public void ReloadWebview(final int id) {
     final WebView w = viewOf(id);
     if (w == null) {
@@ -1827,7 +1828,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: hentikan load. Tanpa feedback.")
+  @SimpleProperty(description = "SET: hentikan load. Tanpa feedback.")
   public void StopWebview(final int id) {
     final WebView w = viewOf(id);
     if (w == null) {
@@ -2208,7 +2209,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Tutup dialog alert webview ber-id.")
+  @SimpleProperty(description = "Tutup dialog alert webview ber-id.")
   public void DismissJsAlert(int id) {
     Holder h = holderOf(id);
     if (h == null || h.jsAlert == null) {
@@ -2223,7 +2224,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Jawab izin web (kamera/mic) webview aktif. "
+  @SimpleProperty(description = "Jawab izin web (kamera/mic) webview aktif. "
       + "true = grant, false = deny.")
   public void GrantWebPermission(boolean grant) {
     try {
@@ -2552,7 +2553,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: lompat riwayat CURRENT sejauh steps. "
+  @SimpleProperty(description = "SET: lompat riwayat CURRENT sejauh steps. "
       + "Tanpa feedback.")
   public void GoBackOrForward(final int steps) {
     final WebView w = curView();
@@ -2648,7 +2649,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: pindah ke hasil cari berikut (true) "
+  @SimpleProperty(description = "SET: pindah ke hasil cari berikut (true) "
       + "atau sebelum (false) di CURRENT. Tanpa feedback.")
   public void FindNext(final boolean forward) {
     final WebView w = curView();
@@ -2692,7 +2693,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: hapus data form webview ber-id. Tanpa "
+  @SimpleProperty(description = "SET: hapus data form webview ber-id. Tanpa "
       + "feedback.")
   public void ClearFormData(final int id) {
     final WebView w = viewOf(id);
@@ -2714,7 +2715,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: hapus riwayat internal webview ber-id. "
+  @SimpleProperty(description = "SET: hapus riwayat internal webview ber-id. "
       + "Tanpa feedback.")
   public void ClearInternalHistory(final int id) {
     final WebView w = viewOf(id);
@@ -2825,7 +2826,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: gulir CURRENT setengah layar ke bawah "
+  @SimpleProperty(description = "SET: gulir CURRENT setengah layar ke bawah "
       + "(true = sampai bawah). Tanpa feedback.")
   public void PageDown(final boolean bottom) {
     final WebView w = curView();
@@ -2847,7 +2848,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: gulir CURRENT setengah layar ke atas "
+  @SimpleProperty(description = "SET: gulir CURRENT setengah layar ke atas "
       + "(true = sampai atas). Tanpa feedback.")
   public void PageUp(final boolean top) {
     final WebView w = curView();
@@ -2911,7 +2912,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: zoom CURRENT sejauh persen. Tanpa "
+  @SimpleProperty(description = "SET: zoom CURRENT sejauh persen. Tanpa "
       + "feedback.")
   public void ZoomBy(final int zoomP) {
     final WebView w = curView();
@@ -2955,7 +2956,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: jeda rendering webview ber-id "
+  @SimpleProperty(description = "SET: jeda rendering webview ber-id "
       + "(animasi/geolokasi). Tanpa feedback.")
   public void PauseWebView(final int id) {
     final WebView w = viewOf(id);
@@ -2978,7 +2979,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: lanjutkan webview ber-id yang di-pause. "
+  @SimpleProperty(description = "SET: lanjutkan webview ber-id yang di-pause. "
       + "Tanpa feedback.")
   public void ResumeWebView(final int id) {
     final WebView w = viewOf(id);
@@ -3001,7 +3002,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Jawab confirm JS di CURRENT (true = OK). "
+  @SimpleProperty(description = "Jawab confirm JS di CURRENT (true = OK). "
       + "Sama logika dengan ConfirmJsDialog current.")
   public void ConfirmJs(boolean confirm) {
     int id = curId();
@@ -3022,7 +3023,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Jawab prompt JS di CURRENT dengan teks. Sama "
+  @SimpleProperty(description = "Jawab prompt JS di CURRENT dengan teks. Sama "
       + "logika dengan ContinueJsPrompt current.")
   public void ContinueJs(String input) {
     Holder h = curHolder();
@@ -3044,7 +3045,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     AllowGeolocation(allow, remember);
   }
 
-  @SimpleFunction(description = "SET: beri/tolak izin web CURRENT. Kosong = "
+  @SimpleProperty(description = "SET: beri/tolak izin web CURRENT. Kosong = "
       + "tolak; isi apa pun = beri semua yang diminta. Tanpa feedback.")
   public void GrantPermission(final String permissions) {
     final Holder h = curHolder();
@@ -3179,7 +3180,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: catat nama screen untuk shortcut "
+  @SimpleProperty(description = "SET: catat nama screen untuk shortcut "
       + "(dipakai CreateShortcut). Tanpa feedback.")
   public void RegisterScreenForShortcut(String screen) {
     screenName = screen == null ? "" : screen.trim();
@@ -3419,7 +3420,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: daftarkan skema deep-link custom "
+  @SimpleProperty(description = "SET: daftarkan skema deep-link custom "
       + "(contoh \"myapp\"). Tanpa feedback; duplikat diabaikan.")
   public void RegisterDeepLink(String scheme) {
     try {
@@ -3441,7 +3442,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: jawab resubmission form CURRENT (true = "
+  @SimpleProperty(description = "SET: jawab resubmission form CURRENT (true = "
       + "kirim ulang). Dipanggil dari event OnFormResubmission. Tanpa "
       + "feedback bila tidak ada yang menunggu.")
   public void ResubmitForm(boolean reSubmit) {
@@ -3688,7 +3689,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
 
   // ================= blok Sunny: jembatan filter AdBlock =================
 
-  @SimpleFunction(description = "SET: tambah 1 aturan filter (format AdBlock "
+  @SimpleProperty(description = "SET: tambah 1 aturan filter (format AdBlock "
       + "Plus) ke mesin global. Tanpa feedback.")
   public void AddFilterRule(String rule) {
     try {
@@ -3698,7 +3699,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: tambah banyak aturan filter (teks "
+  @SimpleProperty(description = "SET: tambah banyak aturan filter (teks "
       + "newline) ke mesin global. Tanpa feedback.")
   public void AddFilterRules(String rulesString) {
     try {
@@ -3708,7 +3709,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "SET: whitelist 1 host ke mesin global. "
+  @SimpleProperty(description = "SET: whitelist 1 host ke mesin global. "
       + "Tanpa feedback.")
   public void AddToWhitelist(String host) {
     try {

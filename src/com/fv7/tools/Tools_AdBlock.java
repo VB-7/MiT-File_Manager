@@ -30,7 +30,7 @@ import java.util.List;
 import java.util.Set;
 
 @DesignerComponent(
-    version = 3,
+    version = 4,
     description = "Tools_AdBlock: mesin AdBlock AUTO ala 1DM — banyak list beda "
         + "tipe dipakai SEKALIGUS dalam satu mesin gabungan (bukan per-id). "
         + "Sumber bawaan 27 URL (EasyList, uAssets, AdGuard, Fanboy, ABPindo, "
@@ -1455,7 +1455,7 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
 
   // ================= blok: hosts =================
 
-  @SimpleFunction(description = "SET: tambah host manual (list ATAU teks "
+  @SimpleProperty(description = "SET: tambah host manual (list ATAU teks "
       + "multi-separator). Blok yang normalisasi. Tanpa feedback.")
   public void AddAdBlockHosts(Object hostsIn) {
     ArrayList<String> list = toStrList(hostsIn);
