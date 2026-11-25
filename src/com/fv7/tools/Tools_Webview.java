@@ -76,7 +76,7 @@ import java.util.List;
 import java.util.Map;
 
 @DesignerComponent(
-    version = 4,
+    version = 5,
     description = "Tools_Webview: webview ber-id ala Sunny Gupta v13 (blueprint "
         + "dicuri + disempurnakan, bukan fork). ID NUMBER dua arah (masuk/keluar "
         + "number, tanpa +0), simpan URUT PEMBUATAN + Current/Previous/First/"
@@ -138,7 +138,6 @@ public class Tools_Webview extends AndroidNonvisibleComponent
   private static boolean supportMultipleDef = false;
   private static int newWindowApproach = 2; // 1 = samakan, 2 = event
   private static boolean zoomEnabledDef = true;
-  private static boolean displayZoomDef = false;
   private static int zoomPercentDef = 100;
   private static boolean desktopDefault = false;
   private static String userAgentOverride = "";
@@ -244,7 +243,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     s.setLoadWithOverviewMode(true);
     s.setUseWideViewPort(true);
     s.setBuiltInZoomControls(zoomEnabledDef);
-    s.setDisplayZoomControls(displayZoomDef);
+    s.setDisplayZoomControls(false); // UI +/- tidak pernah ditampilkan
     s.setSupportZoom(zoomEnabledDef);
     s.setTextZoom(zoomPercentDef);
     s.setAllowFileAccess(true);
@@ -747,6 +746,10 @@ public class Tools_Webview extends AndroidNonvisibleComponent
       }
       return;
     }
+    if (src.startsWith("data:")) {
+      w.loadUrl(src);
+      return;
+    }
     FileProbe f = FileProbe.of(src);
     if (f != null && f.exists) {
       w.loadUrl("file://" + f.abs);
@@ -924,13 +927,41 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     }
 
     public boolean shouldOverrideUrlLoading(WebView view, String url) {
+      if (blockedTap(view, url)) {
+        return true;
+      }
       return handleDeep(url);
     }
 
     public boolean shouldOverrideUrlLoading(WebView view,
         WebResourceRequest request) {
       try {
-        return handleDeep(request.getUrl().toString());
+        String url = request.getUrl().toString();
+        if (blockedTap(view, url)) {
+          return true;
+        }
+        return handleDeep(url);
+      } catch (Exception e) {
+        return false;
+      }
+    }
+
+    /** Pencegat tautan iklan ala 1DM: link yang ditekan bila cocok filter
+        AdBlock DIBATALKAN (return true = tetap di url sekarang, tidak load).
+        Statistik ikut tercatat via shouldBlock (GetBlockedRequestsCount). */
+    private boolean blockedTap(WebView view, String url) {
+      try {
+        if (url == null || view == null) {
+          return false;
+        }
+        if (!(url.startsWith("http://") || url.startsWith("https://"))) {
+          return false;
+        }
+        int wid = holderId(view);
+        Holder h = holderOf(wid);
+        boolean useAb = (h == null ? true : h.adBlock)
+            && Tools_AdBlock.isEnabled();
+        return useAb && Tools_AdBlock.shouldBlock(url);
       } catch (Exception e) {
         return false;
       }
@@ -1524,99 +1555,13 @@ public class Tools_Webview extends AndroidNonvisibleComponent
   // ================= blok: tampil + id =================
 
   @SimpleFunction(description = "Buat id webview unik baru (Number, siap pakai "
-      + "ke CallShowWebview). URUT PEMBUATAN.")
+      + "ke CreateWebView). URUT PEMBUATAN.")
   public int CreateWebviewId() {
     int id = Ids.createFor(Ids.WEBVIEW);
     if (id < 1) {
       Shared.err(this, "Webview", 0, "gagal buat id");
     }
     return id;
-  }
-
-  @SimpleFunction(description = "CALL: tampilkan webview ber-id ke layout. "
-      + "source fleksibel: URL http(s), www..., //asset, file path, "
-      + "atau string HTML (<... = loadData). width/height angka MIT (-2 isi, "
-      + "-1 otomatis, positif pixel). id NUMBER (pakai CreateWebviewId, "
-      + "reservasi otomatis diadopsi). Sukses menembak WebviewShown; gagal "
-      + "via ErrorOccurred.")
-  public void CallShowWebview(final AndroidViewComponent container,
-      final String source, final int id, final int width, final int height) {
-    if (id < 1) {
-      Shared.err(this, "Webview", id, "id harus >= 1 (pakai CreateWebviewId)");
-      return;
-    }
-    if (!Ids.register(Ids.WEBVIEW, id)) {
-      Shared.err(this, "Webview", id, "ID " + id + " sedang dipakai webview lain");
-      return;
-    }
-    synchronized (viewLock) {
-      Holder old = holders.get(Integer.valueOf(id));
-      if (old != null && old.view != null) {
-        Shared.err(this, "Webview", id, "ID " + id + " masih tampil "
-            + "(Remove dulu)");
-        return;
-      }
-    }
-    try {
-      form.runOnUiThread(new Runnable() {
-        public void run() {
-          try {
-            ViewGroup vg = groupOf(container);
-            if (vg == null) {
-              Ids.setActive(Ids.WEBVIEW, id, false);
-              Ids.unregister(Ids.WEBVIEW, id);
-              Shared.err(Tools_Webview.this, "Webview", id,
-                  "layout tidak valid");
-              return;
-            }
-            WebView w = new SWView(context, id);
-            Holder h = new Holder();
-            h.view = w;
-            synchronized (viewLock) {
-              holders.put(Integer.valueOf(id), h);
-            }
-            setupDefaults(w, id);
-            detach(w);
-            ViewGroup.LayoutParams lp = new ViewGroup.LayoutParams(
-                mitToAndroidSize(width), mitToAndroidSize(height));
-            vg.addView(w, lp);
-            Ids.setActive(Ids.WEBVIEW, id, true);
-            loadSource(w, source == null ? "" : source);
-            String u = "";
-            try {
-              u = w.getUrl() == null ? "" : w.getUrl();
-            } catch (Exception e) {
-              u = "";
-            }
-            WebviewShown(id, source == null ? "" : source);
-          } catch (Exception e) {
-            String m = e.getMessage();
-            Ids.setActive(Ids.WEBVIEW, id, false);
-            Ids.unregister(Ids.WEBVIEW, id);
-            Shared.err(Tools_Webview.this, "Webview", id,
-                m == null ? "gagal tampil" : m);
-          }
-        }
-      });
-    } catch (Exception e) {
-      String m = e.getMessage();
-      Ids.setActive(Ids.WEBVIEW, id, false);
-      Ids.unregister(Ids.WEBVIEW, id);
-      Shared.err(this, "Webview", id, m == null ? "gagal tampil" : m);
-    }
-  }
-
-  @SimpleFunction(description = "Hapus webview ber-id (lepas view + lepas id). "
-      + "Sukses menembak WebviewRemoved; tidak ada = diam.")
-  public void RemoveWebviewId(int id) {
-    boolean existed;
-    synchronized (viewLock) {
-      existed = holders.containsKey(Integer.valueOf(id));
-    }
-    clearStatic(id);
-    if (existed) {
-      WebviewRemoved(id);
-    }
   }
 
   @SimpleFunction(description = "SET: hapus SEMUA webview Tools_Webview "
@@ -1627,7 +1572,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
       all = new ArrayList<Integer>(holders.keySet());
     }
     for (int i = 0; i < all.size(); i = i + 1) {
-      RemoveWebviewId(all.get(i).intValue());
+      RemoveWebView(all.get(i).intValue());
     }
   }
 
@@ -1660,7 +1605,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
       }
     }
     for (int i = 0; i < gone.size(); i = i + 1) {
-      RemoveWebviewId(gone.get(i).intValue());
+      RemoveWebView(gone.get(i).intValue());
     }
   }
 
@@ -1703,33 +1648,6 @@ public class Tools_Webview extends AndroidNonvisibleComponent
   }
 
   // ================= blok: sumber + navigasi =================
-
-  @SimpleFunction(description = "SET: ganti sumber webview ber-id (format sama "
-      + "seperti CallShowWebview). Tanpa feedback; id tidak ada via "
-      + "ErrorOccurred.")
-  public void SetWebviewSource(final int id, final String source) {
-    final WebView w = viewOf(id);
-    if (w == null) {
-      Shared.err(this, "Webview", id, "id tidak ada");
-      return;
-    }
-    try {
-      form.runOnUiThread(new Runnable() {
-        public void run() {
-          try {
-            loadSource(w, source == null ? "" : source);
-          } catch (Exception e) {
-            String m = e.getMessage();
-            Shared.err(Tools_Webview.this, "Webview", id,
-                m == null ? "gagal load" : m);
-          }
-        }
-      });
-    } catch (Exception e) {
-      String m = e.getMessage();
-      Shared.err(this, "Webview", id, m == null ? "gagal load" : m);
-    }
-  }
 
   @SimpleFunction(description = "CALL: load string HTML mentah ke webview "
       + "ber-id. Tanpa return; selesai via PageLoaded.")
@@ -1808,6 +1726,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
 
   @SimpleProperty(description = "SET: muat ulang halaman. Tanpa feedback.")
   public void ReloadWebview(final int id) {
+    final Holder h = holderOf(id);
     final WebView w = viewOf(id);
     if (w == null) {
       Shared.err(this, "Webview", id, "id tidak ada");
@@ -1817,6 +1736,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
       form.runOnUiThread(new Runnable() {
         public void run() {
           try {
+            cancelJsOf(h);
             w.reload();
           } catch (Exception e) {
             // abaikan
@@ -2341,11 +2261,68 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Buat webview kosong ber-id ke layout "
-      + "(MATCH_PARENT). Id NUMBER. Sukses menembak WebviewShown; gagal via "
-      + "ErrorOccurred.")
-  public void CreateWebView(AndroidViewComponent container, int id) {
-    CallShowWebview(container, "about:blank", id, -2, -2);
+  @SimpleFunction(description = "Buat + tampilkan webview kosong ber-id ke layout "
+      + "(MATCH_PARENT, about:blank). Id NUMBER (pakai CreateWebviewId). "
+      + "Ukuran via SetWebviewSize; muat link via GoToUrl(id, url). "
+      + "Sukses menembak WebviewShown; gagal via ErrorOccurred.")
+  public void CreateWebView(final AndroidViewComponent container, final int id) {
+    if (id < 1) {
+      Shared.err(this, "Webview", id, "id harus >= 1 (pakai CreateWebviewId)");
+      return;
+    }
+    if (!Ids.register(Ids.WEBVIEW, id)) {
+      Shared.err(this, "Webview", id, "ID " + id + " sedang dipakai webview lain");
+      return;
+    }
+    synchronized (viewLock) {
+      Holder old = holders.get(Integer.valueOf(id));
+      if (old != null && old.view != null) {
+        Shared.err(this, "Webview", id, "ID " + id + " masih tampil "
+            + "(Remove dulu)");
+        return;
+      }
+    }
+    try {
+      form.runOnUiThread(new Runnable() {
+        public void run() {
+          try {
+            ViewGroup vg = groupOf(container);
+            if (vg == null) {
+              Ids.setActive(Ids.WEBVIEW, id, false);
+              Ids.unregister(Ids.WEBVIEW, id);
+              Shared.err(Tools_Webview.this, "Webview", id,
+                  "layout tidak valid");
+              return;
+            }
+            WebView w = new SWView(context, id);
+            Holder h = new Holder();
+            h.view = w;
+            synchronized (viewLock) {
+              holders.put(Integer.valueOf(id), h);
+            }
+            setupDefaults(w, id);
+            detach(w);
+            ViewGroup.LayoutParams lp = new ViewGroup.LayoutParams(
+                mitToAndroidSize(-2), mitToAndroidSize(-2));
+            vg.addView(w, lp);
+            Ids.setActive(Ids.WEBVIEW, id, true);
+            loadSource(w, "about:blank");
+            WebviewShown(id, "about:blank");
+          } catch (Exception e) {
+            String m = e.getMessage();
+            Ids.setActive(Ids.WEBVIEW, id, false);
+            Ids.unregister(Ids.WEBVIEW, id);
+            Shared.err(Tools_Webview.this, "Webview", id,
+                m == null ? "gagal tampil" : m);
+          }
+        }
+      });
+    } catch (Exception e) {
+      String m = e.getMessage();
+      Ids.setActive(Ids.WEBVIEW, id, false);
+      Ids.unregister(Ids.WEBVIEW, id);
+      Shared.err(this, "Webview", id, m == null ? "gagal tampil" : m);
+    }
   }
 
   @SimpleProperty(description = "Id current (dipakai semua blok tanpa id). "
@@ -2385,50 +2362,11 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     return viewOf(id);
   }
 
-  @SimpleFunction(description = "Id current (dipakai blok tanpa id). "
-      + "-1 bila kosong.")
-  public int CurrentId() {
-    return curId();
-  }
-
-  @SimpleFunction(description = "Semua id yang dipakai (list NUMBER). "
-      + "Sama isi dengan GetWebviewIds.")
-  public List<Integer> GetIds() {
-    return Ids.idsOf(Ids.WEBVIEW);
-  }
-
-  @SimpleFunction(description = "CALL: muat URL ke webview CURRENT. Selesai "
-      + "via PageLoaded.")
-  public void GoToUrl(String url) {
-    final Holder h = curHolder();
-    final WebView w = h == null ? null : h.view;
-    if (w == null) {
-      Shared.err(this, "Webview", 0, "tidak ada current (SetWebView dulu)");
-      return;
-    }
-    final String u = url == null ? "" : url;
-    try {
-      form.runOnUiThread(new Runnable() {
-        public void run() {
-          try {
-            cancelJsOf(h);
-            loadUrlWithHeaders(w, u);
-          } catch (Exception e) {
-            String m = e.getMessage();
-            Shared.err(Tools_Webview.this, "Webview", curId(),
-                m == null ? "gagal load" : m);
-          }
-        }
-      });
-    } catch (Exception e) {
-      String m = e.getMessage();
-      Shared.err(this, "Webview", curId(), m == null ? "gagal load" : m);
-    }
-  }
-
-  @SimpleFunction(description = "CALL: muat URL ke webview ber-id. Selesai "
-      + "via PageLoaded.")
-  public void GoToUrl2(final int id, String url) {
+  @SimpleFunction(description = "CALL: muat APA PUN ke webview ber-id: URL "
+      + "http(s), www..., //asset, path file, string HTML (<...), atau "
+      + "data:/base64. Header custom ikut bila http(s). Selesai via "
+      + "PageLoaded; id tidak ada via ErrorOccurred.")
+  public void GoToUrl(final int id, String url) {
     final WebView w = viewOf(id);
     if (w == null) {
       Shared.err(this, "Webview", id, "id tidak ada");
@@ -2441,7 +2379,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
         public void run() {
           try {
             cancelJsOf(h);
-            loadUrlWithHeaders(w, u);
+            loadSource(w, u);
           } catch (Exception e) {
             String m = e.getMessage();
             Shared.err(Tools_Webview.this, "Webview", id,
@@ -2455,51 +2393,42 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "CALL: muat ulang halaman CURRENT. Tanpa "
-      + "return; selesai via PageLoaded.")
-  public void Reload() {
-    final Holder h = curHolder();
-    final WebView w = h == null ? null : h.view;
+  @SimpleFunction(description = "CALL: muat URL + header tambahan sekali jalan "
+      + "ke webview ber-id (dictionary ATAU teks \"Key: Value\"). Header "
+      + "kosong = sama dengan GoToUrl. Selesai via PageLoaded; id tidak ada "
+      + "via ErrorOccurred.")
+  public void GoToUrlWithHeaders(final int id, String url, Object headers) {
+    final WebView w = viewOf(id);
     if (w == null) {
-      Shared.err(this, "Webview", 0, "tidak ada current (SetWebView dulu)");
+      Shared.err(this, "Webview", id, "id tidak ada");
       return;
     }
+    final Holder h = holderOf(id);
+    final String u = url == null ? "" : url;
+    final HashMap<String, String> m = headersMapOf(headers);
     try {
       form.runOnUiThread(new Runnable() {
         public void run() {
           try {
             cancelJsOf(h);
-            w.reload();
+            if (m.isEmpty()) {
+              loadSource(w, u);
+            } else {
+              w.loadUrl(u, m);
+            }
           } catch (Exception e) {
-            // abaikan
+            String e2 = e.getMessage();
+            Shared.err(Tools_Webview.this, "Webview", id,
+                e2 == null ? "gagal load" : e2);
           }
         }
       });
     } catch (Exception e) {
-      // abaikan
+      String m2 = e.getMessage();
+      Shared.err(this, "Webview", id, m2 == null ? "gagal load" : m2);
     }
   }
 
-  @SimpleFunction(description = "SET: hentikan load CURRENT. Tanpa feedback.")
-  public void StopLoading() {
-    final WebView w = curView();
-    if (w == null) {
-      return;
-    }
-    try {
-      form.runOnUiThread(new Runnable() {
-        public void run() {
-          try {
-            w.stopLoading();
-          } catch (Exception e) {
-            // abaikan
-          }
-        }
-      });
-    } catch (Exception e) {
-      // abaikan
-    }
-  }
 
   @SimpleFunction(description = "CALL: load string HTML ke CURRENT. Selesai "
       + "via PageLoaded.")
@@ -2577,11 +2506,6 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Progres load webview ber-id 0-100. -1 bila "
-      + "tidak ada. Sama isi dengan GetWebviewProgress.")
-  public int GetProgress(int id) {
-    return GetWebviewProgress(id);
-  }
 
   @SimpleFunction(description = "Riwayat internal (URL per baris waktu) "
       + "webview ber-id. Kosong bila tidak ada.")
@@ -2603,16 +2527,18 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     return out;
   }
 
-  @SimpleFunction(description = "SET: hapus webview ber-id (lepas view + id). "
-      + "Sama dengan RemoveWebviewId.")
+  @SimpleFunction(description = "Hapus webview ber-id (lepas view + lepas id "
+      + "dari pool, bisa dipakai lagi). Sukses menembak WebviewRemoved; "
+      + "tidak ada = diam.")
   public void RemoveWebView(int id) {
-    RemoveWebviewId(id);
-  }
-
-  @SimpleFunction(description = "SET: tampil/sembunyi webview ber-id. true = "
-      + "VISIBLE, false = GONE. Sama dengan SetWebviewVisible.")
-  public void SetVisibility(final int id, final boolean visibility) {
-    SetWebviewVisible(id, visibility);
+    boolean existed;
+    synchronized (viewLock) {
+      existed = holders.containsKey(Integer.valueOf(id));
+    }
+    clearStatic(id);
+    if (existed) {
+      WebviewRemoved(id);
+    }
   }
 
   @SimpleFunction(description = "True bila situs ini di-whitelist AdBlock "
@@ -2924,28 +2850,6 @@ public class Tools_Webview extends AndroidNonvisibleComponent
         public void run() {
           try {
             w.zoomBy((float) zoomP);
-          } catch (Exception e) {
-            // abaikan
-          }
-        }
-      });
-    } catch (Exception e) {
-      // abaikan
-    }
-  }
-
-  @SimpleFunction(description = "SET: tampilkan pemilih zoom grafis di "
-      + "CURRENT. Tanpa feedback.")
-  public void InvokeZoomPicker() {
-    final WebView w = curView();
-    if (w == null) {
-      return;
-    }
-    try {
-      form.runOnUiThread(new Runnable() {
-        public void run() {
-          try {
-            w.invokeZoomPicker();
           } catch (Exception e) {
             // abaikan
           }
@@ -3304,39 +3208,6 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     } catch (Exception e) {
       String m = e.getMessage();
       Shared.err(this, "Webview", curId(), m == null ? "post gagal" : m);
-    }
-  }
-
-  @SimpleFunction(description = "CALL: muat URL + header tambahan sekali jalan "
-      + "ke CURRENT (dictionary ATAU teks \"Key: Value\"). Selesai via "
-      + "PageLoaded.")
-  public void LoadWithHeaders(String url, Object headers) {
-    final WebView w = curView();
-    if (w == null) {
-      Shared.err(this, "Webview", 0, "tidak ada current (SetWebView dulu)");
-      return;
-    }
-    final String u = url == null ? "" : url;
-    final HashMap<String, String> m = headersMapOf(headers);
-    try {
-      form.runOnUiThread(new Runnable() {
-        public void run() {
-          try {
-            if (m.isEmpty()) {
-              loadUrlWithHeaders(w, u);
-            } else {
-              w.loadUrl(u, m);
-            }
-          } catch (Exception e) {
-            String e2 = e.getMessage();
-            Shared.err(Tools_Webview.this, "Webview", curId(),
-                e2 == null ? "gagal load" : e2);
-          }
-        }
-      });
-    } catch (Exception e) {
-      String m2 = e.getMessage();
-      Shared.err(this, "Webview", curId(), m2 == null ? "gagal load" : m2);
     }
   }
 
@@ -3730,7 +3601,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "SET: buang SEMUA network rule (whitelist + "
-      + "setting tetap). Tanpa feedback.")
+      + "manual + setting tetap). Tanpa feedback.")
   public void ClearFilterRules() {
     Tools_AdBlock.clearRulesOnly();
   }
@@ -3742,7 +3613,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "SET: buang SEMUA data AdBlock (hasil + "
-      + "cache). Tanpa feedback.")
+      + "cache). Koleksi manual tetap. Tanpa feedback.")
   public void ClearAdBlockerData() {
     Tools_AdBlock.clearAllData();
   }
@@ -4298,36 +4169,6 @@ public class Tools_Webview extends AndroidNonvisibleComponent
       // abaikan
     }
   }
-
-  @SimpleProperty(description = "True bila kontrol zoom CURRENT tampil.",
-      category = PropertyCategory.BEHAVIOR)
-  public boolean DisplayZoom() {
-    return displayZoomDef;
-  }
-
-  @SimpleProperty(description = "SET: kontrol zoom (berlaku CURRENT + "
-      + "webview baru).", category = PropertyCategory.BEHAVIOR)
-  public void DisplayZoom(final boolean show) {
-    displayZoomDef = show;
-    final WebView w = curView();
-    if (w == null) {
-      return;
-    }
-    try {
-      form.runOnUiThread(new Runnable() {
-        public void run() {
-          try {
-            w.getSettings().setDisplayZoomControls(show);
-          } catch (Exception e) {
-            // abaikan
-          }
-        }
-      });
-    } catch (Exception e) {
-      // abaikan
-    }
-  }
-
   @SimpleProperty(description = "True bila JavaScript CURRENT nyala.",
       category = PropertyCategory.BEHAVIOR)
   public boolean EnableJS() {

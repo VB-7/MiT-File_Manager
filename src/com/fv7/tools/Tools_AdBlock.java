@@ -30,7 +30,7 @@ import java.util.List;
 import java.util.Set;
 
 @DesignerComponent(
-    version = 4,
+    version = 5,
     description = "Tools_AdBlock: mesin AdBlock AUTO ala 1DM — banyak list beda "
         + "tipe dipakai SEKALIGUS dalam satu mesin gabungan (bukan per-id). "
         + "Sumber bawaan 27 URL (EasyList, uAssets, AdGuard, Fanboy, ABPindo, "
@@ -58,6 +58,7 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
   private static final String K_MODE = "mode";
   private static final String K_LAST = "lastUpdate";
   private static final String K_CUSTOM = "customSources";
+  private static final String K_MANUAL = "manualRules";
 
   private static final String MODE_MANUAL = "Manual";
   private static final String MODE_TIAPBUKA = "TiapBuka";
@@ -99,6 +100,7 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
   private static final LinkedHashSet<String> hosts = new LinkedHashSet<String>();
   private static final ArrayList<String> netRules = new ArrayList<String>();
   private static final ArrayList<String> whitelist = new ArrayList<String>();
+  private static final ArrayList<String> manual = new ArrayList<String>();
   private static final ArrayList<String> cosmetics = new ArrayList<String>();
   private static boolean enabled = false;
   private static long blockedCount = 0;
@@ -118,6 +120,7 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
     last = this;
     loadPrefs();
     loadCache();
+    loadManual();
     maybeAutoRefresh();
   }
 
@@ -251,6 +254,219 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
       writeCache("white.txt", whitelist);
       writeCache("cosmetic.txt", cosmetics);
     }
+  }
+
+  private void loadManual() {
+    ArrayList<String> kept = new ArrayList<String>();
+    try {
+      SharedPreferences p = context.getSharedPreferences(PREFS,
+          Context.MODE_PRIVATE);
+      String c = p.getString(K_MANUAL, "");
+      if (c != null) {
+        String[] parts = c.split("\n");
+        for (int i = 0; i < parts.length; i = i + 1) {
+          String s = parts[i].trim();
+          if (s.length() > 0 && !kept.contains(s)) {
+            kept.add(s);
+          }
+        }
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    synchronized (lock) {
+      manual.clear();
+      manual.addAll(kept);
+    }
+    applyManual();
+    persistIfReady();
+  }
+
+  private void saveManual() {
+    try {
+      StringBuilder sb = new StringBuilder();
+      synchronized (lock) {
+        for (int i = 0; i < manual.size(); i = i + 1) {
+          if (i > 0) {
+            sb.append('\n');
+          }
+          sb.append(manual.get(i));
+        }
+      }
+      SharedPreferences p = context.getSharedPreferences(PREFS,
+          Context.MODE_PRIVATE);
+      p.edit().putString(K_MANUAL, sb.toString()).apply();
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  private static void saveManualIfReady() {
+    try {
+      Tools_AdBlock m = last;
+      if (m != null) {
+        m.saveManual();
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  private static boolean usableManualLine(String t) {
+    if (t == null) {
+      return false;
+    }
+    String s = t.trim();
+    if (s.length() == 0) {
+      return false;
+    }
+    if (s.startsWith("!") || s.startsWith("[Adblock")) {
+      return false;
+    }
+    if (s.startsWith("#") && !s.startsWith("##")
+        && !s.startsWith("#$#") && !s.startsWith("#?#")) {
+      return false;
+    }
+    return true;
+  }
+
+  private static void applyManual() {
+    try {
+      ArrayList<String> copy;
+      synchronized (lock) {
+        copy = new ArrayList<String>(manual);
+      }
+      for (int i = 0; i < copy.size(); i = i + 1) {
+        classifyLine(copy.get(i));
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  private static String derivedHostOf(String t) {
+    try {
+      if (t.startsWith("0.0.0.0") || t.startsWith("127.0.0.1")
+          || t.startsWith("::1") || t.startsWith("0 ")) {
+        String[] parts = t.split("\\s+");
+        for (int i = parts.length - 1; i >= 0; i = i - 1) {
+          String d = lowerHost(parts[i]);
+          if (looksDomain(d) && !d.equals("localhost")) {
+            return d;
+          }
+        }
+        return "";
+      }
+      if (t.startsWith("http://") || t.startsWith("https://")) {
+        return hostOfUrl(t);
+      }
+      if (looksDomain(t)) {
+        return lowerHost(t);
+      }
+      return domainOfRule(t);
+    } catch (Exception e) {
+      return "";
+    }
+  }
+
+  private static boolean ruleRefAlive(String ref, String skipRaw) {
+    try {
+      synchronized (lock) {
+        for (int i = 0; i < netRules.size(); i = i + 1) {
+          String r = netRules.get(i);
+          if (r.equals(skipRaw)) {
+            continue;
+          }
+          if (r.equals(ref) || derivedHostOf(r).equals(ref)) {
+            return true;
+          }
+        }
+        for (int i = 0; i < whitelist.size(); i = i + 1) {
+          String w = whitelist.get(i);
+          if (w.equals(skipRaw)) {
+            continue;
+          }
+          if (w.equals(ref) || domainOfRule(w).equals(ref)) {
+            return true;
+          }
+        }
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    return false;
+  }
+
+  private static void dropManualEffects(String t) {
+    synchronized (lock) {
+      netRules.remove(t);
+      whitelist.remove(t);
+      cosmetics.remove(t);
+      hosts.remove(t);
+      if (t.startsWith("@@")) {
+        String d = domainOfRule(t);
+        if (d.length() > 0 && !ruleRefAlive("@@:" + d, t)
+            && !ruleRefAlive(d, t)) {
+          hosts.remove("@@:" + d);
+        }
+      } else {
+        String d = derivedHostOf(t);
+        if (d.length() > 0 && !ruleRefAlive(d, t)) {
+          hosts.remove(d);
+        }
+      }
+    }
+  }
+
+  private static int addManualLines(ArrayList<String> lines) {
+    int n = 0;
+    synchronized (lock) {
+      for (int i = 0; i < lines.size(); i = i + 1) {
+        String raw = lines.get(i);
+        String s = raw == null ? "" : raw.trim();
+        if (!usableManualLine(s) || manual.contains(s)) {
+          continue;
+        }
+        manual.add(s);
+        n = n + 1;
+      }
+    }
+    if (n > 0) {
+      applyManual();
+      persistIfReady();
+      saveManualIfReady();
+    }
+    return n;
+  }
+
+  private static boolean removeManualLine(String line) {
+    String s = line == null ? "" : line.trim();
+    if (s.length() == 0) {
+      return false;
+    }
+    boolean out = false;
+    synchronized (lock) {
+      out = manual.remove(s);
+    }
+    if (out) {
+      dropManualEffects(s);
+      persistIfReady();
+      saveManualIfReady();
+    }
+    return out;
+  }
+
+  private static void clearManualAll() {
+    ArrayList<String> copy;
+    synchronized (lock) {
+      copy = new ArrayList<String>(manual);
+      manual.clear();
+    }
+    for (int i = 0; i < copy.size(); i = i + 1) {
+      dropManualEffects(copy.get(i));
+    }
+    persistIfReady();
+    saveManualIfReady();
   }
 
   private void maybeAutoRefresh() {
@@ -962,6 +1178,7 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
       synchronized (lock) {
         netRules.clear();
       }
+      applyManual();
       persistIfReady();
     } catch (Exception e) {
       // abaikan
@@ -1004,6 +1221,8 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
       }
       persistIfReady();
       clearCachesOnly();
+      applyManual();
+      persistIfReady();
     } catch (Exception e) {
       // abaikan
     }
@@ -1344,6 +1563,63 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
     return activeSources();
   }
 
+  @SimpleProperty(description = "SET: tambah 1 URL langganan filter "
+      + "(http/https) ke daftar custom (bawaan ikut tersimpan). Berlaku "
+      + "di refresh berikut. Tanpa feedback.")
+  public void AddAdBlockSource(String url) {
+    try {
+      String u = url == null ? "" : url.trim();
+      if (!u.startsWith("http://") && !u.startsWith("https://")) {
+        Shared.err(this, "AdBlock", 0, "URL harus http/https");
+        return;
+      }
+      ArrayList<String> cur = new ArrayList<String>(activeSources());
+      if (cur.contains(u)) {
+        Shared.err(this, "AdBlock", 0, "URL sudah ada");
+        return;
+      }
+      cur.add(u);
+      StringBuilder sb = new StringBuilder();
+      for (int i = 0; i < cur.size(); i = i + 1) {
+        if (i > 0) {
+          sb.append('\n');
+        }
+        sb.append(cur.get(i));
+      }
+      SharedPreferences p = context.getSharedPreferences(PREFS,
+          Context.MODE_PRIVATE);
+      p.edit().putString(K_CUSTOM, sb.toString()).apply();
+    } catch (Exception e) {
+      String m = e.getMessage();
+      Shared.err(this, "AdBlock", 0, m == null ? "sumber gagal" : m);
+    }
+  }
+
+  @SimpleFunction(description = "SET: buang 1 URL dari daftar custom. "
+      + "Aturan yang sudah masuk ember tetap sampai ClearAdBlockerData. "
+      + "Tanpa feedback.")
+  public void RemoveAdBlockSource(String url) {
+    try {
+      String u = url == null ? "" : url.trim();
+      ArrayList<String> cur = new ArrayList<String>(activeSources());
+      if (!cur.remove(u)) {
+        return;
+      }
+      StringBuilder sb = new StringBuilder();
+      for (int i = 0; i < cur.size(); i = i + 1) {
+        if (i > 0) {
+          sb.append('\n');
+        }
+        sb.append(cur.get(i));
+      }
+      SharedPreferences p = context.getSharedPreferences(PREFS,
+          Context.MODE_PRIVATE);
+      p.edit().putString(K_CUSTOM, sb.toString()).apply();
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
   private static long updateIntervalMs(String m) {
     if (MODE_TIAPBUKA.equals(m)) {
       return 0;
@@ -1426,7 +1702,7 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "SET: hapus SEMUA hasil (hosts/rules/whitelist/"
-      + "cosmetic + cache file). Tanpa feedback.")
+      + "cosmetic + cache file). Koleksi manual tetap. Tanpa feedback.")
   public void SetClearAdBlock() {
     synchronized (lock) {
       hosts.clear();
@@ -1451,6 +1727,8 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
     } catch (Exception e) {
       // abaikan
     }
+    applyManual();
+    persistCache();
   }
 
   // ================= blok: hosts =================
@@ -1658,6 +1936,80 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
   public boolean IsWhitelisted(String url) {
     String h = hostOfUrl(url == null ? "" : url);
     return hostWhitelisted(h);
+  }
+
+  // ================= blok: manual (koleksi user ala Via) =================
+
+  @SimpleProperty(description = "SET: simpan 1 aturan manual (host / rule "
+      + "ABP / @@whitelist / ##cosmetic) ke koleksi + langsung aktif. Tahan "
+      + "refresh & hapus data. Tanpa feedback.")
+  public void AddManualRule(String rule) {
+    try {
+      ArrayList<String> one = new ArrayList<String>();
+      one.add(rule == null ? "" : rule);
+      addManualLines(one);
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  @SimpleProperty(description = "SET: simpan banyak aturan manual (list ATAU "
+      + "teks multi-separator) ke koleksi + langsung aktif. Tahan refresh & "
+      + "hapus data. Tanpa feedback.")
+  public void AddManualRules(Object rulesIn) {
+    try {
+      addManualLines(toStrList(rulesIn));
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  @SimpleFunction(description = "SET: buang 1 aturan dari koleksi manual (+ "
+      + "efeknya di ember bila tak dipakai langganan lain). Tanpa feedback.")
+  public void RemoveManualRule(String rule) {
+    try {
+      removeManualLine(rule == null ? "" : rule);
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  @SimpleFunction(description = "Koleksi manual mentah (URUT MASUK).")
+  public List<String> GetManualRules() {
+    synchronized (lock) {
+      return new ArrayList<String>(manual);
+    }
+  }
+
+  @SimpleFunction(description = "Koleksi manual sebagai 1 teks newline.")
+  public String GetManualRulesText() {
+    synchronized (lock) {
+      StringBuilder sb = new StringBuilder();
+      for (int i = 0; i < manual.size(); i = i + 1) {
+        if (i > 0) {
+          sb.append('\n');
+        }
+        sb.append(manual.get(i));
+      }
+      return sb.toString();
+    }
+  }
+
+  @SimpleFunction(description = "Jumlah koleksi manual.")
+  public int GetManualRuleCount() {
+    synchronized (lock) {
+      return manual.size();
+    }
+  }
+
+  @SimpleFunction(description = "SET: buang SEMUA koleksi manual (+ efeknya "
+      + "di ember). Langganan + cache tetap. Tanpa feedback.")
+  public void ClearManualRules() {
+    try {
+      clearManualAll();
+    } catch (Exception e) {
+      // abaikan
+    }
   }
 
   // ================= blok: cosmetic =================
