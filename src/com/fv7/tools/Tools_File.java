@@ -42,7 +42,7 @@ import java.util.List;
 import java.util.Map;
 
 @DesignerComponent(
-    version = 24,
+    version = 25,
     description = "Tools_File: file/folder teks, salin/pindah/hapus/rename, direktori, izin "
         + "storage 1 pintu (CallSetStoragePermission + cek + GotPermission), "
         + "picker/opener, base64-ke-file, info ruang. Konvensi awalan: "
@@ -1300,6 +1300,169 @@ public class Tools_File extends AndroidNonvisibleComponent
     doCopyOrMove(true, fromFileName, toFileName);
   }
 
+  @SimpleFunction(description = "Salin BANYAK file sekaligus ke satu folder (tanpa "
+      + "loop manual). fromPaths = list path sumber (atau teks koma). Kembali: "
+      + "true = mulai. Pantau via CopyBatchStarted/ProgressChanged/Finished. "
+      + "(API v3-v8, direstorasi tanpa scope.)")
+  public boolean CopyList(Object fromPaths, String toFolder) {
+    if (!Shared.claimSlot("copyormove")) {
+      Shared.err(this, "CopyOrMove", 0, "masih ada salinan/pindahan berjalan");
+      return false;
+    }
+    if (wantAsset(toFolder)) {
+      Shared.releaseSlot("copyormove");
+      Shared.err(this, "CopyOrMove", 0, "tidak bisa salin ke Asset");
+      return false;
+    }
+    final List<String> paths = toStringList(fromPaths);
+    final String tF = toFolder == null ? "" : toFolder;
+    if (paths.isEmpty()) {
+      Shared.releaseSlot("copyormove");
+      Shared.err(this, "CopyOrMove", 0, "list kosong");
+      return false;
+    }
+    copyMoveCancel = false;
+    final Tools_File me = this;
+    AsynchUtil.runAsynchronously(new Runnable() {
+      public void run() {
+        me.runBatchList(false, paths, tF);
+      }
+    });
+    return true;
+  }
+
+  @SimpleFunction(description = "Pindah BANYAK file sekaligus ke satu folder "
+      + "(sumber ikut terhapus bila sukses). fromPaths = list path sumber "
+      + "(atau teks koma). Kembali: true = mulai. Pantau via "
+      + "MoveBatchStarted/ProgressChanged/Finished. (API v3-v8, direstorasi "
+      + "tanpa scope.)")
+  public boolean MoveList(Object fromPaths, String toFolder) {
+    if (!Shared.claimSlot("copyormove")) {
+      Shared.err(this, "CopyOrMove", 0, "masih ada salinan/pindahan berjalan");
+      return false;
+    }
+    if (wantAsset(toFolder)) {
+      Shared.releaseSlot("copyormove");
+      Shared.err(this, "CopyOrMove", 0, "tidak bisa pindah ke Asset");
+      return false;
+    }
+    final List<String> paths = toStringList(fromPaths);
+    final String tF = toFolder == null ? "" : toFolder;
+    if (paths.isEmpty()) {
+      Shared.releaseSlot("copyormove");
+      Shared.err(this, "CopyOrMove", 0, "list kosong");
+      return false;
+    }
+    copyMoveCancel = false;
+    final Tools_File me = this;
+    AsynchUtil.runAsynchronously(new Runnable() {
+      public void run() {
+        me.runBatchList(true, paths, tF);
+      }
+    });
+    return true;
+  }
+
+  private void runBatchList(final boolean move, List<String> paths,
+      String folder) {
+    int total = paths.size();
+    int done = 0;
+    int fail = 0;
+    try {
+      File dir = rootedFile(folder);
+      if (dir == null) {
+        batchListFinished(move, false, "", 0, total,
+            "folder tujuan tidak valid");
+        return;
+      }
+      if (!dir.exists()) {
+        dir.mkdirs();
+      }
+      final int fTotal = total;
+      final String fFolder = dir.getAbsolutePath();
+      fireOnUi(new Runnable() {
+        public void run() {
+          if (move) {
+            MoveBatchStarted(fTotal, fFolder);
+          } else {
+            CopyBatchStarted(fTotal, fFolder);
+          }
+        }
+      });
+      for (int i = 0; i < paths.size(); i = i + 1) {
+        if (copyMoveCancel) {
+          batchListFinished(move, false, fFolder, done, total - done,
+              "Dibatalkan");
+          return;
+        }
+        String srcP = paths.get(i);
+        String name = Shared.fileNameOf(Shared.clean(srcP));
+        if (name.length() == 0) {
+          name = "file_" + i;
+        }
+        final int idx = i + 1;
+        final String fName = name;
+        fireOnUi(new Runnable() {
+          public void run() {
+            if (move) {
+              MoveBatchProgressChanged(idx, fTotal, fName, 0);
+            } else {
+              CopyBatchProgressChanged(idx, fTotal, fName, 0);
+            }
+          }
+        });
+        File dst = new File(dir, name);
+        boolean existed = dst.isFile();
+        runCopyOrMove(move, srcP, dst.getAbsolutePath());
+        boolean okNow = false;
+        try {
+          okNow = dst.isFile() && !existed && !copyMoveCancel;
+        } catch (Exception e) {
+          // abaikan
+        }
+        if (okNow) {
+          done = done + 1;
+        } else {
+          fail = fail + 1;
+        }
+        final int dIdx = i + 1;
+        fireOnUi(new Runnable() {
+          public void run() {
+            if (move) {
+              MoveBatchProgressChanged(dIdx, fTotal, fName, 100);
+            } else {
+              CopyBatchProgressChanged(dIdx, fTotal, fName, 100);
+            }
+          }
+        });
+      }
+      batchListFinished(move, fail == 0, fFolder, done, fail, "OK");
+    } catch (Exception e) {
+      String m = e.getMessage();
+      batchListFinished(move, false, "", done, total - done,
+          m == null ? "batch gagal" : m);
+    } finally {
+      Shared.releaseSlot("copyormove");
+    }
+  }
+
+  private void batchListFinished(final boolean move, final boolean success,
+      final String folder, final int doneCount, final int failCount,
+      final String msg) {
+    final String sc = "";
+    fireOnUi(new Runnable() {
+      public void run() {
+        if (move) {
+          MoveBatchFinished(success, sc, folder, doneCount, failCount, msg);
+        } else {
+          CopyBatchFinished(success, sc, folder, doneCount, failCount, msg);
+        }
+      }
+    });
+    if (!success && !"Dibatalkan".equals(msg) && !"OK".equals(msg)) {
+      Shared.err(this, "CopyOrMove", 0, msg);
+    }
+  }
   private void doCopyOrMove(final boolean isMove, final String fromFileName,
       final String toFileName) {
     if (!Shared.claimSlot("copyormove")) {
@@ -2720,6 +2883,56 @@ public class Tools_File extends AndroidNonvisibleComponent
     Shared.fire(this, "CopyOrMoveFinished",
         Boolean.valueOf(success), path, fileName,
         Boolean.valueOf(isDuplicated));
+  }
+
+  @SimpleEvent(description = "Batch salin dimulai: total file + folder "
+      + "tujuan. (API v3-v8.)")
+  public void CopyBatchStarted(int total, String destFolder) {
+    Shared.fire(this, "CopyBatchStarted",
+        Integer.valueOf(total), destFolder);
+  }
+
+  @SimpleEvent(description = "Progres batch salin: index mulai-1 + total + "
+      + "nama file + persen file.")
+  public void CopyBatchProgressChanged(int index, int total, String fileName,
+      int filePercent) {
+    Shared.fire(this, "CopyBatchProgressChanged",
+        Integer.valueOf(index), Integer.valueOf(total), fileName,
+        Integer.valueOf(filePercent));
+  }
+
+  @SimpleEvent(description = "Batch salin selesai: success + scope (kosong, "
+      + "scope dihapus v13) + folder + berhasil + gagal + pesan.")
+  public void CopyBatchFinished(boolean success, String scope,
+      String destFolder, int doneCount, int failCount, String message) {
+    Shared.fire(this, "CopyBatchFinished",
+        Boolean.valueOf(success), scope, destFolder,
+        Integer.valueOf(doneCount), Integer.valueOf(failCount), message);
+  }
+
+  @SimpleEvent(description = "Batch pindah dimulai: total file + folder "
+      + "tujuan. (API v3-v8.)")
+  public void MoveBatchStarted(int total, String destFolder) {
+    Shared.fire(this, "MoveBatchStarted",
+        Integer.valueOf(total), destFolder);
+  }
+
+  @SimpleEvent(description = "Progres batch pindah: index mulai-1 + total + "
+      + "nama file + persen file.")
+  public void MoveBatchProgressChanged(int index, int total, String fileName,
+      int filePercent) {
+    Shared.fire(this, "MoveBatchProgressChanged",
+        Integer.valueOf(index), Integer.valueOf(total), fileName,
+        Integer.valueOf(filePercent));
+  }
+
+  @SimpleEvent(description = "Batch pindah selesai: success + scope (kosong, "
+      + "scope dihapus v13) + folder + berhasil + gagal + pesan.")
+  public void MoveBatchFinished(boolean success, String scope,
+      String destFolder, int doneCount, int failCount, String message) {
+    Shared.fire(this, "MoveBatchFinished",
+        Boolean.valueOf(success), scope, destFolder,
+        Integer.valueOf(doneCount), Integer.valueOf(failCount), message);
   }
 
   @SimpleEvent(description = "Hasil CallSetStoragePermission File (HANYA izin "
