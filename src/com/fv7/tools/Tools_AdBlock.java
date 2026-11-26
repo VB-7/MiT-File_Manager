@@ -1172,7 +1172,7 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
         boolean ok = true;
         if ("all".equals(type)) {
           String[] all = {"host", "rule", "white", "cosmetic"};
-          boolean anyOk = false;
+          final boolean[] anyOk = {false};
           for (int i = 0; i < all.length; i = i + 1) {
             String prov = me.prefGet(me.prefOf(all[i], K_SETHOST,
                 K_SETRULE, K_SETWHITE, K_SETCOS), "");
@@ -1181,14 +1181,14 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
             }
             me.refreshType(all[i], false);
             if (storeCount(all[i]) > 0) {
-              anyOk = true;
+              anyOk[0] = true;
             }
           }
           try {
             me.form.runOnUiThread(new Runnable() {
               public void run() {
                 Shared.fire(me, "AdBlockIntervalChanged",
-                    Boolean.valueOf(anyOk), "All");
+                    Boolean.valueOf(anyOk[0]), "All");
               }
             });
           } catch (Exception e) {
