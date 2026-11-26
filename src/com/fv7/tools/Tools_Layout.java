@@ -4,11 +4,13 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import com.google.appinventor.components.annotations.DesignerComponent;
+import com.google.appinventor.components.annotations.Options;
 import com.google.appinventor.components.annotations.PropertyCategory;
 import com.google.appinventor.components.annotations.SimpleEvent;
 import com.google.appinventor.components.annotations.SimpleFunction;
 import com.google.appinventor.components.annotations.SimpleObject;
 import com.google.appinventor.components.annotations.SimpleProperty;
+import com.fv7.tools.helpers.LayoutType;
 import com.google.appinventor.components.common.ComponentCategory;
 import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
 import com.google.appinventor.components.runtime.AndroidViewComponent;
@@ -27,7 +29,7 @@ import java.util.List;
 import java.util.Map;
 
 @DesignerComponent(
-    version = 22,
+    version = 23,
     description = "Tools_Layout: bikin layout dinamis ber-id (Vertical, "
         + "Horizontal, VerticalScroll, HorizontalScroll) di dalam layout yang "
         + "sudah ada atau buatan Tools_Core/Tools_Layout. Id dikelola "
@@ -437,7 +439,7 @@ public class Tools_Layout extends AndroidNonvisibleComponent
       + "ketuker); id = id layout; visible false = GONE (hilang total, "
       + "ruang ikut ketutup). Tanpa feedback; cek dulu pakai IsLayoutExists "
       + "bila ragu.")
-  public void SetLayoutVisible(String type, int id, boolean visible) {
+  public void SetLayoutVisible(@Options(LayoutType.class) String type, int id, boolean visible) {
     try {
       Component c = findTypedLayout(type, id);
       if (c instanceof AndroidViewComponent) {
@@ -454,7 +456,7 @@ public class Tools_Layout extends AndroidNonvisibleComponent
   @SimpleFunction(description = "True bila layout dinamis ber-id ini ADA dan "
       + "tipenya PERSIS sama dengan type yang diminta (colok TypeVertical/"
       + "dll). False bila id tidak ada ATAU tipe beda.")
-  public boolean IsLayoutExists(String type, int id) {
+  public boolean IsLayoutExists(@Options(LayoutType.class) String type, int id) {
     try {
       return findTypedLayout(type, id) != null;
     } catch (Exception e) {
@@ -465,7 +467,7 @@ public class Tools_Layout extends AndroidNonvisibleComponent
   @SimpleFunction(description = "True bila layout dinamis ber-id ini ADA, "
       + "tipenya cocok (seperti IsLayoutExists), DAN sedang tampil (visible). "
       + "False bila tidak ada / tipe beda / sedang GONE. Kebalikan: IsLayoutGone.")
-  public boolean IsLayoutVisible(String type, int id) {
+  public boolean IsLayoutVisible(@Options(LayoutType.class) String type, int id) {
     try {
       Component c = findTypedLayout(type, id);
       if (c instanceof AndroidViewComponent) {
@@ -481,7 +483,7 @@ public class Tools_Layout extends AndroidNonvisibleComponent
   @SimpleFunction(description = "True bila layout dinamis ber-id ini sedang GONE/"
       + "sembunyi. Kebalikan IsLayoutVisible: true juga bila id tidak ada / tipe "
       + "beda (ragu? cek IsLayoutExists dulu).")
-  public boolean IsLayoutGone(String type, int id) {
+  public boolean IsLayoutGone(@Options(LayoutType.class) String type, int id) {
     try {
       Component c = findTypedLayout(type, id);
       if (c instanceof AndroidViewComponent) {
@@ -539,7 +541,7 @@ public class Tools_Layout extends AndroidNonvisibleComponent
       + "sama dengan type yang diminta (colok TypeVertical/dll; untuk dicolok ke "
       + "soket container, mis. Create button). AMAN vs GetLayout(id) yang bebas. "
       + "null bila id tidak ada ATAU tipe beda.")
-  public Object GetLayoutAs(String type, int id) {
+  public Object GetLayoutAs(@Options(LayoutType.class) String type, int id) {
     try {
       return findTypedLayout(type, id);
     } catch (Exception e) {
@@ -550,7 +552,7 @@ public class Tools_Layout extends AndroidNonvisibleComponent
   @SimpleFunction(description = "SET: atur lebar + tinggi layout dinamis ber-id "
       + "(tipe wajib cocok). Angka SAMA seperti blok bawaan MIT: -2 = isi "
       + "penuh (fill parent), -1 = otomatis, positif = pixel. Tanpa feedback.")
-  public void SetLayoutSize(String type, int id, int width, int height) {
+  public void SetLayoutSize(@Options(LayoutType.class) String type, int id, int width, int height) {
     try {
       Component c = findTypedLayout(type, id);
       if (c instanceof AndroidViewComponent) {
@@ -564,7 +566,7 @@ public class Tools_Layout extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "SET: warna latar layout dinamis ber-id (tipe "
       + "wajib cocok). Colok blok warna MIT. Tanpa feedback.")
-  public void SetLayoutBackgroundColor(String type, int id, int color) {
+  public void SetLayoutBackgroundColor(@Options(LayoutType.class) String type, int id, int color) {
     try {
       Component c = findTypedLayout(type, id);
       if (c instanceof VerticalArrangement) {
@@ -584,7 +586,7 @@ public class Tools_Layout extends AndroidNonvisibleComponent
   @SimpleFunction(description = "SET: perataan isi layout dinamis ber-id (tipe "
       + "wajib cocok). Angka SAMA seperti blok bawaan MIT: horizontal 1=kiri, "
       + "2=tengah, 3=kanan; vertikal 1=atas, 2=tengah, 3=bawah. Tanpa feedback.")
-  public void SetLayoutAlignment(String type, int id, int horizontal,
+  public void SetLayoutAlignment(@Options(LayoutType.class) String type, int id, int horizontal,
       int vertical) {
     try {
       Component c = findTypedLayout(type, id);
@@ -608,7 +610,7 @@ public class Tools_Layout extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "Lebar layout dinamis ber-id (angka MIT: -2 isi, "
       + "-1 otomatis, positif pixel). -3 bila id tidak ada / tipe beda.")
-  public int GetLayoutWidth(String type, int id) {
+  public int GetLayoutWidth(@Options(LayoutType.class) String type, int id) {
     try {
       Component c = findTypedLayout(type, id);
       if (c instanceof AndroidViewComponent) {
@@ -622,7 +624,7 @@ public class Tools_Layout extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "Tinggi layout dinamis ber-id (angka MIT). "
       + "-3 bila id tidak ada / tipe beda.")
-  public int GetLayoutHeight(String type, int id) {
+  public int GetLayoutHeight(@Options(LayoutType.class) String type, int id) {
     try {
       Component c = findTypedLayout(type, id);
       if (c instanceof AndroidViewComponent) {

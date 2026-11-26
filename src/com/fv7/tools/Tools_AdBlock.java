@@ -23,6 +23,8 @@ import com.fv7.tools.helpers.AdBlockProviderHost;
 import com.fv7.tools.helpers.AdBlockProviderRule;
 import com.fv7.tools.helpers.AdBlockProviderWhite;
 import com.fv7.tools.helpers.AdBlockType;
+import com.fv7.tools.helpers.ScriptletName;
+import com.fv7.tools.helpers.AdBlockUpdateMode;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -37,7 +39,7 @@ import java.util.List;
 import java.util.Set;
 
 @DesignerComponent(
-    version = 6,
+    version = 7,
     description = "Tools_AdBlock: mesin AdBlock AUTO ala 1DM — banyak list beda "
         + "tipe dipakai SEKALIGUS dalam satu mesin gabungan (bukan per-id). "
         + "Sumber bawaan 27 URL (EasyList, uAssets, AdGuard, Fanboy, ABPindo, "
@@ -2271,7 +2273,7 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
   @SimpleProperty(description = "SET hijau: mode update (Manual / TiapBuka / "
       + "Harian / Mingguan / Auto-ikut-pembuat). Auto = hormati `! Expires:` "
       + "tiap list, fallback Harian. Salah via ErrorOccurred.")
-  public void AdBlockUpdateMode(String mode) {
+  public void AdBlockUpdateMode(@Options(AdBlockUpdateMode.class) String mode) {
     String t = mode == null ? "" : mode.trim().toLowerCase();
     boolean known = t.equals("manual") || t.equals("tiapbuka")
         || t.equals("tiap buka") || t.equals("setiap buka")
@@ -3129,7 +3131,7 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
       + "cabut meta-refresh; privacy = acak sidik kanvas + samarkan "
       + "navigator (ala Brave Shields). Disuntik tiap halaman mulai dimuat. "
       + "Nama tidak dikenal via ErrorOccurred.")
-  public void SetScriptletEnabled(String name, boolean on) {
+  public void SetScriptletEnabled(@Options(ScriptletName.class) String name, boolean on) {
     if (!setScriptlet(name, on)) {
       Shared.err(this, "AdBlock", 0,
           "scriptlet tidak dikenal: " + (name == null ? "" : name));
@@ -3138,7 +3140,7 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
 
   @SimpleFunction(description = "True bila scriptlet ini sedang nyala "
       + "(popup/antiadblock/overlay/redirect).")
-  public boolean IsScriptletEnabled(String name) {
+  public boolean IsScriptletEnabled(@Options(ScriptletName.class) String name) {
     return isScriptletOn(name);
   }
 

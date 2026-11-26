@@ -1,6 +1,7 @@
 package com.fv7.tools;
 
 import android.app.Activity;
+import android.content.ClipData;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
@@ -8,6 +9,8 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.util.Base64;
 
+import com.fv7.tools.helpers.FileCategory;
+import com.fv7.tools.helpers.PickMimeType;
 import com.fv7.tools.helpers.Type;
 import com.google.appinventor.components.annotations.DesignerComponent;
 import com.google.appinventor.components.annotations.Options;
@@ -25,6 +28,7 @@ import com.google.appinventor.components.runtime.EventDispatcher;
 import com.google.appinventor.components.runtime.OnDestroyListener;
 import com.google.appinventor.components.runtime.PermissionResultHandler;
 import com.google.appinventor.components.runtime.util.AsynchUtil;
+import com.google.appinventor.components.runtime.util.YailList;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -38,7 +42,7 @@ import java.util.List;
 import java.util.Map;
 
 @DesignerComponent(
-    version = 23,
+    version = 24,
     description = "Tools_File: file/folder teks, salin/pindah/hapus/rename, direktori, izin "
         + "storage 1 pintu (CallSetStoragePermission + cek + GotPermission), "
         + "picker/opener, base64-ke-file, info ruang. Konvensi awalan: "
@@ -2040,15 +2044,15 @@ public class Tools_File extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "GET: Daftar file (path lengkap) yang kategorinya "
-      + "cocok. type = image/audio/video/text/archive/document/apk (boleh alias "
-      + "Indonesia: gambar/musik/video/teks/arsip/dokumen; alias lama vidio tetap "
+      + "cocok. type = Helper FileCategory (boleh alias teks Indonesia: "
+      + "gambar/musik/video/teks/arsip/dokumen; alias lama vidio tetap "
       + "diterima) atau salah satu blok TypeImage/dll. recursive = sertakan isi "
       + "subfolder. path seperti IsFileOrDirectoryExists. Pilih: nama bisa dibohongi "
       + "(jpg padahal zip) — bila akurasi penting pakai DetectArchiveType "
       + "Tools_Compress (baca isi); bila kecepatan penting pakai FileTypeOf "
       + "(baca nama).")
-  public List<String> GetFilesByType(String folder, String type,
-      boolean recursive) {
+  public List<String> GetFilesByType(String folder,
+      @Options(FileCategory.class) String type, boolean recursive) {
     ArrayList<String> out = new ArrayList<String>();
     String cat = Shared.normCategory(type);
     if (cat.length() == 0) {
@@ -2105,7 +2109,8 @@ public class Tools_File extends AndroidNonvisibleComponent
   @SimpleFunction(description = "Daftar ekstensi (tanpa titik) yang masuk "
       + "kategori type. Tipe tak dikenal = list kosong + error. "
       + "Olah string saja.")
-  public List<String> GetExtensionsForType(String type) {
+  public List<String> GetExtensionsForType(
+      @Options(FileCategory.class) String type) {
     String cat = Shared.normCategory(type);
     if (cat.length() == 0) {
       Shared.err(this, "File", 0, "tipe tidak dikenal: "
@@ -2330,7 +2335,7 @@ public class Tools_File extends AndroidNonvisibleComponent
   @SimpleFunction(description = "Buka pemilih file. mimeType contoh: image/* "
       + "(kosong = semua). Hasil lewat AfterFilePicked (uri + path + nama "
       + "file). Satu picker per saat.")
-  public void OpenFilePicker(String mimeType) {
+  public void OpenFilePicker(@Options(PickMimeType.class) String mimeType) {
     if (!Shared.claimSlot("pick")) {
       Shared.err(this, "Pick", 0, "picker sudah dibuka");
       return;
@@ -2353,6 +2358,37 @@ public class Tools_File extends AndroidNonvisibleComponent
     }
   }
 
+  @SimpleFunction(description = "Buka pemilih multi-file (pilih beberapa "
+      + "sekaligus; tampilan multi tergantung aplikasi picker). mimeType "
+      + "contoh: audio/* (kosong = semua). Hasil lewat AfterMultiFilePicked "
+      + "(3 list sejajar: uri + path absolut + nama file). Satu picker "
+      + "per saat.")
+  public void OpenMultiFilePicker(@Options(PickMimeType.class) String mimeType) {
+    if (!Shared.claimSlot("pick")) {
+      Shared.err(this, "Pick", 0, "picker sudah dibuka");
+      return;
+    }
+    try {
+      Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+      intent.addCategory(Intent.CATEGORY_OPENABLE);
+      String mt = Shared.clean(mimeType);
+      intent.setType(mt.length() == 0 ? "*/*" : mt);
+      intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+      int rc = form.registerForActivityResult(this);
+      synchronized (picks) {
+        picks.put(Integer.valueOf(rc), Integer.valueOf(2));
+      }
+      activity.startActivityForResult(intent, rc);
+    } catch (Exception e) {
+      Shared.releaseSlot("pick");
+      String m = e.getMessage();
+      Shared.err(this, "Pick", 0, m == null ? "picker gagal dibuka" : m);
+      AfterMultiFilePicked(false, YailList.makeList(new ArrayList<String>()),
+          YailList.makeList(new ArrayList<String>()),
+          YailList.makeList(new ArrayList<String>()));
+    }
+  }
+
   public void resultReturned(int requestCode, int resultCode, Intent data) {
     Integer hit;
     synchronized (picks) {
@@ -2363,6 +2399,10 @@ public class Tools_File extends AndroidNonvisibleComponent
     }
     Shared.releaseSlot("pick");
     try {
+      if (hit.intValue() == 2) {
+        finishMultiPick(resultCode, data);
+        return;
+      }
       if (resultCode == Activity.RESULT_OK && data != null
           && data.getData() != null) {
         final Uri uri = data.getData();
@@ -2377,6 +2417,49 @@ public class Tools_File extends AndroidNonvisibleComponent
       String m = e.getMessage();
       Shared.err(this, "Pick", 0, m == null ? "picker gagal" : m);
       AfterFilePicked(false, "", "", "");
+    }
+  }
+
+  private void finishMultiPick(int resultCode, Intent data) {
+    try {
+      ArrayList<String> uris = new ArrayList<String>();
+      ArrayList<String> paths = new ArrayList<String>();
+      ArrayList<String> names = new ArrayList<String>();
+      if (resultCode == Activity.RESULT_OK && data != null) {
+        if (data.getClipData() != null) {
+          ClipData clip = data.getClipData();
+          for (int i = 0; i < clip.getItemCount(); i = i + 1) {
+            Uri u = clip.getItemAt(i).getUri();
+            if (u == null) {
+              continue;
+            }
+            String p = resolveUriToPath(u);
+            uris.add(u.toString());
+            paths.add(p);
+            names.add(Shared.fileNameOf(p));
+          }
+        } else if (data.getData() != null) {
+          Uri u = data.getData();
+          String p = resolveUriToPath(u);
+          uris.add(u.toString());
+          paths.add(p);
+          names.add(Shared.fileNameOf(p));
+        }
+      }
+      if (uris.isEmpty()) {
+        AfterMultiFilePicked(false, YailList.makeList(new ArrayList<String>()),
+            YailList.makeList(new ArrayList<String>()),
+            YailList.makeList(new ArrayList<String>()));
+      } else {
+        AfterMultiFilePicked(true, YailList.makeList(uris),
+            YailList.makeList(paths), YailList.makeList(names));
+      }
+    } catch (Exception e) {
+      String m = e.getMessage();
+      Shared.err(this, "Pick", 0, m == null ? "picker gagal" : m);
+      AfterMultiFilePicked(false, YailList.makeList(new ArrayList<String>()),
+          YailList.makeList(new ArrayList<String>()),
+          YailList.makeList(new ArrayList<String>()));
     }
   }
 
@@ -2658,6 +2741,15 @@ public class Tools_File extends AndroidNonvisibleComponent
   public void AfterFilePicked(boolean success, String uri,
       String path, String fileName) {
     Shared.fire(this, "AfterFilePicked", Boolean.valueOf(success), uri, path, fileName);
+  }
+
+  @SimpleEvent(description = "Hasil OpenMultiFilePicker: success + 3 list "
+      + "sejajar (uri, path absolut, nama file). success=false = dibatalkan "
+      + "atau tidak ada yang dipilih.")
+  public void AfterMultiFilePicked(boolean success, YailList uris,
+      YailList paths, YailList fileNames) {
+    Shared.fire(this, "AfterMultiFilePicked", Boolean.valueOf(success), uris,
+        paths, fileNames);
   }
 
   @SimpleEvent(description = "Hasil OpenFile: success + pesan.")

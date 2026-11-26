@@ -15,12 +15,14 @@ import android.view.animation.ScaleAnimation;
 import android.view.animation.TranslateAnimation;
 
 import com.google.appinventor.components.annotations.DesignerComponent;
+import com.google.appinventor.components.annotations.Options;
 import com.google.appinventor.components.annotations.PropertyCategory;
 import com.google.appinventor.components.annotations.SimpleEvent;
 import com.google.appinventor.components.annotations.SimpleFunction;
 import com.google.appinventor.components.annotations.SimpleObject;
 import com.google.appinventor.components.annotations.SimpleProperty;
 import com.google.appinventor.components.annotations.UsesPermissions;
+import com.fv7.tools.helpers.SlideDirection;
 import com.google.appinventor.components.common.ComponentCategory;
 import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
 import com.google.appinventor.components.runtime.AndroidViewComponent;
@@ -35,7 +37,7 @@ import java.io.InputStream;
 import java.util.ArrayList;
 
 @DesignerComponent(
-    version = 23,
+    version = 24,
     description = "Tools_Style: percantik komponen/wadah yang kelihatan "
         + "(Button, Label, Arrangement, gambar Tools_Image, komponen dinamis, "
         + "dsb). Radius, border, gradien, elevation, padding, margin, opacity, "
@@ -752,7 +754,8 @@ public class Tools_Style extends AndroidNonvisibleComponent {
   @SimpleFunction(description = "CALL: Animasi geser-masuk: direction = colok "
       + "DirectionLeft/DirectionRight/DirectionTop/DirectionBottom ; teks left/right/top/bottom = cara lama. durationMs mis. "
       + "300; durationMs<=0 = tanpa set durasi (jalan instan).")
-  public void CallAnimateSlideIn(AndroidViewComponent comp, String direction,
+  public void CallAnimateSlideIn(AndroidViewComponent comp,
+      @Options(SlideDirection.class) String direction,
       int durationMs) {
     View v = viewOf(comp, "SlideIn");
     if (v == null) {
