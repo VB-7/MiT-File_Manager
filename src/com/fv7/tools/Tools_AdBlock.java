@@ -16,6 +16,13 @@ import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
 import com.google.appinventor.components.runtime.ComponentContainer;
 import com.google.appinventor.components.runtime.util.AsynchUtil;
 import com.google.appinventor.components.runtime.util.YailList;
+import com.google.appinventor.components.annotations.Options;
+import com.fv7.tools.helpers.AdBlockInterval;
+import com.fv7.tools.helpers.AdBlockProviderCosmetic;
+import com.fv7.tools.helpers.AdBlockProviderHost;
+import com.fv7.tools.helpers.AdBlockProviderRule;
+import com.fv7.tools.helpers.AdBlockProviderWhite;
+import com.fv7.tools.helpers.AdBlockType;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -30,7 +37,7 @@ import java.util.List;
 import java.util.Set;
 
 @DesignerComponent(
-    version = 5,
+    version = 6,
     description = "Tools_AdBlock: mesin AdBlock AUTO ala 1DM — banyak list beda "
         + "tipe dipakai SEKALIGUS dalam satu mesin gabungan (bukan per-id). "
         + "Sumber bawaan 27 URL (EasyList, uAssets, AdGuard, Fanboy, ABPindo, "
@@ -57,8 +64,29 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
   private static final String PREFS = "Fv7ToolsAdBlock";
   private static final String K_MODE = "mode";
   private static final String K_LAST = "lastUpdate";
+  private static final String K_ENABLED = "enabled";
   private static final String K_CUSTOM = "customSources";
   private static final String K_MANUAL = "manualRules";
+  private static final String K_SETHOST = "setHost";
+  private static final String K_SETRULE = "setRule";
+  private static final String K_SETWHITE = "setWhite";
+  private static final String K_SETCOS = "setCos";
+  private static final String K_INTHOST = "intHost";
+  private static final String K_INTRULE = "intRule";
+  private static final String K_INTWHITE = "intWhite";
+  private static final String K_INTCOS = "intCos";
+  private static final String K_LASTHOST = "lastHost";
+  private static final String K_LASTRULE = "lastRule";
+  private static final String K_LASTWHITE = "lastWhite";
+  private static final String K_LASTCOS = "lastCos";
+  private static final String K_EXPHOST = "expHost";
+  private static final String K_EXPRULE = "expRule";
+  private static final String K_EXPWHITE = "expWhite";
+  private static final String K_EXPCOS = "expCos";
+  private static final String K_SHOST = "storeHost";
+  private static final String K_SRULE = "storeRule";
+  private static final String K_SWHITE = "storeWhite";
+  private static final String K_SCOS = "storeCos";
 
   private static final String MODE_MANUAL = "Manual";
   private static final String MODE_TIAPBUKA = "TiapBuka";
@@ -101,6 +129,14 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
   private static final ArrayList<String> netRules = new ArrayList<String>();
   private static final ArrayList<String> whitelist = new ArrayList<String>();
   private static final ArrayList<String> manual = new ArrayList<String>();
+  private static final ArrayList<String> hostLines = new ArrayList<String>();
+  private static final ArrayList<String> ruleLines = new ArrayList<String>();
+  private static final ArrayList<String> whiteLines = new ArrayList<String>();
+  private static final ArrayList<String> cosmeticLines = new ArrayList<String>();
+  private static boolean refreshingHost = false;
+  private static boolean refreshingRule = false;
+  private static boolean refreshingWhite = false;
+  private static boolean refreshingCosmetic = false;
   private static final ArrayList<String> cosmetics = new ArrayList<String>();
   private static boolean enabled = false;
   private static long blockedCount = 0;
@@ -121,6 +157,14 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
     loadPrefs();
     loadCache();
     loadManual();
+    loadStores();
+    if (storesEmpty() && bucketsNonEmpty()) {
+      importBucketsToStores();
+    } else if (!storesEmpty()) {
+      rebuildBuckets();
+    }
+    foldManualToStores();
+    persistStores();
     maybeAutoRefresh();
   }
 
@@ -132,9 +176,11 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
           Context.MODE_PRIVATE);
       updateMode = normMode(p.getString(K_MODE, MODE_HARIAN));
       lastUpdate = p.getLong(K_LAST, 0);
+      enabled = p.getBoolean(K_ENABLED, false);
     } catch (Exception e) {
       updateMode = MODE_HARIAN;
       lastUpdate = 0;
+      enabled = false;
     }
   }
 
@@ -428,12 +474,14 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
           continue;
         }
         manual.add(s);
+        routeToStore(s);
         n = n + 1;
       }
     }
     if (n > 0) {
       applyManual();
       persistIfReady();
+      persistStoresIfReady();
       saveManualIfReady();
     }
     return n;
@@ -450,7 +498,14 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
     }
     if (out) {
       dropManualEffects(s);
+      synchronized (lock) {
+        hostLines.remove(s);
+        ruleLines.remove(s);
+        whiteLines.remove(s);
+        cosmeticLines.remove(s);
+      }
       persistIfReady();
+      persistStoresIfReady();
       saveManualIfReady();
     }
     return out;
@@ -464,9 +519,739 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
     }
     for (int i = 0; i < copy.size(); i = i + 1) {
       dropManualEffects(copy.get(i));
+      synchronized (lock) {
+        hostLines.remove(copy.get(i));
+        ruleLines.remove(copy.get(i));
+        whiteLines.remove(copy.get(i));
+        cosmeticLines.remove(copy.get(i));
+      }
     }
     persistIfReady();
+    persistStoresIfReady();
     saveManualIfReady();
+  }
+
+  private static boolean storesEmpty() {
+    synchronized (lock) {
+      return hostLines.isEmpty() && ruleLines.isEmpty()
+          && whiteLines.isEmpty() && cosmeticLines.isEmpty();
+    }
+  }
+
+  private static boolean bucketsNonEmpty() {
+    synchronized (lock) {
+      return !hosts.isEmpty() || !netRules.isEmpty()
+          || !whitelist.isEmpty() || !cosmetics.isEmpty();
+    }
+  }
+
+  private void loadStores() {
+    synchronized (lock) {
+      hostLines.clear();
+      ruleLines.clear();
+      whiteLines.clear();
+      cosmeticLines.clear();
+      hostLines.addAll(readPrefLines(K_SHOST));
+      ruleLines.addAll(readPrefLines(K_SRULE));
+      whiteLines.addAll(readPrefLines(K_SWHITE));
+      cosmeticLines.addAll(readPrefLines(K_SCOS));
+    }
+  }
+
+  private ArrayList<String> readPrefLines(String key) {
+    ArrayList<String> out = new ArrayList<String>();
+    try {
+      SharedPreferences p = context.getSharedPreferences(PREFS,
+          Context.MODE_PRIVATE);
+      String c = p.getString(key, "");
+      if (c != null) {
+        String[] parts = c.split("\n");
+        for (int i = 0; i < parts.length; i = i + 1) {
+          String s = parts[i].trim();
+          if (s.length() > 0 && !out.contains(s)) {
+            out.add(s);
+          }
+        }
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    return out;
+  }
+
+  private void saveStores() {
+    try {
+      SharedPreferences p = context.getSharedPreferences(PREFS,
+          Context.MODE_PRIVATE);
+      synchronized (lock) {
+        p.edit().putString(K_SHOST, joinLines(hostLines))
+            .putString(K_SRULE, joinLines(ruleLines))
+            .putString(K_SWHITE, joinLines(whiteLines))
+            .putString(K_SCOS, joinLines(cosmeticLines)).apply();
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  private static String joinLines(ArrayList<String> lines) {
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < lines.size(); i = i + 1) {
+      if (i > 0) {
+        sb.append('\n');
+      }
+      sb.append(lines.get(i));
+    }
+    return sb.toString();
+  }
+
+  private static void persistStoresIfReady() {
+    try {
+      Tools_AdBlock m = last;
+      if (m != null) {
+        m.saveStores();
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  private static void importBucketsToStores() {
+    synchronized (lock) {
+      for (int i = 0; i < hosts.size(); i = i + 1) {
+        String h = hosts.get(i);
+        if (h.startsWith("@@:")) {
+          String d = h.substring(3);
+          String w = "@@||" + d + "^";
+          if (!whiteLines.contains(w)) {
+            whiteLines.add(w);
+          }
+        } else if (!hostLines.contains(h)) {
+          hostLines.add(h);
+        }
+      }
+      for (int i = 0; i < netRules.size(); i = i + 1) {
+        if (!ruleLines.contains(netRules.get(i))) {
+          ruleLines.add(netRules.get(i));
+        }
+      }
+      for (int i = 0; i < whitelist.size(); i = i + 1) {
+        if (!whiteLines.contains(whitelist.get(i))) {
+          whiteLines.add(whitelist.get(i));
+        }
+      }
+      for (int i = 0; i < cosmetics.size(); i = i + 1) {
+        if (!cosmeticLines.contains(cosmetics.get(i))) {
+          cosmeticLines.add(cosmetics.get(i));
+        }
+      }
+    }
+    persistStoresIfReady();
+  }
+
+  private static void rebuildBuckets() {
+    ArrayList<String> h;
+    ArrayList<String> r;
+    ArrayList<String> w;
+    ArrayList<String> c;
+    synchronized (lock) {
+      h = new ArrayList<String>(hostLines);
+      r = new ArrayList<String>(ruleLines);
+      w = new ArrayList<String>(whiteLines);
+      c = new ArrayList<String>(cosmeticLines);
+      hosts.clear();
+      netRules.clear();
+      whitelist.clear();
+      cosmetics.clear();
+    }
+    for (int i = 0; i < h.size(); i = i + 1) {
+      classifyLine(h.get(i));
+    }
+    for (int i = 0; i < r.size(); i = i + 1) {
+      classifyLine(r.get(i));
+    }
+    for (int i = 0; i < w.size(); i = i + 1) {
+      classifyLine(w.get(i));
+    }
+    for (int i = 0; i < c.size(); i = i + 1) {
+      classifyLine(c.get(i));
+    }
+  }
+
+  private void foldManualToStores() {
+    ArrayList<String> copy;
+    synchronized (lock) {
+      copy = new ArrayList<String>(manual);
+    }
+    for (int i = 0; i < copy.size(); i = i + 1) {
+      routeToStore(copy.get(i));
+      classifyLine(copy.get(i));
+    }
+    persistStoresIfReady();
+  }
+
+  private static int categoryOf(String line) {
+    if (line == null) {
+      return 0;
+    }
+    String t = line.trim();
+    if (t.length() == 0) {
+      return 0;
+    }
+    if (t.startsWith("!") || t.startsWith("[Adblock")) {
+      return 0;
+    }
+    if (t.startsWith("#") && !t.startsWith("##")
+        && !t.startsWith("#$#") && !t.startsWith("#?#")) {
+      return 0;
+    }
+    if (t.startsWith("@@")) {
+      return 3;
+    }
+    if (t.indexOf("##") >= 0 || t.indexOf("#$#") >= 0
+        || t.indexOf("#?#") >= 0) {
+      return 4;
+    }
+    if (t.startsWith("||") || t.startsWith("|http")
+        || t.startsWith("|ws") || t.indexOf("*") >= 0
+        || t.endsWith("^") || t.indexOf("$") >= 0) {
+      return 2;
+    }
+    if (t.startsWith("0.0.0.0") || t.startsWith("127.0.0.1")
+        || t.startsWith("::1") || t.startsWith("0 ")) {
+      return 1;
+    }
+    if (looksDomain(t)) {
+      return 1;
+    }
+    if (t.startsWith("http://") || t.startsWith("https://")) {
+      return hostOfUrl(t).length() > 0 ? 1 : 2;
+    }
+    return 2;
+  }
+
+  private static void routeToStore(String line) {
+    if (line == null) {
+      return;
+    }
+    String t = line.trim();
+    if (t.length() == 0) {
+      return;
+    }
+    int c = categoryOf(t);
+    if (c == 0) {
+      return;
+    }
+    synchronized (lock) {
+      if (c == 1 && !hostLines.contains(t)) {
+        hostLines.add(t);
+      } else if (c == 2 && !ruleLines.contains(t)) {
+        ruleLines.add(t);
+      } else if (c == 3 && !whiteLines.contains(t)) {
+        whiteLines.add(t);
+      } else if (c == 4 && !cosmeticLines.contains(t)) {
+        cosmeticLines.add(t);
+      }
+    }
+  }
+
+  private static String normType(String s) {
+    String t = s == null ? "" : s.trim().toLowerCase();
+    if (t.equals("semua")) {
+      return "all";
+    }
+    if (t.equals("aturan")) {
+      return "rule";
+    }
+    if (t.equals("putih")) {
+      return "white";
+    }
+    if (t.equals("kosmetik")) {
+      return "cosmetic";
+    }
+    if (t.equals("all") || t.equals("host") || t.equals("rule")
+        || t.equals("white") || t.equals("cosmetic")) {
+      return t;
+    }
+    return "";
+  }
+
+  private static String normInterval(String s) {
+    String t = s == null ? "" : s.trim().toLowerCase();
+    if (t.equals("harian") || t.equals("daily") || t.equals("1 day")
+        || t.equals("day")) {
+      return "daily";
+    }
+    if (t.equals("mingguan") || t.equals("weekly") || t.equals("1 week")
+        || t.equals("week")) {
+      return "weekly";
+    }
+    return "auto";
+  }
+
+  private static long intervalMs(String code) {
+    if ("daily".equals(code)) {
+      return 24L * 3600L * 1000L;
+    }
+    if ("weekly".equals(code)) {
+      return 7L * 24L * 3600L * 1000L;
+    }
+    return -1L;
+  }
+
+  private static long expiresMs(String text) {
+    try {
+      String[] lines = text.split("\n");
+      for (int i = 0; i < lines.length && i < 40; i = i + 1) {
+        String l = lines[i].trim();
+        if (!l.startsWith("! Expires:")) {
+          continue;
+        }
+        String rest = l.substring(10).trim().toLowerCase();
+        String[] parts = rest.split(" ");
+        if (parts.length < 2) {
+          continue;
+        }
+        long n = 0;
+        try {
+          n = Long.parseLong(parts[0]);
+        } catch (Exception e) {
+          continue;
+        }
+        if (parts[1].startsWith("hour")) {
+          return n * 3600L * 1000L;
+        }
+        if (parts[1].startsWith("day")) {
+          return n * 24L * 3600L * 1000L;
+        }
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    return -1L;
+  }
+
+  private String prefOf(String type, String host, String rule,
+      String white, String cos) {
+    if ("host".equals(type)) {
+      return host;
+    }
+    if ("rule".equals(type)) {
+      return rule;
+    }
+    if ("white".equals(type)) {
+      return white;
+    }
+    if ("cosmetic".equals(type)) {
+      return cos;
+    }
+    return "";
+  }
+
+  private String prefGet(String key, String def) {
+    try {
+      SharedPreferences p = context.getSharedPreferences(PREFS,
+          Context.MODE_PRIVATE);
+      String v = p.getString(key, def);
+      return v == null ? def : v;
+    } catch (Exception e) {
+      return def;
+    }
+  }
+
+  private void prefSet(String key, String val) {
+    try {
+      SharedPreferences p = context.getSharedPreferences(PREFS,
+          Context.MODE_PRIVATE);
+      p.edit().putString(key, val).apply();
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  private long prefGetLong(String key, long def) {
+    try {
+      SharedPreferences p = context.getSharedPreferences(PREFS,
+          Context.MODE_PRIVATE);
+      return p.getLong(key, def);
+    } catch (Exception e) {
+      return def;
+    }
+  }
+
+  private static ArrayList<String> storeFor(String type) {
+    if ("host".equals(type)) {
+      return hostLines;
+    }
+    if ("rule".equals(type)) {
+      return ruleLines;
+    }
+    if ("white".equals(type)) {
+      return whiteLines;
+    }
+    if ("cosmetic".equals(type)) {
+      return cosmeticLines;
+    }
+    return null;
+  }
+
+  private static int storeCount(String type) {
+    ArrayList<String> s = storeFor(type);
+    if (s == null) {
+      return 0;
+    }
+    synchronized (lock) {
+      return s.size();
+    }
+  }
+
+  private static String storeText(String type) {
+    ArrayList<String> s = storeFor(type);
+    if (s == null) {
+      return "";
+    }
+    synchronized (lock) {
+      return joinLines(new ArrayList<String>(s));
+    }
+  }
+
+  private boolean typeFresh(String type) {
+    ArrayList<String> s = storeFor(type);
+    if (s == null) {
+      return false;
+    }
+    synchronized (lock) {
+      if (s.isEmpty()) {
+        return false;
+      }
+    }
+    String iv = normInterval(prefGet(prefOf(type, K_INTHOST, K_INTRULE,
+        K_INTWHITE, K_INTCOS), "auto"));
+    long last = prefGetLong(prefOf(type, K_LASTHOST, K_LASTRULE,
+        K_LASTWHITE, K_LASTCOS), 0);
+    if (last <= 0) {
+      return false;
+    }
+    long limit = intervalMs(iv);
+    if (limit < 0) {
+      limit = prefGetLong(prefOf(type, K_EXPHOST, K_EXPRULE,
+          K_EXPWHITE, K_EXPCOS), -1L);
+      if (limit < 0) {
+        limit = 24L * 3600L * 1000L;
+      }
+    }
+    return System.currentTimeMillis() - last < limit;
+  }
+
+  private static String providerUrl(String key) {
+    if ("IDMFilters".equals(key)) {
+      return "https://www.apps2sd.info/idm/filters.txt";
+    }
+    if ("EasyList".equals(key)) {
+      return "https://easylist.to/easylist/easylist.txt";
+    }
+    if ("UBOFilters".equals(key)) {
+      return "https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/filters.txt";
+    }
+    if ("AdGuardBase".equals(key)) {
+      return "https://filters.adtidy.org/extension/ublock/filters/2_without_easylist.txt";
+    }
+    if ("EasyPrivacy".equals(key)) {
+      return "https://easylist.to/easylist/easyprivacy.txt";
+    }
+    if ("PeterLowe".equals(key)) {
+      return "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=1&mimetype=plaintext";
+    }
+    if ("AntiAdblockKiller".equals(key)) {
+      return "https://raw.githubusercontent.com/reek/anti-adblock-killer/master/anti-adblock-killer-filters.txt";
+    }
+    if ("ABPWarningRemoval".equals(key)) {
+      return "https://easylist-downloads.adblockplus.org/antiadblockfilters.txt";
+    }
+    if ("UBOUnbreak".equals(key)) {
+      return "https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/unbreak.txt";
+    }
+    if ("AdGuardMobile".equals(key)) {
+      return "https://filters.adtidy.org/extension/ublock/filters/11.txt";
+    }
+    if ("UBOBadware".equals(key)) {
+      return "https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/badware.txt";
+    }
+    if ("UBOPrivacy".equals(key)) {
+      return "https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/privacy.txt";
+    }
+    if ("UBOResourceAbuse".equals(key)) {
+      return "https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/resource-abuse.txt";
+    }
+    if ("URLhausMalware".equals(key)) {
+      return "https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-online.txt";
+    }
+    if ("AdGuardAnnoyances".equals(key)) {
+      return "https://filters.adtidy.org/extension/ublock/filters/14.txt";
+    }
+    if ("FanboyAnnoyance".equals(key)) {
+      return "https://secure.fanboy.co.nz/fanboy-annoyance.txt";
+    }
+    if ("UBOAnnoyances".equals(key)) {
+      return "https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/annoyances.txt";
+    }
+    if ("FanboyCookie".equals(key)) {
+      return "https://secure.fanboy.co.nz/fanboy-cookiemonster.txt";
+    }
+    if ("OneHostsLite".equals(key)) {
+      return "https://badmojr.github.io/1Hosts/Lite/hosts.txt";
+    }
+    if ("FanboyIndian".equals(key)) {
+      return "https://secure.fanboy.co.nz/fanboy-indian.txt";
+    }
+    if ("AdGuardTurkish".equals(key)) {
+      return "https://filters.adtidy.org/windows/filters/13.txt?id=13";
+    }
+    if ("ABPindo".equals(key)) {
+      return "https://raw.githubusercontent.com/ABPindo/indonesianadblockrules/master/subscriptions/abpindo.txt";
+    }
+    if ("AdGuardRussian".equals(key)) {
+      return "https://filters.adtidy.org/windows/filters/1.txt?id=1";
+    }
+    if ("EasyGermany".equals(key)) {
+      return "https://easylist-downloads.adblockplus.org/easylistgermany.txt";
+    }
+    if ("OISDBig".equals(key)) {
+      return "https://abp.oisd.nl";
+    }
+    if ("FuckFuckAdblock".equals(key)) {
+      return "https://raw.githubusercontent.com/bogachenko/fuckfuckadblock/master/fuckfuckadblock.txt";
+    }
+    if ("PeterLoweNoHtml".equals(key)) {
+      return "https://pgl.yoyo.org/as/serverlist.php?hostformat=nohtml&showintro=0&mimetype=plaintext";
+    }
+    return "";
+  }
+
+  private static void setRefreshing(String type, boolean on) {
+    synchronized (lock) {
+      if ("host".equals(type)) {
+        refreshingHost = on;
+      } else if ("rule".equals(type)) {
+        refreshingRule = on;
+      } else if ("white".equals(type)) {
+        refreshingWhite = on;
+      } else if ("cosmetic".equals(type)) {
+        refreshingCosmetic = on;
+      }
+    }
+  }
+
+  private void fireGot(final String type, final boolean ok) {
+    final int total = storeCount(type);
+    final String data = storeText(type);
+    final String evt;
+    if ("host".equals(type)) {
+      evt = "GotAdBlockHost";
+    } else if ("rule".equals(type)) {
+      evt = "GotAdBlockRules";
+    } else if ("white".equals(type)) {
+      evt = "GotAdBlockWhite";
+    } else {
+      evt = "GotAdBlockCosmetic";
+    }
+    try {
+      form.runOnUiThread(new Runnable() {
+        public void run() {
+          Shared.fire(Tools_AdBlock.this, evt, Boolean.valueOf(ok),
+              Integer.valueOf(total), data);
+        }
+      });
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  private void refreshType(final String type, final boolean fire) {
+    setRefreshing(type, true);
+    boolean ok = false;
+    try {
+      String key = prefGet(prefOf(type, K_SETHOST, K_SETRULE,
+          K_SETWHITE, K_SETCOS), "");
+      String url = providerUrl(key);
+      if (url.length() == 0) {
+        if (fire) {
+          fireGot(type, false);
+        }
+        return;
+      }
+      String txt = downloadText(url);
+      if (txt == null || txt.length() == 0) {
+        if (fire) {
+          fireGot(type, false);
+        }
+        return;
+      }
+      int want = "host".equals(type) ? 1 : "rule".equals(type) ? 2
+          : "white".equals(type) ? 3 : 4;
+      ArrayList<String> fresh = new ArrayList<String>();
+      String[] lines = txt.replace("\r\n", "\n").replace("\r", "\n").split("\n");
+      for (int i = 0; i < lines.length; i = i + 1) {
+        String s = lines[i].trim();
+        if (s.length() == 0 || fresh.contains(s)) {
+          continue;
+        }
+        if (categoryOf(s) == want) {
+          fresh.add(s);
+        }
+      }
+      if (!fresh.isEmpty()) {
+        ArrayList<String> s = storeFor(type);
+        synchronized (lock) {
+          s.clear();
+          s.addAll(fresh);
+        }
+        rebuildBuckets();
+        persistIfReady();
+        persistStoresIfReady();
+        setEnabled(true);
+      }
+      long exp = expiresMs(txt);
+      try {
+        SharedPreferences p = context.getSharedPreferences(PREFS,
+            Context.MODE_PRIVATE);
+        SharedPreferences.Editor ed = p.edit();
+        ed.putLong(prefOf(type, K_LASTHOST, K_LASTRULE,
+            K_LASTWHITE, K_LASTCOS), System.currentTimeMillis());
+        if (exp > 0) {
+          ed.putLong(prefOf(type, K_EXPHOST, K_EXPRULE,
+              K_EXPWHITE, K_EXPCOS), exp);
+        }
+        ed.apply();
+      } catch (Exception e) {
+        // abaikan
+      }
+      ok = !fresh.isEmpty();
+    } catch (Exception e) {
+      ok = false;
+    } finally {
+      setRefreshing(type, false);
+    }
+    if (fire) {
+      fireGot(type, ok);
+    }
+  }
+
+  private void startTypeSet(final String type, String provider,
+      String interval) {
+    String key = provider == null ? "" : provider.trim();
+    if (providerUrl(key).length() == 0) {
+      Shared.err(this, "AdBlock", 0, "penyedia tidak dikenal");
+      fireGot(type, false);
+      return;
+    }
+    prefSet(prefOf(type, K_SETHOST, K_SETRULE,
+        K_SETWHITE, K_SETCOS), key);
+    prefSet(prefOf(type, K_INTHOST, K_INTRULE,
+        K_INTWHITE, K_INTCOS), normInterval(interval));
+    if (typeFresh(type)) {
+      if (storeCount(type) > 0) {
+        setEnabled(true);
+      }
+      fireGot(type, true);
+      return;
+    }
+    final Tools_AdBlock me = this;
+    AsynchUtil.runAsynchronously(new Runnable() {
+      public void run() {
+        me.refreshType(type, true);
+      }
+    });
+  }
+
+  private void changeTypeInterval(final String type, String interval) {
+    prefSet(prefOf(type, K_INTHOST, K_INTRULE,
+        K_INTWHITE, K_INTCOS), normInterval(interval));
+    final Tools_AdBlock me = this;
+    AsynchUtil.runAsynchronously(new Runnable() {
+      public void run() {
+        boolean ok = true;
+        if ("all".equals(type)) {
+          String[] all = {"host", "rule", "white", "cosmetic"};
+          boolean anyOk = false;
+          for (int i = 0; i < all.length; i = i + 1) {
+            String prov = me.prefGet(me.prefOf(all[i], K_SETHOST,
+                K_SETRULE, K_SETWHITE, K_SETCOS), "");
+            if (providerUrl(prov).length() == 0) {
+              continue;
+            }
+            me.refreshType(all[i], false);
+            if (storeCount(all[i]) > 0) {
+              anyOk = true;
+            }
+          }
+          try {
+            me.form.runOnUiThread(new Runnable() {
+              public void run() {
+                Shared.fire(me, "AdBlockIntervalChanged",
+                    Boolean.valueOf(anyOk), "All");
+              }
+            });
+          } catch (Exception e) {
+            // abaikan
+          }
+          return;
+        }
+        String prov = me.prefGet(me.prefOf(type, K_SETHOST, K_SETRULE,
+            K_SETWHITE, K_SETCOS), "");
+        if (providerUrl(prov).length() == 0) {
+          ok = false;
+        } else {
+          me.refreshType(type, false);
+          ok = storeCount(type) > 0;
+        }
+        final boolean fOk = ok;
+        try {
+          me.form.runOnUiThread(new Runnable() {
+            public void run() {
+              Shared.fire(me, "AdBlockIntervalChanged",
+                  Boolean.valueOf(fOk), type.substring(0, 1).toUpperCase()
+                      + type.substring(1));
+            }
+          });
+        } catch (Exception e) {
+          // abaikan
+        }
+      }
+    });
+  }
+
+  private static void retainManualInStores() {
+    synchronized (lock) {
+      hostLines.retainAll(manual);
+      ruleLines.retainAll(manual);
+      whiteLines.retainAll(manual);
+      cosmeticLines.retainAll(manual);
+    }
+  }
+
+  private static void reapplyManual() {
+    ArrayList<String> copy;
+    synchronized (lock) {
+      copy = new ArrayList<String>(manual);
+    }
+    for (int i = 0; i < copy.size(); i = i + 1) {
+      routeToStore(copy.get(i));
+      classifyLine(copy.get(i));
+    }
+  }
+
+  private static void reapplyManualFor(int cat) {
+    ArrayList<String> copy;
+    synchronized (lock) {
+      copy = new ArrayList<String>(manual);
+    }
+    for (int i = 0; i < copy.size(); i = i + 1) {
+      if (categoryOf(copy.get(i)) == cat) {
+        routeToStore(copy.get(i));
+        classifyLine(copy.get(i));
+      }
+    }
   }
 
   private void maybeAutoRefresh() {
@@ -895,6 +1680,16 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
   /** Nyala/mati global dari luar (properti BlockAds Webview). */
   public static void setEnabled(boolean on) {
     enabled = on;
+    try {
+      Tools_AdBlock m = last;
+      if (m != null) {
+        SharedPreferences p = m.context.getSharedPreferences(PREFS,
+            Context.MODE_PRIVATE);
+        p.edit().putBoolean(K_ENABLED, on).apply();
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
   }
 
   public static boolean isEnabled() {
@@ -1101,6 +1896,7 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
         String[] lines = t.split("\n");
         for (int i = 0; i < lines.length; i = i + 1) {
           classifyLine(lines[i]);
+          routeToStore(lines[i]);
         }
       }
       synchronized (lock) {
@@ -1111,6 +1907,7 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
     } catch (Exception e) {
       // abaikan
     }
+    persistStoresIfReady();
     return after - before;
   }
 
@@ -1134,7 +1931,14 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
         }
       }
       if (added) {
+        synchronized (lock) {
+          String wr = "@@||" + h + "^";
+          if (!whiteLines.contains(wr)) {
+            whiteLines.add(wr);
+          }
+        }
         persistIfReady();
+        persistStoresIfReady();
       }
     } catch (Exception e) {
       // abaikan
@@ -1159,12 +1963,14 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
           if (w.equals("@@||" + h + "^") || w.equals("@@" + h)
               || w.indexOf(h) >= 0 && w.startsWith("@@")) {
             whitelist.remove(i);
+            whiteLines.remove(w);
             out = true;
           }
         }
       }
       if (out) {
         persistIfReady();
+        persistStoresIfReady();
       }
     } catch (Exception e) {
       // abaikan
@@ -1177,9 +1983,11 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
     try {
       synchronized (lock) {
         netRules.clear();
+        ruleLines.clear();
       }
-      applyManual();
+      reapplyManualFor(2);
       persistIfReady();
+      persistStoresIfReady();
     } catch (Exception e) {
       // abaikan
     }
@@ -1221,8 +2029,10 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
       }
       persistIfReady();
       clearCachesOnly();
-      applyManual();
+      retainManualInStores();
+      reapplyManual();
       persistIfReady();
+      persistStoresIfReady();
     } catch (Exception e) {
       // abaikan
     }
@@ -1342,6 +2152,7 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
             String[] lines = txt.split("\n");
             for (int j = 0; j < lines.length; j = j + 1) {
               classifyLine(lines[j]);
+              routeToStore(lines[j]);
             }
           }
         } catch (Exception e) {
@@ -1370,11 +2181,15 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
         nCos = cosmetics.size();
       }
       me.persistCache();
+      me.saveStores();
       synchronized (lock) {
         lastUpdate = System.currentTimeMillis();
       }
       me.savePrefs();
       ok = (nHost + nRule) > 0;
+      if (ok) {
+        setEnabled(true);
+      }
       msg = ok ? "ok" : "hasil kosong (cek koneksi)";
     } catch (Exception e) {
       String m = e.getMessage();
@@ -1727,8 +2542,10 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
     } catch (Exception e) {
       // abaikan
     }
-    applyManual();
+    retainManualInStores();
+    reapplyManual();
     persistCache();
+    persistStoresIfReady();
   }
 
   // ================= blok: hosts =================
@@ -1938,6 +2755,217 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
     return hostWhitelisted(h);
   }
 
+  // ================= blok: langganan per-tipe (tanpa id) =================
+
+  @SimpleFunction(description = "CALL: pasang langganan Host (pilih nama " +
+      "penyedia + interval). Data baru = event GotAdBlockHost; cache segar " +
+      "= langsung event tanpa download.")
+  public void SetAdBlockHost(@Options(AdBlockProviderHost.class) String provider,
+      @Options(AdBlockInterval.class) String interval) {
+    try {
+      startTypeSet("host", provider, interval);
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  @SimpleFunction(description = "CALL: pasang langganan Rules (pilih nama " +
+      "penyedia + interval). Hasil via event GotAdBlockRules.")
+  public void SetAdBlockRules(@Options(AdBlockProviderRule.class) String provider,
+      @Options(AdBlockInterval.class) String interval) {
+    try {
+      startTypeSet("rule", provider, interval);
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  @SimpleFunction(description = "CALL: pasang langganan Whitelist (pilih " +
+      "nama penyedia + interval). Hasil via event GotAdBlockWhite.")
+  public void SetAdBlockWhite(@Options(AdBlockProviderWhite.class) String provider,
+      @Options(AdBlockInterval.class) String interval) {
+    try {
+      startTypeSet("white", provider, interval);
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  @SimpleFunction(description = "CALL: pasang langganan Cosmetic (pilih " +
+      "nama penyedia + interval). Hasil via event GotAdBlockCosmetic.")
+  public void SetAdBlockCosmetic(@Options(AdBlockProviderCosmetic.class) String provider,
+      @Options(AdBlockInterval.class) String interval) {
+    try {
+      startTypeSet("cosmetic", provider, interval);
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  @SimpleFunction(description = "True bila data tipe ada (All = keempatnya ada).")
+  public boolean HasAdBlock(@Options(AdBlockType.class) String type) {
+    try {
+      String tp = normType(type);
+      if ("all".equals(tp)) {
+        synchronized (lock) {
+          return !hostLines.isEmpty() && !ruleLines.isEmpty()
+              && !whiteLines.isEmpty() && !cosmeticLines.isEmpty();
+        }
+      }
+      ArrayList<String> s = storeFor(tp);
+      if (s == null) {
+        return false;
+      }
+      synchronized (lock) {
+        return !s.isEmpty();
+      }
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
+  @SimpleFunction(description = "True bila tipe sudah ter-update (ada + " +
+      "masih segar ikut intervalnya). All = keempatnya segar.")
+  public boolean IsAdBlockUpdated(@Options(AdBlockType.class) String type) {
+    try {
+      String tp = normType(type);
+      if ("all".equals(tp)) {
+        return typeFresh("host") && typeFresh("rule")
+            && typeFresh("white") && typeFresh("cosmetic");
+      }
+      if ("".equals(tp)) {
+        return false;
+      }
+      return typeFresh(tp);
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
+  @SimpleFunction(description = "True bila tipe sedang download update. " +
+      "All = salah satu sedang jalan.")
+  public boolean IsAdBlockUpdating(@Options(AdBlockType.class) String type) {
+    try {
+      String tp = normType(type);
+      synchronized (lock) {
+        if ("all".equals(tp)) {
+          return refreshingHost || refreshingRule || refreshingWhite
+              || refreshingCosmetic;
+        }
+        if ("host".equals(tp)) {
+          return refreshingHost;
+        }
+        if ("rule".equals(tp)) {
+          return refreshingRule;
+        }
+        if ("white".equals(tp)) {
+          return refreshingWhite;
+        }
+        if ("cosmetic".equals(tp)) {
+          return refreshingCosmetic;
+        }
+        return false;
+      }
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
+  @SimpleFunction(description = "Isi data tipe sebagai teks (separator " +
+      "antar baris; kosong = newline; ketik \n = newline). All = gabungan " +
+      "keempatnya.")
+  public String GetAdBlockType(@Options(AdBlockType.class) String type,
+      String separator) {
+    try {
+      String tp = normType(type);
+      String sep = separator == null ? "" : separator;
+      if (sep.length() == 0) {
+        sep = "\n";
+      }
+      sep = sep.replace("\\n", "\n");
+      if ("all".equals(tp)) {
+        return storeText("host") + sep + storeText("rule") + sep
+            + storeText("white") + sep + storeText("cosmetic");
+      }
+      if ("".equals(tp)) {
+        return "";
+      }
+      return storeText(tp);
+    } catch (Exception e) {
+      return "";
+    }
+  }
+
+  @SimpleFunction(description = "SET: tambah teks kustom ke tipe (All = " +
+      "ikut isi barisnya). Masuk koleksi, langsung aktif, tahan hapus data. " +
+      "Tanpa feedback.")
+  public void AddAdBlockString(@Options(AdBlockType.class) String type,
+      String text) {
+    try {
+      String tp = normType(type);
+      if ("".equals(tp) || text == null) {
+        return;
+      }
+      String[] lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n");
+      ArrayList<String> add = new ArrayList<String>();
+      synchronized (lock) {
+        for (int i = 0; i < lines.length; i = i + 1) {
+          String s = lines[i].trim();
+          if (!usableManualLine(s) || manual.contains(s)) {
+            continue;
+          }
+          manual.add(s);
+          if ("all".equals(tp)) {
+            routeToStore(s);
+          } else {
+            ArrayList<String> st = storeFor(tp);
+            if (st != null && !st.contains(s)) {
+              st.add(s);
+            }
+          }
+          add.add(s);
+        }
+      }
+      for (int i = 0; i < add.size(); i = i + 1) {
+        classifyLine(add.get(i));
+      }
+      if (!add.isEmpty()) {
+        persistIfReady();
+        persistStoresIfReady();
+        saveManualIfReady();
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  @SimpleFunction(description = "CALL: ganti interval tipe saat mesin " +
+      "sudah jalan. Sukses = tipe itu langsung di-refresh (tanpa duplikat); " +
+      "hasil via event AdBlockIntervalChanged. All = keempatnya.")
+  public void SetAdBlockInterval(@Options(AdBlockType.class) String type,
+      @Options(AdBlockInterval.class) String interval) {
+    try {
+      String tp = normType(type);
+      if ("".equals(tp)) {
+        Shared.err(this, "AdBlock", 0, "tipe tidak dikenal");
+        return;
+      }
+      if ("all".equals(tp)) {
+        String[] all = {"host", "rule", "white", "cosmetic"};
+        for (int i = 0; i < all.length; i = i + 1) {
+          prefSet(prefOf(all[i], K_INTHOST, K_INTRULE,
+              K_INTWHITE, K_INTCOS), normInterval(interval));
+        }
+      } else {
+        prefSet(prefOf(tp, K_INTHOST, K_INTRULE,
+            K_INTWHITE, K_INTCOS), normInterval(interval));
+      }
+      changeTypeInterval(tp, interval);
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
   // ================= blok: manual (koleksi user ala Via) =================
 
   @SimpleProperty(description = "SET: simpan 1 aturan manual (host / rule "
@@ -2141,6 +3169,38 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
   public void AdBlockProgressChanged(int done, int total) {
     Shared.fire(this, "AdBlockProgressChanged",
         Integer.valueOf(done), Integer.valueOf(total));
+  }
+
+  @SimpleEvent(description = "Host selesai dimuat: sukses + total + isi.")
+  public void GotAdBlockHost(boolean success, int totalHost, String host) {
+    Shared.fire(this, "GotAdBlockHost", Boolean.valueOf(success),
+        Integer.valueOf(totalHost), host);
+  }
+
+  @SimpleEvent(description = "Rules selesai dimuat: sukses + total + isi.")
+  public void GotAdBlockRules(boolean success, int totalRule, String rule) {
+    Shared.fire(this, "GotAdBlockRules", Boolean.valueOf(success),
+        Integer.valueOf(totalRule), rule);
+  }
+
+  @SimpleEvent(description = "Whitelist selesai dimuat: sukses + total + isi.")
+  public void GotAdBlockWhite(boolean success, int totalWhite, String white) {
+    Shared.fire(this, "GotAdBlockWhite", Boolean.valueOf(success),
+        Integer.valueOf(totalWhite), white);
+  }
+
+  @SimpleEvent(description = "Cosmetic selesai dimuat: sukses + total + isi.")
+  public void GotAdBlockCosmetic(boolean success, int totalCosmetic,
+      String cosmetic) {
+    Shared.fire(this, "GotAdBlockCosmetic", Boolean.valueOf(success),
+        Integer.valueOf(totalCosmetic), cosmetic);
+  }
+
+  @SimpleEvent(description = "Ganti interval selesai: sukses + tipe " +
+      "(All/Host/Rule/White/Cosmetic). Tipe itu langsung di-refresh.")
+  public void AdBlockIntervalChanged(boolean success, String type) {
+    Shared.fire(this, "AdBlockIntervalChanged", Boolean.valueOf(success),
+        type);
   }
 
   @SimpleEvent(description = "SATU-SATUNYA error Tools_AdBlock. component = "

@@ -76,7 +76,7 @@ import java.util.List;
 import java.util.Map;
 
 @DesignerComponent(
-    version = 5,
+    version = 6,
     description = "Tools_Webview: webview ber-id ala Sunny Gupta v13 (blueprint "
         + "dicuri + disempurnakan, bukan fork). ID NUMBER dua arah (masuk/keluar "
         + "number, tanpa +0), simpan URUT PEMBUATAN + Current/Previous/First/"
@@ -2541,11 +2541,6 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "True bila situs ini di-whitelist AdBlock "
-      + "(cek host persis/subdomain + rule @@).")
-  public boolean IsWhitelisted(String url) {
-    return Tools_AdBlock.isWhitelistedUrl(url == null ? "" : url);
-  }
 
   // ================= blok Sunny: operasi tampilan =================
 
@@ -3560,100 +3555,114 @@ public class Tools_Webview extends AndroidNonvisibleComponent
 
   // ================= blok Sunny: jembatan filter AdBlock =================
 
-  @SimpleProperty(description = "SET: tambah 1 aturan filter (format AdBlock "
-      + "Plus) ke mesin global. Tanpa feedback.")
-  public void AddFilterRule(String rule) {
-    try {
-      Tools_AdBlock.addFilterText(rule == null ? "" : rule);
-    } catch (Exception e) {
-      // abaikan
+
+  @SimpleFunction(description = "CALL: muat 1 daftar filter (otomatis: " +
+      "http(s) = download, //nama = asset, kosong/default = EasyList, " +
+      "lainnya = file). Event OnFilterListProgress/Loaded/Error.")
+  public void LoadFilterList(final String source) {
+    String s = source == null ? "" : source.trim();
+    if (s.length() == 0 || s.equalsIgnoreCase("default")) {
+      loadFilterFromUrl("https://easylist.to/easylist/easylist.txt");
+      return;
     }
-  }
-
-  @SimpleProperty(description = "SET: tambah banyak aturan filter (teks "
-      + "newline) ke mesin global. Tanpa feedback.")
-  public void AddFilterRules(String rulesString) {
-    try {
-      Tools_AdBlock.addFilterText(rulesString == null ? "" : rulesString);
-    } catch (Exception e) {
-      // abaikan
+    if (s.startsWith("http://") || s.startsWith("https://")) {
+      loadFilterFromUrl(s);
+      return;
     }
-  }
-
-  @SimpleProperty(description = "SET: whitelist 1 host ke mesin global. "
-      + "Tanpa feedback.")
-  public void AddToWhitelist(String host) {
-    try {
-      Tools_AdBlock.addWhiteHost(host == null ? "" : host);
-    } catch (Exception e) {
-      // abaikan
+    String p = s;
+    if (p.startsWith("//")) {
+      p = p.substring(2);
     }
-  }
-
-  @SimpleFunction(description = "SET: buang 1 host dari whitelist global. "
-      + "Tanpa feedback.")
-  public void RemoveFromWhitelist(String host) {
-    try {
-      Tools_AdBlock.removeWhiteHost(host == null ? "" : host);
-    } catch (Exception e) {
-      // abaikan
+    if (p.startsWith("/")) {
+      loadFilterFromFile(new java.io.File(p));
+      return;
     }
+    loadFilterFromAsset(p);
   }
 
-  @SimpleFunction(description = "SET: buang SEMUA network rule (whitelist + "
-      + "manual + setting tetap). Tanpa feedback.")
-  public void ClearFilterRules() {
-    Tools_AdBlock.clearRulesOnly();
-  }
-
-  @SimpleFunction(description = "SET: hapus file cache AdBlock saja (ember "
-      + "tetap). Tanpa feedback.")
-  public void ClearAdBlockerCaches() {
-    Tools_AdBlock.clearCachesOnly();
-  }
-
-  @SimpleFunction(description = "SET: buang SEMUA data AdBlock (hasil + "
-      + "cache). Koleksi manual tetap. Tanpa feedback.")
-  public void ClearAdBlockerData() {
-    Tools_AdBlock.clearAllData();
-  }
-
-  @SimpleFunction(description = "SET: pastikan cache AdBlock termuat lalu "
-      + "tembak OnFilterListLoaded. Tanpa return.")
-  public void InitAdBlocker() {
-    Tools_AdBlock.ensureLoaded();
-    final int n = Tools_AdBlock.hostCount()
-        + Tools_AdBlock.ruleCount();
-    try {
-      form.runOnUiThread(new Runnable() {
-        public void run() {
-          OnFilterListLoaded(n, "InitAdBlocker");
-        }
-      });
-    } catch (Exception e) {
-      // abaikan
+  private void loadFilterFromUrl(final String u) {
+    if (u.length() == 0) {
+      Shared.err(this, "Webview", 0, "url kosong");
+      return;
     }
-  }
-
-  @SimpleFunction(description = "CALL: tambah teks host/filter (async) ke "
-      + "mesin global. Progres via OnFilterListProgress, selesai via "
-      + "OnFilterListLoaded.")
-  public void InitAdHostsAsync(final String hosts) {
     try {
       AsynchUtil.runAsynchronously(new Runnable() {
         public void run() {
-          final String t = hosts == null ? "" : hosts;
-          final int added = Tools_AdBlock.addFilterText(t);
+          String t = Tools_AdBlock.downloadText(u);
+          finishFilterLoad(u, t);
+        }
+      });
+    } catch (Exception e) {
+      String m = e.getMessage();
+      Shared.err(this, "Webview", 0, m == null ? "gagal" : m);
+    }
+  }
+
+  private void loadFilterFromAsset(final String assetPath) {
+    String p = assetPath == null ? "" : assetPath.trim();
+    if (p.startsWith("//")) {
+      p = p.substring(2);
+    }
+    if (p.length() == 0) {
+      Shared.err(this, "Webview", 0, "asset kosong");
+      return;
+    }
+    final String fp = p;
+    try {
+      AsynchUtil.runAsynchronously(new Runnable() {
+        public void run() {
+          String t = null;
+          java.io.InputStream in = null;
           try {
-            form.runOnUiThread(new Runnable() {
-              public void run() {
-                OnFilterListProgress(t.length(), "InitAdHostsAsync");
-                OnFilterListLoaded(added, "InitAdHostsAsync");
-              }
-            });
+            in = form.openAsset(fp);
+            byte[] d = readAllBytes(in);
+            t = new String(d, "UTF-8");
           } catch (Exception e) {
-            // abaikan
+            t = null;
+          } finally {
+            try {
+              if (in != null) {
+                in.close();
+              }
+            } catch (Exception e) {
+              // abaikan
+            }
           }
+          finishFilterLoad(fp, t);
+        }
+      });
+    } catch (Exception e) {
+      String m = e.getMessage();
+      Shared.err(this, "Webview", 0, m == null ? "gagal" : m);
+    }
+  }
+
+  private void loadFilterFromFile(final java.io.File f) {
+    if (!f.exists()) {
+      Shared.err(this, "Webview", 0, "file tidak ada");
+      return;
+    }
+    try {
+      AsynchUtil.runAsynchronously(new Runnable() {
+        public void run() {
+          String t = null;
+          java.io.FileInputStream in = null;
+          try {
+            in = new java.io.FileInputStream(f);
+            byte[] d = readAllBytes(in);
+            t = new String(d, "UTF-8");
+          } catch (Exception e) {
+            t = null;
+          } finally {
+            try {
+              if (in != null) {
+                in.close();
+              }
+            } catch (Exception e) {
+              // abaikan
+            }
+          }
+          finishFilterLoad(f.getAbsolutePath(), t);
         }
       });
     } catch (Exception e) {
@@ -3703,138 +3712,6 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     return bos.toByteArray();
   }
 
-  @SimpleFunction(description = "CALL: unduh 1 daftar filter dari URL (async) "
-      + "lalu gabung ke mesin global. Event OnFilterListProgress (loaded = "
-      + "ukuran byte) + OnFilterListLoaded (aturan BARU, source = url) / "
-      + "OnFilterListError.")
-  public void LoadFilterListFromUrl(final String url) {
-    final String u = url == null ? "" : url.trim();
-    if (u.length() == 0) {
-      Shared.err(this, "Webview", 0, "url kosong");
-      return;
-    }
-    try {
-      AsynchUtil.runAsynchronously(new Runnable() {
-        public void run() {
-          String t = Tools_AdBlock.downloadText(u);
-          finishFilterLoad(u, t);
-        }
-      });
-    } catch (Exception e) {
-      String m = e.getMessage();
-      Shared.err(this, "Webview", 0, m == null ? "gagal" : m);
-    }
-  }
-
-  @SimpleFunction(description = "CALL: muat daftar filter bawaan (EasyList, "
-      + "async). Event sama dengan LoadFilterListFromUrl.")
-  public void LoadDefaultFilterList() {
-    LoadFilterListFromUrl("https://easylist.to/easylist/easylist.txt");
-  }
-
-  @SimpleFunction(description = "CALL: muat daftar filter dari asset "
-      + "(//nama, async). Event sama dengan LoadFilterListFromUrl.")
-  public void LoadFilterListFromAsset(final String assetPath) {
-    String p = assetPath == null ? "" : assetPath.trim();
-    if (p.startsWith("//")) {
-      p = p.substring(2);
-    }
-    if (p.length() == 0) {
-      Shared.err(this, "Webview", 0, "asset kosong");
-      return;
-    }
-    final String fp = p;
-    try {
-      AsynchUtil.runAsynchronously(new Runnable() {
-        public void run() {
-          String t = null;
-          java.io.InputStream in = null;
-          try {
-            in = form.openAsset(fp);
-            byte[] d = readAllBytes(in);
-            t = new String(d, "UTF-8");
-          } catch (Exception e) {
-            t = null;
-          } finally {
-            try {
-              if (in != null) {
-                in.close();
-              }
-            } catch (Exception e) {
-              // abaikan
-            }
-          }
-          finishFilterLoad(fp, t);
-        }
-      });
-    } catch (Exception e) {
-      String m = e.getMessage();
-      Shared.err(this, "Webview", 0, m == null ? "gagal" : m);
-    }
-  }
-
-  @SimpleFunction(description = "CALL: muat daftar filter dari file "
-      + "(path absolut ATAU relatif storage, async). Event sama dengan "
-      + "LoadFilterListFromUrl.")
-  public void LoadFilterListFromFile(final String filePath) {
-    String p = filePath == null ? "" : filePath.trim();
-    if (p.length() == 0) {
-      Shared.err(this, "Webview", 0, "path kosong");
-      return;
-    }
-    final java.io.File f;
-    if (p.startsWith("/")) {
-      f = new java.io.File(p);
-    } else {
-      f = new java.io.File("/storage/emulated/0/" + p);
-    }
-    if (!f.exists()) {
-      Shared.err(this, "Webview", 0, "file tidak ada");
-      return;
-    }
-    try {
-      AsynchUtil.runAsynchronously(new Runnable() {
-        public void run() {
-          String t = null;
-          java.io.FileInputStream in = null;
-          try {
-            in = new java.io.FileInputStream(f);
-            byte[] d = readAllBytes(in);
-            t = new String(d, "UTF-8");
-          } catch (Exception e) {
-            t = null;
-          } finally {
-            try {
-              if (in != null) {
-                in.close();
-              }
-            } catch (Exception e) {
-              // abaikan
-            }
-          }
-          finishFilterLoad(f.getAbsolutePath(), t);
-        }
-      });
-    } catch (Exception e) {
-      String m = e.getMessage();
-      Shared.err(this, "Webview", 0, m == null ? "gagal" : m);
-    }
-  }
-
-  @SimpleFunction(description = "Jumlah host yang diblokir mesin global.")
-  public int GetBlockedHostsCount() {
-    return Tools_AdBlock.hostCount();
-  }
-
-  @SimpleFunction(description = "Jumlah network rule mesin global.")
-  public int GetFilterRulesCount() {
-    return Tools_AdBlock.ruleCount();
-  }
-
-  @SimpleFunction(description = "Jumlah whitelist mesin global.")
-  public int GetWhitelistCount() {
-    return Tools_AdBlock.whiteCount();
-  }
 
   @SimpleFunction(description = "CALL: baca sertifikat SSL halaman CURRENT. "
       + "Hasil via GotCertificate(isSecure, issuedBy, issuedTo, validTill).")
