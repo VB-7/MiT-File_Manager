@@ -28,7 +28,7 @@ import java.util.Map;
 
 @UsesPermissions("android.permission.INTERNET")
 @DesignerComponent(
-    version = 23,
+    version = 24,
     description = "Tools_Audio: putar BANYAK audio ber-id (background, tanpa tampilan), kontrol "
         + "pause/resume/seek/maju/mundur, loop, volume. Satu id = satu audio, bisa jalan bareng. "
         + "Id dikelola CreateAudioId (atau CreateUniqueId Tools_Base). "
@@ -689,7 +689,7 @@ public class Tools_Audio extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "Loop khusus satu id. = loop global bila belum "
       + "diatur via SetAudioLooping.")
-  public boolean GetAudioLooping(int id) {
+  public boolean IsAudioLooping(int id) {
     synchronized (audioLock) {
       Boolean o = loops.get(Integer.valueOf(id));
       if (o != null) {

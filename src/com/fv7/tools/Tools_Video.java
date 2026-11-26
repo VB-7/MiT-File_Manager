@@ -38,7 +38,7 @@ import java.util.Map;
 
 @UsesPermissions("android.permission.INTERNET")
 @DesignerComponent(
-    version = 23,
+    version = 24,
     description = "Tools_Video: putar BANYAK video ber-id di dalam layout (Arrangement MIT / dinamis), "
         + "kontrol ala VLC (pause/resume/seek/maju/mundur/double-tap), loop, volume. "
         + "Satu id = satu video, bisa jalan bareng. Id dikelola CreateVideoId (atau "
@@ -861,7 +861,7 @@ public class Tools_Video extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "Loop khusus satu id. = loop global bila belum "
       + "diatur via SetVideoLooping.")
-  public boolean GetVideoLooping(int id) {
+  public boolean IsVideoLooping(int id) {
     synchronized (videoLock) {
       Boolean o = loops.get(Integer.valueOf(id));
       if (o != null) {

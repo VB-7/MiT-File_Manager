@@ -39,7 +39,7 @@ import java.util.List;
 import java.util.Set;
 
 @DesignerComponent(
-    version = 7,
+    version = 8,
     description = "Tools_AdBlock: mesin AdBlock AUTO ala 1DM — banyak list beda "
         + "tipe dipakai SEKALIGUS dalam satu mesin gabungan (bukan per-id). "
         + "Sumber bawaan 27 URL (EasyList, uAssets, AdGuard, Fanboy, ABPindo, "
@@ -2804,7 +2804,7 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
   }
 
   @SimpleFunction(description = "True bila data tipe ada (All = keempatnya ada).")
-  public boolean HasAdBlock(@Options(AdBlockType.class) String type) {
+  public boolean IsAdBlockAvailable(@Options(AdBlockType.class) String type) {
     try {
       String tp = normType(type);
       if ("all".equals(tp)) {

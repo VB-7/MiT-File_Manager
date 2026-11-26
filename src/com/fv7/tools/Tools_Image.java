@@ -45,7 +45,7 @@ import java.util.List;
 import java.util.Map;
 
 @DesignerComponent(
-    version = 24,
+    version = 25,
     description = "Tools_Image: tampilkan BANYAK gambar ber-id ke layout (path/URL/base64 mandiri) + "
         + "gambar dari base64 + info ukuran. Id dikelola CreateImageId / Tools_Base. "
         + "Sukses menembak ImageShown (id + path); gagal via ErrorOccurred. "
@@ -2580,7 +2580,7 @@ public class Tools_Image extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "Mode pas slider ber-id (true = muat penuh; false "
       + "= penuhi halaman / slider tidak ada). Pasangan SetSliderFit.")
-  public boolean GetSliderFit(int sliderId) {
+  public boolean IsSliderFit(int sliderId) {
     synchronized (viewLock) {
       Slider s = sliders.get(Integer.valueOf(sliderId));
       return s != null && s.fit;

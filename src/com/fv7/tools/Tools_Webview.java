@@ -76,7 +76,7 @@ import java.util.List;
 import java.util.Map;
 
 @DesignerComponent(
-    version = 6,
+    version = 7,
     description = "Tools_Webview: webview ber-id ala Sunny Gupta v13 (blueprint "
         + "dicuri + disempurnakan, bukan fork). ID NUMBER dua arah (masuk/keluar "
         + "number, tanpa +0), simpan URUT PEMBUATAN + Current/Previous/First/"
@@ -1770,7 +1770,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "True bila bisa mundur. Number in, boolean out.")
-  public boolean CanGoBack(int id) {
+  public boolean IsGoBackAvailable(int id) {
     try {
       WebView w = viewOf(id);
       return w != null && w.canGoBack();
@@ -1780,7 +1780,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "True bila bisa maju.")
-  public boolean CanGoForward(int id) {
+  public boolean IsGoForwardAvailable(int id) {
     try {
       WebView w = viewOf(id);
       return w != null && w.canGoForward();
@@ -2473,7 +2473,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "True bila CURRENT bisa mundur sekian "
       + "langkah (negatif = mundur, positif = maju).")
-  public boolean CanGoBackOrForward(int steps) {
+  public boolean IsGoBackOrForwardAvailable(int steps) {
     try {
       WebView w = curView();
       return w != null && w.canGoBackOrForward(steps);

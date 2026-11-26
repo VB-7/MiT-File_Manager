@@ -42,7 +42,7 @@ import java.util.List;
 import java.util.Map;
 
 @DesignerComponent(
-    version = 25,
+    version = 26,
     description = "Tools_File: file/folder teks, salin/pindah/hapus/rename, direktori, izin "
         + "storage 1 pintu (CallSetStoragePermission + cek + GotPermission), "
         + "picker/opener, base64-ke-file, info ruang. Konvensi awalan: "
@@ -50,7 +50,7 @@ import java.util.Map;
         + "feedback, Get = nilai balik sinkron. Semua path otomatis di-root ke "
         + "/storage/emulated/0 (\"/Download/a.jpg\" jadi "
         + "\"/storage/emulated/0/Download/a.jpg\"; absolut apa adanya). Salin/pindah "
-        + "digabung satu blok CallCopyOrMoveFile (isMove) + info duplikat. "
+        + "digabung satu blok CopyOrMoveFile (isMove) + info duplikat. "
         + "Izin kamera/mic/lokasi = CADANGAN RESMI untuk blok foto/rekam/lokasi (hadir "
         + "mulai v21); hapus bila batal. Keluarga Open = panggil dunia luar: OpenFile + "
         + "OpenFilePicker berperilaku Call (hasil lewat event), OpenAllFilesAccessSettings "
@@ -267,7 +267,7 @@ public class Tools_File extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "True bila salinan/pindahan CallCopyOrMoveFile "
+  @SimpleFunction(description = "True bila salinan/pindahan CopyOrMoveFile "
       + "yang masih berjalan. Khusus operasi itu (slot copyormove).")
   public boolean IsCopyOrMoveBusy() {
     return Shared.slotBusy("copyormove");
@@ -1275,51 +1275,73 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "CALL: Salin ATAU pindah file (isMove=true = "
       + "pindah; salah centang = file pindah padahal mau salin — untuk aman pakai "
-      + "CallCopyFile/CallMoveFile bila ragu). Path otomatis di-root "
+      + "CopyFile/MoveFile bila ragu). Path otomatis di-root "
       + "/storage/emulated/0. Nama tujuan boleh beda. Bila tujuan SUDAH ADA: tidak "
       + "disalin, Finished(success=false, isDuplicated=true) + ErrorOccurred. "
       + "Asset hanya bisa jadi sumber. Satu job per saat.")
-  public void CallCopyOrMoveFile(final String fromFileName, final String toFileName,
+  public void CopyOrMoveFile(final String fromFileName, final String toFileName,
       final boolean isMove) {
     doCopyOrMove(isMove, fromFileName, toFileName);
   }
 
   @SimpleFunction(description = "CALL: Salin file (tidak pindah). Sama seperti "
-      + "CallCopyOrMoveFile(isMove=false), tapi tanpa risiko salah centang. "
+      + "CopyOrMoveFile(isMove=false), tapi tanpa risiko salah centang. "
       + "Bila tujuan SUDAH ADA: Finished(success=false, isDuplicated=true). "
       + "Hasil lewat CopyOrMoveFinished.")
-  public void CallCopyFile(final String fromFileName, final String toFileName) {
+  public void CopyFile(final String fromFileName, final String toFileName) {
     doCopyOrMove(false, fromFileName, toFileName);
   }
 
   @SimpleFunction(description = "CALL: Pindah file (sumber ikut terhapus bila sukses). "
-      + "Sama seperti CallCopyOrMoveFile(isMove=true), tapi tanpa risiko salah "
+      + "Sama seperti CopyOrMoveFile(isMove=true), tapi tanpa risiko salah "
       + "centang. Bila tujuan SUDAH ADA: Finished(success=false, isDuplicated=true). "
       + "Hasil lewat CopyOrMoveFinished.")
-  public void CallMoveFile(final String fromFileName, final String toFileName) {
+  public void MoveFile(final String fromFileName, final String toFileName) {
     doCopyOrMove(true, fromFileName, toFileName);
   }
 
-  @SimpleFunction(description = "Salin BANYAK file sekaligus ke satu folder (tanpa "
-      + "loop manual). fromPaths = list path sumber (atau teks koma). Kembali: "
-      + "true = mulai. Pantau via CopyBatchStarted/ProgressChanged/Finished. "
-      + "(API v3-v8, direstorasi tanpa scope.)")
-  public boolean CopyList(Object fromPaths, String toFolder) {
+  @SimpleFunction(description = "CALL: salin BANYAK file sekaligus ke satu "
+      + "folder (tanpa loop manual). fromPaths = list path sumber (atau teks "
+      + "koma). Hasil lewat CopyBatchStarted/ProgressChanged/Finished. "
+      + "(API v3-v8, direstorasi tanpa scope; dikonversi void agar konsisten "
+      + "Call = tanpa return).")
+  public void CopyList(Object fromPaths, String toFolder) {
     if (!Shared.claimSlot("copyormove")) {
-      Shared.err(this, "CopyOrMove", 0, "masih ada salinan/pindahan berjalan");
-      return false;
+      final String msg = "masih ada salinan/pindahan berjalan";
+      Shared.err(this, "CopyOrMove", 0, msg);
+      final String fFolder = Shared.clean(toFolder == null ? "" : toFolder);
+      fireOnUi(new Runnable() {
+        public void run() {
+          CopyBatchFinished(false, "", fFolder, 0, 0, msg);
+        }
+      });
+      return;
     }
     if (wantAsset(toFolder)) {
       Shared.releaseSlot("copyormove");
-      Shared.err(this, "CopyOrMove", 0, "tidak bisa salin ke Asset");
-      return false;
+      final String msg = "tidak bisa salin ke Asset";
+      Shared.err(this, "CopyOrMove", 0, msg);
+      final String fFolder = Shared.clean(toFolder == null ? "" : toFolder);
+      fireOnUi(new Runnable() {
+        public void run() {
+          CopyBatchFinished(false, "", fFolder, 0, 0, msg);
+        }
+      });
+      return;
     }
     final List<String> paths = toStringList(fromPaths);
     final String tF = toFolder == null ? "" : toFolder;
     if (paths.isEmpty()) {
       Shared.releaseSlot("copyormove");
-      Shared.err(this, "CopyOrMove", 0, "list kosong");
-      return false;
+      final String msg = "list kosong";
+      Shared.err(this, "CopyOrMove", 0, msg);
+      final String fFolder = Shared.clean(tF);
+      fireOnUi(new Runnable() {
+        public void run() {
+          CopyBatchFinished(false, "", fFolder, 0, 0, msg);
+        }
+      });
+      return;
     }
     copyMoveCancel = false;
     final Tools_File me = this;
@@ -1328,30 +1350,50 @@ public class Tools_File extends AndroidNonvisibleComponent
         me.runBatchList(false, paths, tF);
       }
     });
-    return true;
   }
 
-  @SimpleFunction(description = "Pindah BANYAK file sekaligus ke satu folder "
-      + "(sumber ikut terhapus bila sukses). fromPaths = list path sumber "
-      + "(atau teks koma). Kembali: true = mulai. Pantau via "
+  @SimpleFunction(description = "CALL: pindah BANYAK file sekaligus ke satu "
+      + "folder (sumber ikut terhapus bila sukses). fromPaths = list path "
+      + "sumber (atau teks koma). Hasil lewat "
       + "MoveBatchStarted/ProgressChanged/Finished. (API v3-v8, direstorasi "
-      + "tanpa scope.)")
-  public boolean MoveList(Object fromPaths, String toFolder) {
+      + "tanpa scope; dikonversi void agar konsisten Call = tanpa return.)")
+  public void MoveList(Object fromPaths, String toFolder) {
     if (!Shared.claimSlot("copyormove")) {
-      Shared.err(this, "CopyOrMove", 0, "masih ada salinan/pindahan berjalan");
-      return false;
+      final String msg = "masih ada salinan/pindahan berjalan";
+      Shared.err(this, "CopyOrMove", 0, msg);
+      final String fFolder = Shared.clean(toFolder == null ? "" : toFolder);
+      fireOnUi(new Runnable() {
+        public void run() {
+          MoveBatchFinished(false, "", fFolder, 0, 0, msg);
+        }
+      });
+      return;
     }
     if (wantAsset(toFolder)) {
       Shared.releaseSlot("copyormove");
-      Shared.err(this, "CopyOrMove", 0, "tidak bisa pindah ke Asset");
-      return false;
+      final String msg = "tidak bisa pindah ke Asset";
+      Shared.err(this, "CopyOrMove", 0, msg);
+      final String fFolder = Shared.clean(toFolder == null ? "" : toFolder);
+      fireOnUi(new Runnable() {
+        public void run() {
+          MoveBatchFinished(false, "", fFolder, 0, 0, msg);
+        }
+      });
+      return;
     }
     final List<String> paths = toStringList(fromPaths);
     final String tF = toFolder == null ? "" : toFolder;
     if (paths.isEmpty()) {
       Shared.releaseSlot("copyormove");
-      Shared.err(this, "CopyOrMove", 0, "list kosong");
-      return false;
+      final String msg = "list kosong";
+      Shared.err(this, "CopyOrMove", 0, msg);
+      final String fFolder = Shared.clean(tF);
+      fireOnUi(new Runnable() {
+        public void run() {
+          MoveBatchFinished(false, "", fFolder, 0, 0, msg);
+        }
+      });
+      return;
     }
     copyMoveCancel = false;
     final Tools_File me = this;
@@ -1360,7 +1402,6 @@ public class Tools_File extends AndroidNonvisibleComponent
         me.runBatchList(true, paths, tF);
       }
     });
-    return true;
   }
 
   private void runBatchList(final boolean move, List<String> paths,

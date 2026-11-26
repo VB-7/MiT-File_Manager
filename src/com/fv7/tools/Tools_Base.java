@@ -24,7 +24,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @DesignerComponent(
-    version = 24,
+    version = 25,
     description = "Fondasi Tools: id pool global + util Tag untuk id komponen "
         + "LUAR (auto-konversi teks angka: \"5\" = 5) + util dasar (JSON, URI, "
         + "waktu, byte, mime). Butuh id? CreateUniqueId (global, reservasi "
@@ -616,7 +616,7 @@ public class Tools_Base extends AndroidNonvisibleComponent {
         + "Direction* + background KHUSUS lokal/asset (BUKAN URL); "
         + "Compress ListZipContents->GetZipEntries + percent 0-100 + cancel "
         + "hapus ZIP sebagian; File success jadi #1 di 10 event + "
-        + "IsCopyOrMoveBusy + CallCopyFile/Move/AppendFile + GetLastModified/"
+        + "IsCopyOrMoveBusy + CopyFile/MoveFile + CallAppendFile + GetLastModified/"
         + "IsFileReadable; Core Set* diam->lapor ErrorOccurred + "
         + "InvokeDynamic->CallInvokeDynamic + GetDynamicType/16 Type*/"
         + "IsDynamicVisible; Image slider TANPA batas jumlah + cache URL 50MB "
