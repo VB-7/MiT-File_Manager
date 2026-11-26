@@ -164,7 +164,7 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
       rebuildBuckets();
     }
     foldManualToStores();
-    persistStores();
+    saveStores();
     maybeAutoRefresh();
   }
 
@@ -618,8 +618,7 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
 
   private static void importBucketsToStores() {
     synchronized (lock) {
-      for (int i = 0; i < hosts.size(); i = i + 1) {
-        String h = hosts.get(i);
+      for (String h : new ArrayList<String>(hosts)) {
         if (h.startsWith("@@:")) {
           String d = h.substring(3);
           String w = "@@||" + d + "^";
