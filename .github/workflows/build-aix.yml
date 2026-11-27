@@ -19,7 +19,31 @@ jobs:
       - name: Fetch AI2 deps
         run: git clone --depth 1 https://github.com/mit-cml/extension-deps.git lib/appinventor
       - name: Build extension
-        run: ant extensions
+        run: |
+          set +e
+          ant extensions > /tmp/build.log 2>&1
+          CODE=$?
+          python3 - <<'PYEOF'
+          import re
+          txt = open('/tmp/build.log', encoding='utf-8', errors='replace').read()
+          lines = txt.split('\n')
+          out = []
+          for i, l in enumerate(lines):
+            if re.search(r'error|cannot find symbol|BUILD FAILED|FAILED|Exception|symbol\s*:|location\s*:', l, re.I):
+              out.append(l)
+              for k in range(1, 4):
+                if i + k < len(lines):
+                  out.append('  ' + lines[i + k])
+              if len(out) > 120:
+                break
+          if not out:
+            out = lines[-20:]
+          for l in out[:120]:
+            l = l.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')[:1500]
+            if l.strip():
+              print('::error file=build.xml,line=1::' + l)
+          PYEOF
+          exit $CODE
       - name: Upload AIX
         uses: actions/upload-artifact@v4
         with:
