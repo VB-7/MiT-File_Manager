@@ -883,6 +883,8 @@ public final class Shared {
     } else if (t.equals("document") || t.equals("documents")
         || t.equals("dokumen")) {
       return "document";
+    } else if (t.equals("pdf")) {
+      return "pdf";
     } else if (t.equals("apk")) {
       return "apk";
     } else if (t.equals("unknown") || t.equals("lain")
@@ -890,6 +892,16 @@ public final class Shared {
       return "unknown";
     }
     return "";
+  }
+
+  /** True bila nama file cocok untuk filter kategori kanonik.
+   *  pdf = sub-tipe document (hanya ekstensi pdf); kategori lain =
+   *  fileCategory biasa (document tetap mencakup pdf seperti dulu). */
+  public static boolean fileMatchesCategory(String category, String fileName) {
+    if ("pdf".equals(category)) {
+      return "pdf".equals(extensionOf(fileName == null ? "" : fileName));
+    }
+    return category != null && category.equals(fileCategory(fileName));
   }
 
   /** Daftar ekstensi (tanpa titik, urut) untuk satu kategori kanonik. */
@@ -908,6 +920,8 @@ public final class Shared {
       src = ARCHIVE_EXTS;
     } else if ("document".equals(category)) {
       src = DOC_EXTS;
+    } else if ("pdf".equals(category)) {
+      src = new String[] {"pdf"};
     } else if ("apk".equals(category)) {
       src = new String[] {"apk"};
     }
@@ -938,6 +952,54 @@ public final class Shared {
       return min + ":" + ss;
     } catch (Exception e) {
       return "0:00";
+    }
+  }
+
+  // ================= satuan ukuran (B..YB, basis 1024) =================
+
+  public static final String[] SIZE_UNITS = {"B", "KB", "MB", "GB", "TB",
+      "PB", "EB", "ZB", "YB"};
+
+  /** Index satuan kanonik (case-insensitive, trim). Tak dikenal = -1. */
+  public static int sizeUnitIndex(String u) {
+    try {
+      String s = u == null ? "" : u.trim().toUpperCase();
+      for (int i = 0; i < SIZE_UNITS.length; i = i + 1) {
+        if (SIZE_UNITS[i].equals(s)) {
+          return i;
+        }
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    return -1;
+  }
+
+  /** Index satuan terbesar yang pas untuk bytes (auto). bytes<=0 = 0 (B). */
+  public static int autoSizeUnitIndex(long bytes) {
+    try {
+      if (bytes <= 0) {
+        return 0;
+      }
+      double v = (double) bytes;
+      int i = 0;
+      while (v >= 1024.0 && i < SIZE_UNITS.length - 1) {
+        v = v / 1024.0;
+        i = i + 1;
+      }
+      return i;
+    } catch (Exception e) {
+      return 0;
+    }
+  }
+
+  /** Konversi value dari satuan fromIdx ke toIdx. Dibulatkan 2 desimal. */
+  public static double convertSizeValue(double value, int fromIdx, int toIdx) {
+    try {
+      double r = value * Math.pow(1024.0, (double) (fromIdx - toIdx));
+      return Math.round(r * 100.0) / 100.0;
+    } catch (Exception e) {
+      return -1;
     }
   }
 

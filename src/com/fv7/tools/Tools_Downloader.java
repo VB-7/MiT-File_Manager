@@ -34,7 +34,7 @@ import java.util.Map;
 import java.util.HashMap;
 
 @DesignerComponent(
-    version = 24,
+    version = 26,
     description = "Tools_Downloader: unduh paralel ber-id (pause/resume/cancel per id, "
         + "Started/ProgressChanged/Finished) + unduh batch list URL. Id dikelola "
         + "CreateDownloadId (atau CreateUniqueId Tools_Base). List id URUT PEMBUATAN "
@@ -94,6 +94,10 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
 
   private static final Map<Integer, DlInfo> infos = new HashMap<Integer, DlInfo>();
 
+  /** Throttle progres torrent per id (pola sama seperti unduh http). */
+  private static final Map<Integer, Integer> torrentPct = new HashMap<Integer, Integer>();
+  private static final Map<Integer, Long> torrentFire = new HashMap<Integer, Long>();
+
   private static DlInfo infoOf(int id) {
     synchronized (lock) {
       DlInfo i = infos.get(Integer.valueOf(id));
@@ -115,14 +119,23 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
       + "(base64/url-encoded, mis. data:image/png;base64,...) ATAU content: URI "
       + "Android (dari file picker) ATAU file: URL / path lokal (disalin). "
       + "blob: TIDAK didukung (itu objek browser; ubah dulu jadi base64 via JavaScript, "
-      + "lalu kirim sebagai data:URL atau ke CallSaveBase64ToFile Tools_File). "
-      + "fileName kosong = nama otomatis (seperti CallGuessFileName). folder: boleh nama "
+      + "lalu kirim sebagai data:URL atau ke SaveBase64ToFile Tools_File). "
+      + "TORRENT OTOMATIS: isi url dengan magnet: (mis. magnet:?xt=urn:btih:...) "
+      + "atau link http(s) file .torrent = yang terunduh ISI torrent-nya "
+      + "(1 file = file itu; multi-file = folder nama torrent), BUKAN file "
+      + ".torrent-nya. Event/notif/pause/resume/cancel/retry SAMA seperti unduhan "
+      + "biasa (gagal = sebagian dipertahankan agar Retry melanjutkan sisa; "
+      + "batal = output dihapus). fileName diabaikan untuk torrent (nama ikut "
+      + "torrent). Magnet WAJIB memuat tracker (param tr=...); magnet tanpa "
+      + "tracker belum didukung. File .torrent LOKAL (path/file:/content:) tetap "
+      + "disalin apa adanya, bukan diunduh isinya. "
+      + "fileName kosong = nama otomatis (seperti GuessFileName). folder: boleh nama "
       + "relatif (Download/ = aman tanpa izin khusus); folder di luar itu butuh izin "
       + "MANAGE_EXTERNAL_STORAGE. Contoh aman: Download/. id dari CreateDownloadId atau "
       + "CreateUniqueId Tools_Base. Hasil lewat DownloadStarted/ProgressChanged/Finished "
       + "(bawa id). Gagal mulai (URL/id/folder salah) = Finished(success=false) + "
       + "ErrorOccurred.")
-  public void CallDownload(String url, String fileName, String folder, int id) {
+  public void Download(String url, String fileName, String folder, int id) {
     String u = Shared.clean(url);
     if (u.length() == 0) {
       Shared.err(this, "Download", id, "URL kosong");
@@ -194,7 +207,9 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
           return;
         }
         File srcLocal = localSourceFile(op.url);
-        if (isDataUrl(op.url)) {
+        if (TorrentEngine.isMagnetLink(op.url)) {
+          runTorrentDownload(op, null);
+        } else if (isDataUrl(op.url)) {
           runDataDownload(op);
         } else if (isContentUri(op.url)) {
           runContentDownload(op);
@@ -230,7 +245,7 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     return u != null && u.regionMatches(true, 0, "content:", 0, 8);
   }
 
-  /** Sumber file lokal untuk CallDownload: dukung file: URL dan path lokal
+  /** Sumber file lokal untuk Download: dukung file: URL dan path lokal
    *  (relatif di-root /storage/emulated/0, absolut apa adanya).
    *  Kembali null bila bukan pola lokal (lanjut ke unduh http). */
   private static File localSourceFile(String u) {
@@ -667,16 +682,21 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     }
   }
 
+  private HttpURLConnection openHttp(String url) throws Exception {
+    HttpURLConnection h = (HttpURLConnection) new URL(url).openConnection();
+    h.setConnectTimeout(20000);
+    h.setReadTimeout(20000);
+    h.setInstanceFollowRedirects(true);
+    h.setRequestProperty("Accept-Encoding", "identity");
+    h.setRequestProperty("User-Agent", "Mozilla/5.0");
+    return h;
+  }
+
   private void runDownload(DlOp op) {
     HttpURLConnection c = null;
     File outFile = null;
     try {
-      c = (HttpURLConnection) new URL(op.url).openConnection();
-      c.setConnectTimeout(20000);
-      c.setReadTimeout(20000);
-      c.setInstanceFollowRedirects(true);
-      c.setRequestProperty("Accept-Encoding", "identity");
-      c.setRequestProperty("User-Agent", "Mozilla/5.0");
+      c = openHttp(op.url);
       int code = c.getResponseCode();
       if (code >= 400) {
         finishDownload(op, false, "", "", "HTTP " + code);
@@ -684,6 +704,34 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
       }
       String disp = c.getHeaderField("Content-Disposition");
       String mime = c.getContentType();
+      if (TorrentEngine.isTorrentTarget(op.url, mime == null ? "" : mime)) {
+        // Link torrent: ambil byte .torrent-nya dulu (kecil, max 10 MB).
+        // Valid = unduh ISI torrent; tak valid = lanjut unduh normal di bawah.
+        TorrentEngine.Torrent tt = null;
+        try {
+          byte[] tb = TorrentEngine.fetchHttpBytes(op.url);
+          tt = TorrentEngine.parseTorrent(tb);
+        } catch (Exception e) {
+          tt = null;
+        }
+        try {
+          c.disconnect();
+        } catch (Exception e) {
+          // abaikan
+        }
+        if (tt != null) {
+          runTorrentDownload(op, tt);
+          return;
+        }
+        c = openHttp(op.url);
+        int code2 = c.getResponseCode();
+        if (code2 >= 400) {
+          finishDownload(op, false, "", "", "HTTP " + code2);
+          return;
+        }
+        disp = c.getHeaderField("Content-Disposition");
+        mime = c.getContentType();
+      }
       String name = op.fileName;
       if (name.length() == 0) {
         name = guessFileName(op.url, mime == null ? "" : mime,
@@ -813,6 +861,121 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     }
   }
 
+  /** Unduh ISI torrent (magnet: / .torrent terparse). Event/notif/pause/resume/
+   *  cancel/retry SAMA seperti unduhan biasa. Batal = output dihapus; gagal =
+   *  sebagian dipertahankan agar Retry melanjutkan sisa (tanpa uniqueFile). */
+  private void runTorrentDownload(DlOp op, TorrentEngine.Torrent pre) {
+    final DlOp fOp = op;
+    final int fId = op.id;
+    final TorrentEngine.Torrent fPre = pre;
+    TorrentEngine.Listener l = new TorrentEngine.Listener() {
+      public boolean isCancelled() {
+        return fOp.cancel;
+      }
+      public void waitIfPaused() throws TorrentEngine.Cancelled {
+        if (fOp.cancel) {
+          throw new TorrentEngine.Cancelled();
+        }
+        while (fOp.paused && !fOp.cancel) {
+          synchronized (fOp.pauseLock) {
+            try {
+              fOp.pauseLock.wait(500);
+            } catch (InterruptedException e) {
+              // cek flag lagi
+            }
+          }
+        }
+        if (fOp.cancel) {
+          throw new TorrentEngine.Cancelled();
+        }
+      }
+      public void onStarted(final String name, final String savePath,
+          final long total) {
+        fOp.fileName = name;
+        DlInfo si = infoOf(fId);
+        si.status = "jalan";
+        si.fileName = name;
+        si.savePath = savePath;
+        si.total = total;
+        si.received = 0;
+        si.percent = 0;
+        synchronized (lock) {
+          torrentPct.put(Integer.valueOf(fId), Integer.valueOf(0));
+          torrentFire.put(Integer.valueOf(fId),
+              Long.valueOf(System.currentTimeMillis()));
+        }
+        try {
+          form.runOnUiThread(new Runnable() {
+            public void run() {
+              DownloadStarted(fId, name, savePath);
+            }
+          });
+        } catch (Exception e) {
+          // abaikan
+        }
+        updateNotifFor(fId);
+      }
+      public void onProgress(long done, long total) {
+        int pct = total > 0 ? (int) (done * 100L / total) : 0;
+        long now = System.currentTimeMillis();
+        synchronized (lock) {
+          Integer last = torrentPct.get(Integer.valueOf(fId));
+          Long fire = torrentFire.get(Integer.valueOf(fId));
+          int lp = last == null ? -1 : last.intValue();
+          long lf = fire == null ? 0 : fire.longValue();
+          if (pct == lp && now - lf < PROGRESS_MIN_MS && pct != 100) {
+            return;
+          }
+          torrentPct.put(Integer.valueOf(fId), Integer.valueOf(pct));
+          torrentFire.put(Integer.valueOf(fId), Long.valueOf(now));
+        }
+        DlInfo pi = infoOf(fId);
+        pi.percent = pct;
+        pi.received = done;
+        pi.total = total;
+        final int pPct = pct;
+        final long pDone = done;
+        final long pTotal = total;
+        try {
+          form.runOnUiThread(new Runnable() {
+            public void run() {
+              DownloadProgressChanged(fId, pPct, pDone, pTotal);
+            }
+          });
+        } catch (Exception e) {
+          // abaikan
+        }
+        updateNotifFor(fId);
+      }
+    };
+    try {
+      TorrentEngine.Result r;
+      if (fPre != null) {
+        r = TorrentEngine.downloadTorrent(fPre, fOp.dest, l);
+      } else {
+        r = TorrentEngine.downloadAuto(fOp.url, null, fOp.dest, l);
+      }
+      synchronized (lock) {
+        torrentPct.remove(Integer.valueOf(fId));
+        torrentFire.remove(Integer.valueOf(fId));
+      }
+      finishDownload(fOp, true, r.savePath, r.name, "OK");
+    } catch (TorrentEngine.Cancelled e) {
+      synchronized (lock) {
+        torrentPct.remove(Integer.valueOf(fId));
+        torrentFire.remove(Integer.valueOf(fId));
+      }
+      finishDownload(fOp, false, "", "", "Dibatalkan");
+    } catch (Exception e) {
+      synchronized (lock) {
+        torrentPct.remove(Integer.valueOf(fId));
+        torrentFire.remove(Integer.valueOf(fId));
+      }
+      String m = e.getMessage();
+      finishDownload(fOp, false, "", "", m == null ? "torrent gagal" : m);
+    }
+  }
+
   private void finishDownload(final DlOp op, final boolean success, final String path,
       final String name, final String msg) {
     synchronized (lock) {
@@ -880,13 +1043,13 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
   @SimpleFunction(description = "CALL: unduh BANYAK URL sekaligus (tanpa loop manual). "
       + "urls = list teks URL (atau satu teks URL); fileNames = list nama (atau satu teks; "
       + "boleh kosong = otomatis semua; yang kurang dari jumlah URL = otomatis). "
-      + "Contoh: urls = [url1, url2], fileNames = kosongkan. folder seperti CallDownload. "
+      + "Contoh: urls = [url1, url2], fileNames = kosongkan. folder seperti Download. "
       + "Tanpa return: id tiap URL ketahuan saat DownloadStarted menyala (cocokkan via "
       + "fileName/savePath yang dibawanya). Pantau tiap id lewat "
       + "DownloadStarted/DownloadProgressChanged/DownloadFinished. Ringkasan lewat "
       + "DownloadBatchFinished. Satu batch per saat. Tiap id batch bisa dipasang "
       + "SetDownloadNotification satu-satu (notif per file).")
-  public void CallDownloadList(Object urls, Object fileNames,
+  public void DownloadList(Object urls, Object fileNames,
       String folder) {
     int started = 0;
     synchronized (lock) {
@@ -938,7 +1101,7 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
       }
       Ids.unregister(Ids.DOWNLOAD, id);
       started = started + 1;
-      CallDownload(us.get(i), fn, folder, id);
+      Download(us.get(i), fn, folder, id);
     }
     if (started == 0) {
       synchronized (lock) {
@@ -1066,7 +1229,7 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "Jumlah percobaan unduh id ini (tiap mulai/ulang +1, "
-      + "termasuk CallRetryDownload; 0 bila id belum pernah mengunduh).")
+      + "termasuk RetryDownload; 0 bila id belum pernah mengunduh).")
   public int GetDownloadAttempts(int id) {
     synchronized (lock) {
       DlInfo i = infos.get(Integer.valueOf(id));
@@ -1077,7 +1240,7 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
   @SimpleFunction(description = "CALL: Unduh ulang id ini dari awal (byte dihitung ulang "
       + "dari 0). Untuk id yang gagal/dibatalkan/selesai. Id yang masih jalan harus "
       + "di-Cancel dulu. Hasil lewat DownloadFinished seperti biasa.")
-  public void CallRetryDownload(int id) {
+  public void RetryDownload(int id) {
     String u;
     String fn;
     String folder;
@@ -1099,7 +1262,7 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     }
     cancelStatic(id);
     Ids.setActive(Ids.DOWNLOAD, id, false);
-    CallDownload(u, fn, folder, id);
+    Download(u, fn, folder, id);
   }
 
   @SimpleFunction(description = "Total URL batch yang sedang jalan (0 bila tidak ada batch).")
@@ -1125,7 +1288,7 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
 
   // ================= ID =================
 
-  @SimpleFunction(description = "Buat id unduhan unik baru (Number, siap pakai ke CallDownload). "
+  @SimpleFunction(description = "Buat id unduhan unik baru (Number, siap pakai ke Download). "
       + "Urutan pembuatan menentukan urutan list.")
   public int CreateDownloadId() {
     int id = Ids.createFor(Ids.DOWNLOAD);
@@ -1202,11 +1365,11 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
   @SimpleFunction(description = "SET: tampilkan progres unduhan di bar notifikasi "
       + "Android (otomatis: nama file + persen). show=true = tampil + update "
       + "tiap Started/Progress/Finished; show=false = matikan + hapus notif id itu. "
-      + "Pasang sesudah CallDownload, atau di dalam event DownloadStarted/"
+      + "Pasang sesudah Download, atau di dalam event DownloadStarted/"
       + "ProgressChanged (id sudah terdaftar; di Finished kurang relevan). "
-      + "Tiap id hasil CallDownloadList bisa dipasang satu-satu (notif per file). "
-      + "Android 13+ butuh izin POST_NOTIFICATIONS (minta via blok CallSetNotificationPermission Tools_Sheet "
-      + "ATAU CallRequestPermission Tools_Base). Tanpa feedback.")
+      + "Tiap id hasil DownloadList bisa dipasang satu-satu (notif per file). "
+      + "Android 13+ butuh izin POST_NOTIFICATIONS (minta via blok SetNotificationPermission Tools_Sheet "
+      + "ATAU RequestPermission Tools_Base). Tanpa feedback.")
   public void SetDownloadNotification(int id, boolean show) {
     synchronized (lock) {
       if (show) {
@@ -1412,7 +1575,7 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
       + "data:/content:/file:/path = tebak lokal tanpa internet. Hasil lewat "
       + "FileNameGuessed (url + fileName + mimeType). Butuh potong path jadi nama? "
       + "pakai GetFileName Tools_File.")
-  public void CallGuessFileName(final String url) {
+  public void GuessFileName(final String url) {
     final String u = Shared.clean(url);
     if (u.length() == 0) {
       Shared.err(this, "Download", 0, "URL kosong");
@@ -1421,6 +1584,14 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     }
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
+        if (TorrentEngine.isMagnetLink(u)) {
+          String dn = TorrentEngine.magnetDisplayName(u);
+          if (dn.length() == 0) {
+            dn = "torrent";
+          }
+          fireGuess(u, Shared.sanitize(dn), "application/x-bittorrent");
+          return;
+        }
         if (isDataUrl(u)) {
           int comma = u.indexOf(',');
           String meta = comma >= 0 ? u.substring(5, comma) : "";
@@ -1537,7 +1708,7 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleEvent(description = "Hasil CallGuessFileName: url asal + fileName "
+  @SimpleEvent(description = "Hasil GuessFileName: url asal + fileName "
       + "tebakan + mimeType (kosong bila tak diketahui).")
   public void FileNameGuessed(String url, String fileName, String mimeType) {
     Shared.fire(this, "FileNameGuessed", url, fileName,
@@ -1545,7 +1716,7 @@ public class Tools_Downloader extends AndroidNonvisibleComponent
   }
 
   /** Tebak nama file dari URL/mime/disposition. Dipakai otomatis bila fileName
-   *  CallDownload dikosongkan + oleh CallGuessFileName. */
+   *  Download dikosongkan + oleh GuessFileName. */
   private static String guessFileName(String url, String mimeType, String contentDisposition) {
     String name = null;
     if (contentDisposition != null && contentDisposition.length() > 0) {

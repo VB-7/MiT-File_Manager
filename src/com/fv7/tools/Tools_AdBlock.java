@@ -42,7 +42,7 @@ import java.util.List;
 import java.util.Set;
 
 @DesignerComponent(
-    version = 10,
+    version = 11,
     description = "(Digabung ke Tools_Webview: proyek baru cukup pakai Tools_Webview. Komponen ini dipertahankan agar proyek lama tetap jalan.) Tools_AdBlock: mesin AdBlock AUTO ala 1DM — banyak list beda "
         + "tipe dipakai SEKALIGUS dalam satu mesin gabungan (bukan per-id). "
         + "Sumber bawaan 27 URL (EasyList, uAssets, AdGuard, Fanboy, ABPindo, "

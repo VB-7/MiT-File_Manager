@@ -11,6 +11,7 @@ import android.util.Base64;
 
 import com.fv7.tools.helpers.FileCategory;
 import com.fv7.tools.helpers.PickMimeType;
+import com.fv7.tools.helpers.SizeUnit;
 import com.fv7.tools.helpers.Type;
 import com.google.appinventor.components.annotations.DesignerComponent;
 import com.google.appinventor.components.annotations.Options;
@@ -42,15 +43,16 @@ import java.util.List;
 import java.util.Map;
 
 @DesignerComponent(
-    version = 26,
+    version = 28,
     description = "Tools_File: file/folder teks, salin/pindah/hapus/rename, direktori, izin "
-        + "storage 1 pintu (CallSetStoragePermission + cek + GotPermission), "
+        + "storage 1 pintu (SetStoragePermission + cek + GotPermission), "
         + "picker/opener, base64-ke-file, info ruang. Konvensi awalan: "
         + "Is = boolean (colok ke if), Call = async + hasil lewat event, Set = tanpa "
         + "feedback, Get = nilai balik sinkron. Semua path otomatis di-root ke "
         + "/storage/emulated/0 (\"/Download/a.jpg\" jadi "
         + "\"/storage/emulated/0/Download/a.jpg\"; absolut apa adanya). Salin/pindah "
-        + "digabung satu blok CopyOrMoveFile (isMove) + info duplikat. "
+        + "digabung dua blok CopyOrMovedFile (1 file, ToPath fleksibel folder/file) + "
+        + "CopyOrMovedBatchFiles (banyak file, ToFolder satu untuk semua) + dialog duplikat. "
         + "Izin kamera/mic/lokasi = CADANGAN RESMI untuk blok foto/rekam/lokasi (hadir "
         + "mulai v21); hapus bila batal. Keluarga Open = panggil dunia luar: OpenFile + "
         + "OpenFilePicker berperilaku Call (hasil lewat event), OpenAllFilesAccessSettings "
@@ -80,6 +82,11 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   private volatile boolean copyMoveCancel = false;
   private volatile String lastBase64Path = "";
+
+  // Antrean salin/pindah: sekuensial index 1..N. Satu slot "copyormove"
+  // dipegang selama 1 panggilan (single = antrean isi 1).
+  private volatile boolean batchAskAll = false;
+  private volatile int batchAskAction = 1;
 
   private final Map<Integer, Integer> picks = new HashMap<Integer, Integer>();
   private static final long PROGRESS_MIN_MS = 400;
@@ -267,8 +274,8 @@ public class Tools_File extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "True bila salinan/pindahan CopyOrMoveFile "
-      + "yang masih berjalan. Khusus operasi itu (slot copyormove).")
+  @SimpleFunction(description = "True bila salinan/pindahan CopyOrMovedFile / "
+      + "CopyOrMovedBatchFiles yang masih berjalan. Khusus operasi itu (slot copyormove).")
   public boolean IsCopyOrMoveBusy() {
     return Shared.slotBusy("copyormove");
   }
@@ -277,7 +284,7 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "CALL: jadikan directory hidden (nama jadi "
       + ".nama). Sudah hidden = success. Hasil lewat DirectoryHidden.")
-  public void CallSetHiddenDirectory(final String directory) {
+  public void SetHiddenDirectory(final String directory) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         if (!Shared.ensurePermission(form, activity, Shared.PERM_WRITE_STORAGE)) {
@@ -360,7 +367,7 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "CALL: buat file .nomedia di dalam folder "
       + "(sembunyikan dari galeri/musik). Hasil lewat NomediaFileCreated.")
-  public void CallMakeNomediaFile(final String folder) {
+  public void MakeNomediaFile(final String folder) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         if (!Shared.ensurePermission(form, activity, Shared.PERM_WRITE_STORAGE)) {
@@ -440,7 +447,7 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "CALL: hapus file .nomedia di folder. "
       + "Tidak ada = success. Hasil lewat NomediaFileDeleted.")
-  public void CallDeleteNomediaFile(final String folder) {
+  public void DeleteNomediaFile(final String folder) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         if (!Shared.ensurePermission(form, activity, Shared.PERM_WRITE_STORAGE)) {
@@ -512,7 +519,7 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "CALL: buat folder (termasuk induknya). "
       + "Sudah ada = success. Hasil lewat DirectoryCreated.")
-  public void CallMakeDirectory(final String folder) {
+  public void MakeDirectory(final String folder) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         if (!Shared.ensurePermission(form, activity, Shared.PERM_WRITE_STORAGE)) {
@@ -587,7 +594,7 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "CALL: hapus file/folder (folder rekursif). "
       + "Tidak ada = success. Hasil lewat FileDeleted.")
-  public void CallDeleteFile(final String path) {
+  public void DeleteFile(final String path) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         if (!Shared.ensurePermission(form, activity, Shared.PERM_WRITE_STORAGE)) {
@@ -659,7 +666,7 @@ public class Tools_File extends AndroidNonvisibleComponent
   @SimpleFunction(description = "CALL: hapus BANYAK path sekaligus (tanpa loop "
       + "manual). paths = list, atau teks pisah koma (\"/a.jpg, /b.jpg\"; koma "
       + "boleh spasi). Hasil lewat FileListDeleted (total + terhapus).")
-  public void CallDeleteList(final Object paths) {
+  public void DeleteList(final Object paths) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         if (!Shared.ensurePermission(form, activity, Shared.PERM_WRITE_STORAGE)) {
@@ -727,7 +734,7 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "CALL: ganti nama FILE (tanpa pindah folder). "
       + "newName = nama saja. Hasil lewat FileRenamed (path = nama baru).")
-  public void CallRenameFile(final String path, final String newName) {
+  public void RenameFile(final String path, final String newName) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         if (!Shared.ensurePermission(form, activity, Shared.PERM_WRITE_STORAGE)) {
@@ -810,7 +817,7 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "CALL: ganti nama FOLDER (tanpa pindah). "
       + "newName = nama saja. Hasil lewat FolderRenamed.")
-  public void CallRenameFolder(final String path, final String newName) {
+  public void RenameFolder(final String path, final String newName) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         if (!Shared.ensurePermission(form, activity, Shared.PERM_WRITE_STORAGE)) {
@@ -895,7 +902,7 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "CALL: buat file kosong (folder induk dibuat "
       + "otomatis). Sudah ada = success. Hasil lewat EmptyFileCreated.")
-  public void CallCreateEmptyFile(final String path) {
+  public void CreateEmptyFile(final String path) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         if (!Shared.ensurePermission(form, activity, Shared.PERM_WRITE_STORAGE)) {
@@ -974,9 +981,9 @@ public class Tools_File extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "CALL: tulis teks ke file (UTF-8; timpa isi "
-      + "lama). append=true = sambung di akhir (sama seperti CallAppendFile). "
+      + "lama). append=true = sambung di akhir (sama seperti AppendFile). "
       + "Hanya untuk teks; file biner rusak bila lewat sini. Hasil lewat FileSaved.")
-  public void CallSaveFile(final String path, final String content,
+  public void SaveFile(final String path, final String content,
       final boolean append) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
@@ -1056,16 +1063,16 @@ public class Tools_File extends AndroidNonvisibleComponent
   }
 
   @SimpleFunction(description = "CALL: sambung teks di AKHIR file (UTF-8; "
-      + "tidak menimpa isi lama). Sama seperti CallSaveFile(append=true). "
+      + "tidak menimpa isi lama). Sama seperti SaveFile(append=true). "
       + "File belum ada = dibuat baru. Hasil lewat FileSaved.")
-  public void CallAppendFile(final String path, final String content) {
-    CallSaveFile(path, content, true);
+  public void AppendFile(final String path, final String content) {
+    SaveFile(path, content, true);
   }
 
   @SimpleFunction(description = "CALL: simpan base64 LANGSUNG ke storage "
       + "(tanpa validasi gambar, lebih cepat). Hasil lewat Base64FileSaved. "
       + "Polling: GetLastBase64FilePath.")
-  public void CallSaveBase64ToFile(final String base64, final String path) {
+  public void SaveBase64ToFile(final String base64, final String path) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         if (!Shared.ensurePermission(form, activity, Shared.PERM_WRITE_STORAGE)) {
@@ -1178,7 +1185,7 @@ public class Tools_File extends AndroidNonvisibleComponent
       + "Hanya untuk teks UTF-8; file biner/encoding lain isinya bisa kacau "
       + "(biner = baca via base64/pustaka lain). Hasil lewat GotText "
       + "(content = isi file). Mulai lewat ReadStarted.")
-  public void CallReadText(final String path) {
+  public void ReadText(final String path) {
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
         if (!Shared.ensurePermission(form, activity, Shared.PERM_READ_STORAGE)) {
@@ -1273,72 +1280,35 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   // ================= CALL: salin / pindah =================
 
-  @SimpleFunction(description = "CALL: Salin ATAU pindah file (isMove=true = "
-      + "pindah; salah centang = file pindah padahal mau salin — untuk aman pakai "
-      + "CopyFile/MoveFile bila ragu). Path otomatis di-root "
-      + "/storage/emulated/0. Nama tujuan boleh beda. Bila tujuan SUDAH ADA: tidak "
-      + "disalin, Finished(success=false, isDuplicated=true) + ErrorOccurred. "
-      + "Asset hanya bisa jadi sumber. Satu job per saat.")
-  public void CopyOrMoveFile(final String fromFileName, final String toFileName,
-      final boolean isMove) {
-    doCopyOrMove(isMove, fromFileName, toFileName);
-  }
-
-  @SimpleFunction(description = "CALL: Salin file (tidak pindah). Sama seperti "
-      + "CopyOrMoveFile(isMove=false), tapi tanpa risiko salah centang. "
-      + "Bila tujuan SUDAH ADA: Finished(success=false, isDuplicated=true). "
-      + "Hasil lewat CopyOrMoveFinished.")
-  public void CopyFile(final String fromFileName, final String toFileName) {
-    doCopyOrMove(false, fromFileName, toFileName);
-  }
-
-  @SimpleFunction(description = "CALL: Pindah file (sumber ikut terhapus bila sukses). "
-      + "Sama seperti CopyOrMoveFile(isMove=true), tapi tanpa risiko salah "
-      + "centang. Bila tujuan SUDAH ADA: Finished(success=false, isDuplicated=true). "
-      + "Hasil lewat CopyOrMoveFinished.")
-  public void MoveFile(final String fromFileName, final String toFileName) {
-    doCopyOrMove(true, fromFileName, toFileName);
-  }
-
-  @SimpleFunction(description = "CALL: salin BANYAK file sekaligus ke satu "
-      + "folder (tanpa loop manual). fromPaths = list path sumber (atau teks "
-      + "koma). Hasil lewat CopyBatchStarted/ProgressChanged/Finished. "
-      + "(API v3-v8, direstorasi tanpa scope; dikonversi void agar konsisten "
-      + "Call = tanpa return).")
-  public void CopyList(Object fromPaths, String toFolder) {
+  @SimpleFunction(description = "CALL: salin ATAU pindah 1 file. FromPath = path sumber "
+      + "(file / aset //...). ToPath fleksibel: isi FOLDER = nama ikut asal; isi PATH FILE "
+      + "lengkap = rename. IsMoved=true pindah (sumber dihapus bila sukses), false salin. "
+      + "AskIfDuplicate=true tampilkan dialog bila tujuan sudah ada (Yes=timpa, No=rename "
+      + "otomatis nama_N.ext, Cancel=hentikan, English); false = otomatis rename tanpa dialog. "
+      + "Satu job per saat. Hasil lewat CopyOrMovedFileStarted/ProgressChanged/Finished.")
+  public void CopyOrMovedFile(final String fromPath, final String toPath,
+      final boolean isMoved, final boolean askIfDuplicate) {
     if (!Shared.claimSlot("copyormove")) {
       final String msg = "masih ada salinan/pindahan berjalan";
       Shared.err(this, "CopyOrMove", 0, msg);
-      final String fFolder = Shared.clean(toFolder == null ? "" : toFolder);
+      final String fF = Shared.clean(fromPath);
+      final String fT = Shared.clean(toPath);
       fireOnUi(new Runnable() {
         public void run() {
-          CopyBatchFinished(false, "", fFolder, 0, 0, msg);
+          CopyOrMovedFileFinished(false, Shared.fileNameOf(fF), fF, fT, msg);
         }
       });
       return;
     }
-    if (wantAsset(toFolder)) {
+    if (wantAsset(toPath)) {
       Shared.releaseSlot("copyormove");
       final String msg = "tidak bisa salin ke Asset";
       Shared.err(this, "CopyOrMove", 0, msg);
-      final String fFolder = Shared.clean(toFolder == null ? "" : toFolder);
+      final String fF = Shared.clean(fromPath);
+      final String fT = Shared.clean(toPath);
       fireOnUi(new Runnable() {
         public void run() {
-          CopyBatchFinished(false, "", fFolder, 0, 0, msg);
-        }
-      });
-      return;
-    }
-    final List<String> paths = toStringList(fromPaths);
-    final String tF = toFolder == null ? "" : toFolder;
-    if (paths.isEmpty()) {
-      Shared.releaseSlot("copyormove");
-      final String msg = "list kosong";
-      Shared.err(this, "CopyOrMove", 0, msg);
-      final String fFolder = Shared.clean(tF);
-      fireOnUi(new Runnable() {
-        public void run() {
-          CopyBatchFinished(false, "", fFolder, 0, 0, msg);
+          CopyOrMovedFileFinished(false, Shared.fileNameOf(fF), fF, fT, msg);
         }
       });
       return;
@@ -1347,281 +1317,568 @@ public class Tools_File extends AndroidNonvisibleComponent
     final Tools_File me = this;
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
-        me.runBatchList(false, paths, tF);
-      }
-    });
-  }
-
-  @SimpleFunction(description = "CALL: pindah BANYAK file sekaligus ke satu "
-      + "folder (sumber ikut terhapus bila sukses). fromPaths = list path "
-      + "sumber (atau teks koma). Hasil lewat "
-      + "MoveBatchStarted/ProgressChanged/Finished. (API v3-v8, direstorasi "
-      + "tanpa scope; dikonversi void agar konsisten Call = tanpa return.)")
-  public void MoveList(Object fromPaths, String toFolder) {
-    if (!Shared.claimSlot("copyormove")) {
-      final String msg = "masih ada salinan/pindahan berjalan";
-      Shared.err(this, "CopyOrMove", 0, msg);
-      final String fFolder = Shared.clean(toFolder == null ? "" : toFolder);
-      fireOnUi(new Runnable() {
-        public void run() {
-          MoveBatchFinished(false, "", fFolder, 0, 0, msg);
-        }
-      });
-      return;
-    }
-    if (wantAsset(toFolder)) {
-      Shared.releaseSlot("copyormove");
-      final String msg = "tidak bisa pindah ke Asset";
-      Shared.err(this, "CopyOrMove", 0, msg);
-      final String fFolder = Shared.clean(toFolder == null ? "" : toFolder);
-      fireOnUi(new Runnable() {
-        public void run() {
-          MoveBatchFinished(false, "", fFolder, 0, 0, msg);
-        }
-      });
-      return;
-    }
-    final List<String> paths = toStringList(fromPaths);
-    final String tF = toFolder == null ? "" : toFolder;
-    if (paths.isEmpty()) {
-      Shared.releaseSlot("copyormove");
-      final String msg = "list kosong";
-      Shared.err(this, "CopyOrMove", 0, msg);
-      final String fFolder = Shared.clean(tF);
-      fireOnUi(new Runnable() {
-        public void run() {
-          MoveBatchFinished(false, "", fFolder, 0, 0, msg);
-        }
-      });
-      return;
-    }
-    copyMoveCancel = false;
-    final Tools_File me = this;
-    AsynchUtil.runAsynchronously(new Runnable() {
-      public void run() {
-        me.runBatchList(true, paths, tF);
-      }
-    });
-  }
-
-  private void runBatchList(final boolean move, List<String> paths,
-      String folder) {
-    int total = paths.size();
-    int done = 0;
-    int fail = 0;
-    try {
-      File dir = rootedFile(folder);
-      if (dir == null) {
-        batchListFinished(move, false, "", 0, total,
-            "folder tujuan tidak valid");
-        return;
-      }
-      if (!dir.exists()) {
-        dir.mkdirs();
-      }
-      final int fTotal = total;
-      final String fFolder = dir.getAbsolutePath();
-      fireOnUi(new Runnable() {
-        public void run() {
-          if (move) {
-            MoveBatchStarted(fTotal, fFolder);
-          } else {
-            CopyBatchStarted(fTotal, fFolder);
-          }
-        }
-      });
-      for (int i = 0; i < paths.size(); i = i + 1) {
-        if (copyMoveCancel) {
-          batchListFinished(move, false, fFolder, done, total - done,
-              "Dibatalkan");
-          return;
-        }
-        String srcP = paths.get(i);
-        String name = Shared.fileNameOf(Shared.clean(srcP));
-        if (name.length() == 0) {
-          name = "file_" + i;
-        }
-        final int idx = i + 1;
-        final String fName = name;
-        fireOnUi(new Runnable() {
-          public void run() {
-            if (move) {
-              MoveBatchProgressChanged(idx, fTotal, fName, 0);
-            } else {
-              CopyBatchProgressChanged(idx, fTotal, fName, 0);
-            }
-          }
-        });
-        File dst = new File(dir, name);
-        boolean existed = dst.isFile();
-        runCopyOrMove(move, srcP, dst.getAbsolutePath());
-        boolean okNow = false;
         try {
-          okNow = dst.isFile() && !existed && !copyMoveCancel;
-        } catch (Exception e) {
-          // abaikan
-        }
-        if (okNow) {
-          done = done + 1;
-        } else {
-          fail = fail + 1;
-        }
-        final int dIdx = i + 1;
-        fireOnUi(new Runnable() {
-          public void run() {
-            if (move) {
-              MoveBatchProgressChanged(dIdx, fTotal, fName, 100);
-            } else {
-              CopyBatchProgressChanged(dIdx, fTotal, fName, 100);
-            }
+          if (!Shared.ensurePermission(form, activity, Shared.PERM_WRITE_STORAGE)) {
+            final String permMsg = "izin belum granted (Android 11+: aktifkan 'Akses semua file')";
+            Shared.err(me, "CopyOrMove", 0, permMsg);
+            final String pF = Shared.clean(fromPath);
+            final String pT = Shared.clean(toPath);
+            fireOnUi(new Runnable() {
+              public void run() {
+                CopyOrMovedFileFinished(false, Shared.fileNameOf(pF), pF, pT, permMsg);
+              }
+            });
+            return;
           }
-        });
-      }
-      batchListFinished(move, fail == 0, fFolder, done, fail, "OK");
-    } catch (Exception e) {
-      String m = e.getMessage();
-      batchListFinished(move, false, "", done, total - done,
-          m == null ? "batch gagal" : m);
-    } finally {
-      Shared.releaseSlot("copyormove");
-    }
-  }
-
-  private void batchListFinished(final boolean move, final boolean success,
-      final String folder, final int doneCount, final int failCount,
-      final String msg) {
-    final String sc = "";
-    fireOnUi(new Runnable() {
-      public void run() {
-        if (move) {
-          MoveBatchFinished(success, sc, folder, doneCount, failCount, msg);
-        } else {
-          CopyBatchFinished(success, sc, folder, doneCount, failCount, msg);
+          me.runSingleCopyOrMove(fromPath, toPath, isMoved, askIfDuplicate);
+        } finally {
+          Shared.releaseSlot("copyormove");
         }
       }
     });
-    if (!success && !"Dibatalkan".equals(msg) && !"OK".equals(msg)) {
-      Shared.err(this, "CopyOrMove", 0, msg);
-    }
   }
-  private void doCopyOrMove(final boolean isMove, final String fromFileName,
-      final String toFileName) {
+
+  @SimpleFunction(description = "CALL: salin ATAU pindah BANYAK file sekaligus ke SATU folder "
+      + "(tanpa loop manual, sistem antrian sekuensial index 1..N). FromPaths = list path "
+      + "sumber (atau teks koma). ToFolder = SATU folder tujuan untuk semua (nama ikut asal; "
+      + "bukan list). IsMoved=true pindah, false salin. AskIfDuplicate=true tampilkan dialog "
+      + "bila tujuan sudah ada (Yes=timpa, No=rename otomatis, Cancel=hentikan, + centang "
+      + "'Apply to all files' untuk sisa antrian, English); false = otomatis rename tanpa "
+      + "dialog. Hasil per file lewat CopyOrMovedBatchFilesStarted/ProgressChanged/Finished.")
+  public void CopyOrMovedBatchFiles(final Object fromPaths, final String toFolder,
+      final boolean isMoved, final boolean askIfDuplicate) {
     if (!Shared.claimSlot("copyormove")) {
       final String msg = "masih ada salinan/pindahan berjalan";
       Shared.err(this, "CopyOrMove", 0, msg);
-      fireOnUi(new Runnable() {
-        public void run() {
-          CopyOrMoveFinished(false, Shared.clean(toFileName),
-              Shared.fileNameOf(toFileName), false);
-        }
-      });
       return;
     }
-    if (wantAsset(toFileName)) {
+    if (wantAsset(toFolder)) {
       Shared.releaseSlot("copyormove");
       final String msg = "tidak bisa salin ke Asset";
       Shared.err(this, "CopyOrMove", 0, msg);
-      fireOnUi(new Runnable() {
-        public void run() {
-          CopyOrMoveFinished(false, Shared.clean(toFileName),
-              Shared.fileNameOf(toFileName), false);
-        }
-      });
+      return;
+    }
+    final List<String> paths = toStringList(fromPaths);
+    final String tF = toFolder == null ? "" : toFolder;
+    if (paths.isEmpty()) {
+      Shared.releaseSlot("copyormove");
+      final String msg = "list kosong";
+      Shared.err(this, "CopyOrMove", 0, msg);
       return;
     }
     copyMoveCancel = false;
+    final Tools_File me = this;
     AsynchUtil.runAsynchronously(new Runnable() {
       public void run() {
-        if (!Shared.ensurePermission(form, activity, Shared.PERM_WRITE_STORAGE)) {
-          final String permMsg = "izin belum granted (Android 11+: aktifkan 'Akses semua file')";
-          finishCopyOrMove(isMove, false, "", Shared.fileNameOf(toFileName), false, permMsg);
+        try {
+          if (!Shared.ensurePermission(form, activity, Shared.PERM_WRITE_STORAGE)) {
+            final String permMsg = "izin belum granted (Android 11+: aktifkan 'Akses semua file')";
+            Shared.err(me, "CopyOrMove", 0, permMsg);
+            return;
+          }
+          me.runBatchCopyOrMove(paths, tF, isMoved, askIfDuplicate);
+        } finally {
           Shared.releaseSlot("copyormove");
-          return;
         }
-        runCopyOrMove(isMove, fromFileName, toFileName);
       }
     });
   }
 
   @SimpleFunction(description = "SET: batalkan salinan/pindahan berjalan. "
-      + "Tanpa feedback (file sebagian dihapus). Rantai: CopyOrMoveFinished "
-      + "(success=false, need='dibatalkan').")
+      + "Tanpa feedback (file sebagian dihapus). Rantai: Finished(success=false, "
+      + "message='dibatalkan'/'Cancelled'). Batch: file berjalan dibatalkan, sisa antrian "
+      + "tidak diproses.")
   public void SetCancelCopyOrMove() {
     copyMoveCancel = true;
   }
 
-  private void runCopyOrMove(final boolean move, final String fP, final String tP) {
-    String comp = "CopyOrMove";
+  private interface CopyProgressListener {
+    void onProgress(int pct);
+  }
+
+  private void runSingleCopyOrMove(String fromPath, String toPath,
+      boolean isMoved, boolean askIfDuplicate) {
+    String fP = Shared.clean(fromPath);
+    File planned = resolveSingleDest(fP, toPath);
+    if (planned == null) {
+      String msg = "tujuan tidak valid";
+      Shared.err(this, "CopyOrMove", 0, msg);
+      final String ff = fP;
+      final String mm = msg;
+      final String tt = Shared.clean(toPath);
+      finishSingle(false, Shared.fileNameOf(ff), ff, tt, mm);
+      return;
+    }
+    boolean fromAsset = wantAsset(fP);
+    String srcName;
+    if (fromAsset) {
+      srcName = Shared.fileNameOf(Shared.assetName(fP));
+      if (srcName.length() == 0) {
+        srcName = "file";
+      }
+    } else {
+      File src = rootedFile(fP);
+      if (src == null || !src.exists() || src.isDirectory()) {
+        String msg = src != null && src.isDirectory()
+            ? "sumber adalah folder" : "file sumber tidak ada";
+        Shared.err(this, "CopyOrMove", 0, msg);
+        final String ff = fP;
+        final String mm = msg;
+        finishSingle(false, srcNameOf(src, fP), ff, planned.getAbsolutePath(), mm);
+        return;
+      }
+      srcName = src.getName();
+    }
+    File dst = planned;
+    if (dst.exists() && dst.isFile()) {
+      int choice = askIfDuplicate
+          ? askDuplicateBlocking(dst.getName(), false) : 1;
+      if (choice == 2) {
+        finishSingle(false, dst.getName(), fP, dst.getAbsolutePath(), "Cancelled");
+        return;
+      } else if (choice == 0) {
+        try {
+          dst.delete();
+        } catch (Exception e) {
+          // abaikan, timpa via stream di bawah
+        }
+      } else {
+        dst = autoRename(dst);
+      }
+    } else if (dst.exists() && dst.isDirectory()) {
+      String msg = "tujuan adalah folder";
+      Shared.err(this, "CopyOrMove", 0, msg);
+      finishSingle(false, srcName, fP, dst.getAbsolutePath(), msg);
+      return;
+    }
+    final String sFrom = fP;
+    final String sTo = dst.getAbsolutePath();
+    final String sName = dst.getName();
+    final boolean sMove = isMoved;
+    fireOnUi(new Runnable() {
+      public void run() {
+        CopyOrMovedFileStarted(sFrom, sTo, sName, sMove);
+      }
+    });
+    final String fName = sName;
+    String err = copyBytes(fP, dst, isMoved, new CopyProgressListener() {
+      public void onProgress(int pct) {
+        final int p = pct;
+        fireOnUi(new Runnable() {
+          public void run() {
+            CopyOrMovedFileProgressChanged(p, fName);
+          }
+        });
+      }
+    });
+    if (err != null) {
+      Shared.err(this, "CopyOrMove", 0, err);
+      finishSingle(false, sName, sFrom, sTo, err);
+      return;
+    }
+    finishSingle(true, sName, sFrom, sTo, "");
+  }
+
+  private void runBatchCopyOrMove(List<String> paths, String folder,
+      boolean isMoved, boolean askIfDuplicate) {
+    File dir = rootedFile(folder);
+    if (dir == null) {
+      Shared.err(this, "CopyOrMove", 0, "folder tujuan tidak valid");
+      return;
+    }
+    if (!dir.exists()) {
+      dir.mkdirs();
+    }
+    if (!dir.isDirectory()) {
+      Shared.err(this, "CopyOrMove", 0, "tujuan bukan folder");
+      return;
+    }
+    final String dirAbs = dir.getAbsolutePath();
+    int total = paths.size();
+    ArrayList<String> cleanPaths = new ArrayList<String>();
+    ArrayList<String> names = new ArrayList<String>();
+    ArrayList<String> plannedTos = new ArrayList<String>();
+    for (int i = 0; i < paths.size(); i = i + 1) {
+      String p = Shared.clean(paths.get(i));
+      cleanPaths.add(p);
+      String nm;
+      if (wantAsset(p)) {
+        nm = Shared.fileNameOf(Shared.assetName(p));
+        if (nm.length() == 0) {
+          nm = "file_" + i;
+        }
+      } else {
+        nm = Shared.fileNameOf(p);
+        if (nm.length() == 0) {
+          nm = "file_" + i;
+        }
+      }
+      names.add(nm);
+      plannedTos.add(new File(dir, nm).getAbsolutePath());
+    }
+    final YailList fFrom = YailList.makeList(cleanPaths);
+    final YailList fTo = YailList.makeList(plannedTos);
+    final YailList fNames = YailList.makeList(names);
+    final int fTotal = total;
+    batchAskAll = false;
+    batchAskAction = 1;
+    for (int i = 0; i < paths.size(); i = i + 1) {
+      if (copyMoveCancel) {
+        return;
+      }
+      final int idx = i + 1;
+      final String fP = cleanPaths.get(i);
+      File dst = new File(dir, names.get(i));
+      if (dst.exists() && dst.isFile()) {
+        int choice;
+        if (askIfDuplicate) {
+          if (batchAskAll) {
+            choice = batchAskAction;
+          } else {
+            choice = askDuplicateBlocking(dst.getName(), true);
+          }
+        } else {
+          choice = 1;
+        }
+        if (choice == 2) {
+          final String cName = dst.getName();
+          final String cFrom = fP;
+          final String cTo = dst.getAbsolutePath();
+          final int cIdx = idx;
+          fireOnUi(new Runnable() {
+            public void run() {
+              CopyOrMovedBatchFilesFinished(false, cName, cFrom, cTo, cIdx, "Cancelled");
+            }
+          });
+          return;
+        } else if (choice == 0) {
+          try {
+            dst.delete();
+          } catch (Exception e) {
+            // abaikan
+          }
+        } else {
+          dst = autoRename(dst);
+        }
+      } else if (dst.exists()) {
+        final String cName2 = dst.getName();
+        final String cTo2 = dst.getAbsolutePath();
+        final int cIdx2 = idx;
+        fireOnUi(new Runnable() {
+          public void run() {
+            CopyOrMovedBatchFilesFinished(false, cName2, fP, cTo2, cIdx2, "tujuan adalah folder");
+          }
+        });
+        continue;
+      }
+      if (!fromExists(fP)) {
+        final String cName3 = dst.getName();
+        final String cTo3 = dst.getAbsolutePath();
+        final int cIdx3 = idx;
+        fireOnUi(new Runnable() {
+          public void run() {
+            CopyOrMovedBatchFilesFinished(false, cName3, fP, cTo3, cIdx3, "file sumber tidak ada");
+          }
+        });
+        continue;
+      }
+      final String sFrom = fP;
+      final String sTo = dst.getAbsolutePath();
+      final String sName = dst.getName();
+      final int sIdx = idx;
+      fireOnUi(new Runnable() {
+        public void run() {
+          CopyOrMovedBatchFilesStarted(fFrom, fTo, sIdx, fTotal, fNames);
+        }
+      });
+      final File fDst = dst;
+      String err = copyBytes(fP, fDst, isMoved, new CopyProgressListener() {
+        public void onProgress(int pct) {
+          final int p = pct;
+          fireOnUi(new Runnable() {
+            public void run() {
+              CopyOrMovedBatchFilesProgressChanged(p, sName, sIdx);
+            }
+          });
+        }
+      });
+      if (copyMoveCancel) {
+        final String cTo4 = sTo;
+        fireOnUi(new Runnable() {
+          public void run() {
+            CopyOrMovedBatchFilesFinished(false, sName, sFrom, cTo4, sIdx, "Cancelled");
+          }
+        });
+        return;
+      }
+      if (err != null) {
+        Shared.err(this, "CopyOrMove", 0, err);
+        final String eMsg = err;
+        fireOnUi(new Runnable() {
+          public void run() {
+            CopyOrMovedBatchFilesFinished(false, sName, sFrom, sTo, sIdx, eMsg);
+          }
+        });
+        continue;
+      }
+      fireOnUi(new Runnable() {
+        public void run() {
+          CopyOrMovedBatchFilesFinished(true, sName, sFrom, sTo, sIdx, "");
+        }
+      });
+    }
+  }
+
+  private boolean fromExists(String fP) {
+    try {
+      if (wantAsset(fP)) {
+        return existsInAssets(fP);
+      }
+      File src = rootedFile(fP);
+      return src != null && src.isFile();
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
+  private String srcNameOf(File src, String fP) {
+    try {
+      if (src != null) {
+        return src.getName();
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    return Shared.fileNameOf(Shared.clean(fP));
+  }
+
+  private File resolveSingleDest(String fP, String toP) {
+    try {
+      String t = Shared.clean(toP);
+      if (t.length() == 0) {
+        return null;
+      }
+      if (wantAsset(t)) {
+        return null;
+      }
+      String srcName;
+      if (wantAsset(fP)) {
+        srcName = Shared.fileNameOf(Shared.assetName(fP));
+        if (srcName.length() == 0) {
+          srcName = "file";
+        }
+      } else {
+        File src = rootedFile(fP);
+        if (src == null) {
+          return null;
+        }
+        srcName = src.getName();
+        if (srcName.length() == 0) {
+          srcName = "file";
+        }
+      }
+      if (t.endsWith("/")) {
+        File d = rootedFile(t);
+        if (d == null) {
+          return null;
+        }
+        return new File(d, srcName);
+      }
+      File tFile = rootedFile(t);
+      if (tFile == null) {
+        return null;
+      }
+      if (tFile.isDirectory()) {
+        return new File(tFile, srcName);
+      }
+      return tFile;
+    } catch (Exception e) {
+      return null;
+    }
+  }
+
+  private File autoRename(File dst) {
+    try {
+      if (!dst.exists()) {
+        return dst;
+      }
+      File parent = dst.getParentFile();
+      String name = dst.getName();
+      String base = name;
+      String ext = "";
+      int dot = name.lastIndexOf('.');
+      if (dot > 0) {
+        base = name.substring(0, dot);
+        ext = name.substring(dot + 1);
+      }
+      for (int i = 1; i < 100000; i = i + 1) {
+        String cand = ext.length() == 0 ? base + "_" + i : base + "_" + i + "." + ext;
+        File f = new File(parent, cand);
+        if (!f.exists()) {
+          return f;
+        }
+      }
+      return dst;
+    } catch (Exception e) {
+      return dst;
+    }
+  }
+
+  private int askDuplicateBlocking(final String displayName, final boolean isBatch) {
+    if (isBatch && batchAskAll) {
+      return batchAskAction;
+    }
+    final java.util.concurrent.CountDownLatch latch =
+        new java.util.concurrent.CountDownLatch(1);
+    final int[] out = new int[]{-1};
+    final boolean[] allBox = new boolean[]{false};
+    fireOnUi(new Runnable() {
+      public void run() {
+        try {
+          android.app.AlertDialog.Builder b =
+              new android.app.AlertDialog.Builder(activity);
+          b.setTitle("File already exists");
+          b.setMessage("File \"" + displayName + "\" already exists.\n"
+              + "Yes = Overwrite, No = Rename automatically, Cancel = Stop.");
+          b.setCancelable(false);
+          android.widget.CheckBox cb = null;
+          if (isBatch) {
+            cb = new android.widget.CheckBox(activity);
+            cb.setText("Apply to all files");
+            b.setView(cb);
+          }
+          final android.widget.CheckBox fCb = cb;
+          b.setPositiveButton("Yes",
+              new android.content.DialogInterface.OnClickListener() {
+                public void onClick(android.content.DialogInterface d, int w) {
+                  out[0] = 0;
+                  if (fCb != null) {
+                    try {
+                      allBox[0] = fCb.isChecked();
+                    } catch (Exception e) {
+                      // abaikan
+                    }
+                  }
+                  latch.countDown();
+                }
+              });
+          b.setNegativeButton("No",
+              new android.content.DialogInterface.OnClickListener() {
+                public void onClick(android.content.DialogInterface d, int w) {
+                  out[0] = 1;
+                  if (fCb != null) {
+                    try {
+                      allBox[0] = fCb.isChecked();
+                    } catch (Exception e) {
+                      // abaikan
+                    }
+                  }
+                  latch.countDown();
+                }
+              });
+          b.setNeutralButton("Cancel",
+              new android.content.DialogInterface.OnClickListener() {
+                public void onClick(android.content.DialogInterface d, int w) {
+                  out[0] = 2;
+                  latch.countDown();
+                }
+              });
+          b.show();
+        } catch (Exception e) {
+          out[0] = 1;
+          latch.countDown();
+        }
+      }
+    });
+    try {
+      latch.await();
+    } catch (Exception e) {
+      return 1;
+    }
+    int r = out[0];
+    if (r < 0 || r > 2) {
+      r = 1;
+    }
+    if (isBatch && r != 2 && allBox[0]) {
+      batchAskAll = true;
+      batchAskAction = r;
+    }
+    return r;
+  }
+
+  private String copyBytes(String fP, File dst, boolean move,
+      CopyProgressListener listener) {
     InputStream in = null;
     boolean fromAsset = false;
     String aName = "";
-    File src = rootedFile(fP);
-    long total = 0;
     try {
-      if (src == null) {
-        String p = Shared.clean(fP);
-        if (wantAsset(p)) {
-          fromAsset = true;
-          aName = Shared.assetName(p);
-        } else {
-          finishCopyOrMove(move, false, "",
-              Shared.fileNameOf(fP), false, "path sumber tidak valid");
-          return;
+      String p = Shared.clean(fP);
+      File src = null;
+      if (wantAsset(p)) {
+        fromAsset = true;
+        aName = Shared.assetName(p);
+      } else {
+        src = rootedFile(fP);
+        if (src == null || !src.isFile()) {
+          return "file sumber tidak ada";
         }
-      } else if (src.isDirectory()) {
-        finishCopyOrMove(move, false, "", src.getName(), false,
-            "sumber adalah folder");
-        return;
-      } else if (!src.exists()) {
-        finishCopyOrMove(move, false, "", src.getName(), false,
-            "file sumber tidak ada");
-        return;
       }
-      File dst = rootedFile(tP);
       if (dst == null) {
-        finishCopyOrMove(move, false, "",
-            Shared.fileNameOf(tP), false, "tujuan tidak valid");
-        return;
+        return "tujuan tidak valid";
       }
       if (dst.exists() && dst.isDirectory()) {
-        finishCopyOrMove(move, false, "", dst.getName(), false,
-            "tujuan adalah folder");
-        return;
-      }
-      if (dst.exists() && dst.isFile()) {
-        // Sudah ada: JANGAN timpa. success=false + isDuplicated agar
-        // logika if-success pemanggil tetap benar.
-        finishCopyOrMove(move, false, dst.getAbsolutePath(), dst.getName(), true,
-            "tujuan sudah ada, tidak ditimpa (rename manual / hapus dulu)");
-        return;
+        return "tujuan adalah folder";
       }
       if (dst.getParentFile() != null) {
         dst.getParentFile().mkdirs();
       }
-      final String dAbs = dst.getAbsolutePath();
-      final String dName = dst.getName();
-      fireOnUi(new Runnable() {
-        public void run() {
-          CopyOrMoveStarted(Shared.clean(fP), dAbs, dName, move);
-        }
-      });
+      long total = 0;
       if (fromAsset) {
         try {
           total = context.getAssets().openFd(aName).getLength();
         } catch (Exception e) {
           total = -1;
         }
-        in = context.getAssets().open(aName);
+        try {
+          in = context.getAssets().open(aName);
+        } catch (Exception e) {
+          return "aset tidak ditemukan";
+        }
       } else {
-        if (move && src.renameTo(dst)) {
-          fireCopyOrMoveProgress(100, 1, 1);
-          finishCopyOrMove(true, true, dAbs, dName, false, "");
-          return;
+        if (move && !dst.exists() && src.renameTo(dst)) {
+          if (listener != null) {
+            listener.onProgress(100);
+          }
+          return null;
+        }
+        if (move && dst.exists()) {
+          // overwrite diputuskan di luar; di sini dst sudah dihapus/rename.
+          // Bila masih ada (balapan), hapus dulu agar rename bisa.
+          try {
+            dst.delete();
+          } catch (Exception e) {
+            // abaikan
+          }
+          if (src.renameTo(dst)) {
+            if (listener != null) {
+              listener.onProgress(100);
+            }
+            return null;
+          }
         }
         total = src.length();
-        in = new FileInputStream(src);
+        try {
+          in = new FileInputStream(src);
+        } catch (Exception e) {
+          return "file sumber tidak bisa dibaca";
+        }
       }
-      FileOutputStream out = new FileOutputStream(dst);
+      FileOutputStream out = null;
+      try {
+        out = new FileOutputStream(dst);
+      } catch (Exception e) {
+        return "tujuan tidak bisa ditulis";
+      }
       try {
         byte[] buf = new byte[32768];
         long done = 0;
@@ -1630,13 +1887,17 @@ public class Tools_File extends AndroidNonvisibleComponent
         int n;
         while ((n = in.read(buf)) > 0) {
           if (copyMoveCancel) {
-            finishCopyOrMove(move, false, "", "", false, "dibatalkan");
+            try {
+              out.close();
+            } catch (Exception e) {
+              // abaikan
+            }
             try {
               dst.delete();
             } catch (Exception e) {
               // abaikan
             }
-            return;
+            return "Cancelled";
           }
           out.write(buf, 0, n);
           done = done + n;
@@ -1645,7 +1906,9 @@ public class Tools_File extends AndroidNonvisibleComponent
           if (pct != lastPct && now - lastFire >= PROGRESS_MIN_MS) {
             lastPct = pct;
             lastFire = now;
-            fireCopyOrMoveProgress(pct, done, total);
+            if (listener != null) {
+              listener.onProgress(pct);
+            }
           }
         }
         out.flush();
@@ -1657,31 +1920,33 @@ public class Tools_File extends AndroidNonvisibleComponent
         }
       }
       if (copyMoveCancel) {
-        finishCopyOrMove(move, false, "", "", false, "dibatalkan");
         try {
           dst.delete();
         } catch (Exception e) {
           // abaikan
         }
-        return;
+        return "Cancelled";
       }
-      fireCopyOrMoveProgress(100, total < 0 ? 0 : total,
-          total < 0 ? 0 : total);
+      if (listener != null) {
+        listener.onProgress(100);
+      }
       if (move && !fromAsset) {
         try {
-          src.delete();
+          File s2 = rootedFile(fP);
+          if (s2 != null && s2.isFile()
+              && !s2.getAbsolutePath().equals(dst.getAbsolutePath())) {
+            s2.delete();
+          }
         } catch (Exception e) {
           // abaikan
         }
       }
-      finishCopyOrMove(move, true, dAbs, dName, false, "");
+      return null;
     } catch (SecurityException se) {
-      finishCopyOrMove(move, false, "", Shared.fileNameOf(tP), false,
-          "ditolak sistem (izin)");
+      return "ditolak sistem (izin)";
     } catch (Exception e) {
       String m = e.getMessage();
-      finishCopyOrMove(move, false, "", Shared.fileNameOf(tP), false,
-          m == null ? "salin/pindah gagal" : m);
+      return m == null ? "salin/pindah gagal" : m;
     } finally {
       try {
         if (in != null) {
@@ -1690,32 +1955,22 @@ public class Tools_File extends AndroidNonvisibleComponent
       } catch (Exception e) {
         // abaikan
       }
-      Shared.releaseSlot("copyormove");
     }
   }
 
-  private void fireCopyOrMoveProgress(final int pct, final long done,
-      final long total) {
-    fireOnUi(new Runnable() {
-      public void run() {
-        CopyOrMoveProgressChanged(pct, done, total);
-      }
-    });
-  }
-
-  private void finishCopyOrMove(final boolean move, final boolean success,
-      final String absPath, final String fileName,
-      final boolean duplicated, final String msg) {
-    if (!success && msg.length() > 0) {
+  private void finishSingle(final boolean success, final String fileName,
+      final String fromPath, final String toPath, final String msg) {
+    if (!success && msg.length() > 0 && !"Cancelled".equals(msg)) {
       Shared.err(this, "CopyOrMove", 0, msg);
     }
     final boolean s = success;
-    final String p = absPath;
     final String fn = fileName;
-    final boolean dup = duplicated;
+    final String fp = fromPath;
+    final String tp = toPath;
+    final String m = msg == null ? "" : msg;
     fireOnUi(new Runnable() {
       public void run() {
-        CopyOrMoveFinished(s, p, fn, dup);
+        CopyOrMovedFileFinished(s, fn, fp, tp, m);
       }
     });
   }
@@ -1724,7 +1979,7 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "Nama file dari sebuah path (buang foldernya). "
       + "Olah string saja, tanpa scope. Butuh tebak nama dari URL? pakai "
-      + "CallGuessFileName (Downloader).")
+      + "GuessFileName (Downloader).")
   public String GetFileName(String path) {
     return Shared.fileNameOf(path);
   }
@@ -1755,10 +2010,80 @@ public class Tools_File extends AndroidNonvisibleComponent
     }
   }
 
-  @SimpleFunction(description = "Ukuran file dalam byte (-1 bila tidak ada "
-      + "/ gagal). Folder = total isi rekursif; folder besar = bisa lambat "
-      + "(hitung rekursif, UI beku sesaat). path seperti IsFileOrDirectoryExists.")
-  public long FileSize(String path) {
+  @SimpleFunction(description = "Ukuran file, langsung terkonversi (sync, colok). "
+      + "unit = satuan eksplisit (B..YB, tanpa Auto). Hasil dibulatkan 2 desimal. "
+      + "-1 = tidak ada/gagal/unit tak dikenal. Folder = total isi rekursif "
+      + "(folder besar bisa lambat).")
+  public double GetFileSize(String path,
+      @Options(SizeUnit.class) String unit) {
+    int ti = Shared.sizeUnitIndex(unit);
+    if (ti < 0) {
+      return -1;
+    }
+    long bytes = rawFileBytes(path);
+    if (bytes < 0) {
+      return -1;
+    }
+    return Shared.convertSizeValue((double) bytes, 0, ti);
+  }
+
+  @SimpleFunction(description = "CALL: ukuran file lewat event (untuk Auto). "
+      + "unit = satuan eksplisit atau teks \"Auto\" (= satuan terbesar yang pas). "
+      + "Hasil lewat GotFileSize(path, fileName, size, unit). size -1 = tidak "
+      + "ada/gagal/unit tak dikenal.")
+  public void RequestFileSize(final String path, final String unit) {
+    final Tools_File me = this;
+    AsynchUtil.runAsynchronously(new Runnable() {
+      public void run() {
+        String u = Shared.clean(unit);
+        long bytes = me.rawFileBytes(path);
+        final String fP = Shared.clean(path);
+        final String fN;
+        try {
+          if (me.wantAsset(fP)) {
+            fN = Shared.fileNameOf(Shared.assetName(fP));
+          } else {
+            fN = Shared.fileNameOf(fP);
+          }
+        } catch (Exception e) {
+          fN = "";
+        }
+        if (bytes < 0) {
+          final String uu = u;
+          me.fireOnUi(new Runnable() {
+            public void run() {
+              me.GotFileSize(fP, fN, -1, uu);
+            }
+          });
+          return;
+        }
+        int ti;
+        if ("auto".equalsIgnoreCase(u)) {
+          ti = Shared.autoSizeUnitIndex(bytes);
+        } else {
+          ti = Shared.sizeUnitIndex(u);
+        }
+        if (ti < 0) {
+          final String uu = u;
+          me.fireOnUi(new Runnable() {
+            public void run() {
+              me.GotFileSize(fP, fN, -1, uu);
+            }
+          });
+          return;
+        }
+        final double v = Shared.convertSizeValue((double) bytes, 0, ti);
+        final String uu = Shared.SIZE_UNITS[ti];
+        me.fireOnUi(new Runnable() {
+          public void run() {
+            me.GotFileSize(fP, fN, v, uu);
+          }
+        });
+      }
+    });
+  }
+
+  private long rawFileBytes(String path) {
     try {
       if (wantAsset(path)) {
         try {
@@ -2249,7 +2574,8 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "GET: Daftar file (path lengkap) yang kategorinya "
       + "cocok. type = Helper FileCategory (boleh alias teks Indonesia: "
-      + "gambar/musik/video/teks/arsip/dokumen; alias lama vidio tetap "
+      + "gambar/musik/video/teks/arsip/dokumen; pdf = khusus pdf saja, "
+      + "sub-tipe document; alias lama vidio tetap "
       + "diterima) atau salah satu blok TypeImage/dll. recursive = sertakan isi "
       + "subfolder. path seperti IsFileOrDirectoryExists. Pilih: nama bisa dibohongi "
       + "(jpg padahal zip) — bila akurasi penting pakai DetectArchiveType "
@@ -2270,7 +2596,7 @@ public class Tools_File extends AndroidNonvisibleComponent
         String[] l = context.getAssets().list(Shared.assetName(p));
         if (l != null) {
           for (int i = 0; i < l.length; i = i + 1) {
-            if (cat.equals(Shared.fileCategory(l[i]))) {
+            if (Shared.fileMatchesCategory(cat, l[i])) {
               out.add("//" + Shared.assetName(p) + "/" + l[i]);
             }
           }
@@ -2304,7 +2630,7 @@ public class Tools_File extends AndroidNonvisibleComponent
         if (recursive) {
           walkFilesByCat(g, cat, true, out);
         }
-      } else if (cat.equals(Shared.fileCategory(g.getName()))) {
+      } else if (Shared.fileMatchesCategory(cat, g.getName())) {
         out.add(g.getAbsolutePath());
       }
     }
@@ -2354,10 +2680,18 @@ public class Tools_File extends AndroidNonvisibleComponent
     return "archive";
   }
 
-  @SimpleProperty(description = "Pembanding read-only kategori: document.",
+  @SimpleProperty(description = "Pembanding read-only kategori: document "
+      + "(mencakup pdf).",
       category = PropertyCategory.BEHAVIOR)
   public String TypeDocument() {
     return "document";
+  }
+
+  @SimpleProperty(description = "Pembanding read-only sub-tipe: pdf saja "
+      + "(untuk GetFilesByType/GetExtensionsForType).",
+      category = PropertyCategory.BEHAVIOR)
+  public String TypePdf() {
+    return "pdf";
   }
 
   @SimpleProperty(description = "Pembanding read-only kategori: apk.",
@@ -2378,7 +2712,7 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "True bila aplikasi boleh tulis SEMUA file "
       + "bersama. Android 11+ = 'Akses semua file' aktif; Android 10 ke "
-      + "bawah selalu true (izin tulis biasa cukup via CallSetStoragePermission).")
+      + "bawah selalu true (izin tulis biasa cukup via SetStoragePermission).")
   public boolean IsAllFilesAccessGranted() {
     try {
       if (android.os.Build.VERSION.SDK_INT >= 30) {
@@ -2445,7 +2779,7 @@ public class Tools_File extends AndroidNonvisibleComponent
       + "mutusin) + GotPermission. permanentlyDenied=false = user menolak "
       + "(boleh tanya lagi); true = permanen (aktifkan manual di Setelan). "
       + "Tanpa return.")
-  public void CallSetStoragePermission() {
+  public void SetStoragePermission() {
     requestStorage();
   }
 
@@ -2796,7 +3130,7 @@ public class Tools_File extends AndroidNonvisibleComponent
 
   // ================= EVENTS =================
 
-  @SimpleEvent(description = "Hasil CallSetHiddenDirectory: success pertama, path + "
+  @SimpleEvent(description = "Hasil SetHiddenDirectory: success pertama, path + "
       + "message + needPermission (isi = izin yang harus diminta bila "
       + "gagal karena izin).")
   public void DirectoryHidden(boolean success, String path, String message,
@@ -2805,7 +3139,7 @@ public class Tools_File extends AndroidNonvisibleComponent
         message, needPermission);
   }
 
-  @SimpleEvent(description = "Hasil CallMakeNomediaFile: success pertama, path + "
+  @SimpleEvent(description = "Hasil MakeNomediaFile: success pertama, path + "
       + "message + needPermission.")
   public void NomediaFileCreated(boolean success, String path, String message,
       String needPermission) {
@@ -2813,7 +3147,7 @@ public class Tools_File extends AndroidNonvisibleComponent
         message, needPermission);
   }
 
-  @SimpleEvent(description = "Hasil CallDeleteNomediaFile: success pertama, path + "
+  @SimpleEvent(description = "Hasil DeleteNomediaFile: success pertama, path + "
       + "message + needPermission.")
   public void NomediaFileDeleted(boolean success, String path, String message,
       String needPermission) {
@@ -2821,7 +3155,7 @@ public class Tools_File extends AndroidNonvisibleComponent
         message, needPermission);
   }
 
-  @SimpleEvent(description = "Hasil CallMakeDirectory: success pertama, path + "
+  @SimpleEvent(description = "Hasil MakeDirectory: success pertama, path + "
       + "message + needPermission.")
   public void DirectoryCreated(boolean success, String path, String message,
       String needPermission) {
@@ -2829,7 +3163,7 @@ public class Tools_File extends AndroidNonvisibleComponent
         message, needPermission);
   }
 
-  @SimpleEvent(description = "Hasil CallDeleteFile: success pertama, path + "
+  @SimpleEvent(description = "Hasil DeleteFile: success pertama, path + "
       + "message + needPermission.")
   public void FileDeleted(boolean success, String path, String message,
       String needPermission) {
@@ -2837,7 +3171,7 @@ public class Tools_File extends AndroidNonvisibleComponent
         message, needPermission);
   }
 
-  @SimpleEvent(description = "Hasil CallDeleteList: success + total + "
+  @SimpleEvent(description = "Hasil DeleteList: success + total + "
       + "terhapus + message + needPermission.")
   public void FileListDeleted(boolean success, int total, int deleted,
       String message, String needPermission) {
@@ -2846,7 +3180,7 @@ public class Tools_File extends AndroidNonvisibleComponent
         Integer.valueOf(deleted), message, needPermission);
   }
 
-  @SimpleEvent(description = "Hasil CallRenameFile: success pertama, path (nama baru) + "
+  @SimpleEvent(description = "Hasil RenameFile: success pertama, path (nama baru) + "
       + "message + needPermission.")
   public void FileRenamed(boolean success, String path, String message,
       String needPermission) {
@@ -2854,7 +3188,7 @@ public class Tools_File extends AndroidNonvisibleComponent
         message, needPermission);
   }
 
-  @SimpleEvent(description = "Hasil CallRenameFolder: success pertama, path (nama baru) + "
+  @SimpleEvent(description = "Hasil RenameFolder: success pertama, path (nama baru) + "
       + "message + needPermission.")
   public void FolderRenamed(boolean success, String path, String message,
       String needPermission) {
@@ -2862,7 +3196,7 @@ public class Tools_File extends AndroidNonvisibleComponent
         message, needPermission);
   }
 
-  @SimpleEvent(description = "Hasil CallCreateEmptyFile: success pertama, path + "
+  @SimpleEvent(description = "Hasil CreateEmptyFile: success pertama, path + "
       + "message + needPermission.")
   public void EmptyFileCreated(boolean success, String path, String message,
       String needPermission) {
@@ -2870,7 +3204,7 @@ public class Tools_File extends AndroidNonvisibleComponent
         message, needPermission);
   }
 
-  @SimpleEvent(description = "Hasil CallSaveFile: success pertama, path + "
+  @SimpleEvent(description = "Hasil SaveFile: success pertama, path + "
       + "message + needPermission.")
   public void FileSaved(boolean success, String path, String message,
       String needPermission) {
@@ -2878,7 +3212,7 @@ public class Tools_File extends AndroidNonvisibleComponent
         message, needPermission);
   }
 
-  @SimpleEvent(description = "Hasil CallSaveBase64ToFile: success pertama, path + "
+  @SimpleEvent(description = "Hasil SaveBase64ToFile: success pertama, path + "
       + "message + needPermission.")
   public void Base64FileSaved(boolean success, String path, String message,
       String needPermission) {
@@ -2886,97 +3220,78 @@ public class Tools_File extends AndroidNonvisibleComponent
         message, needPermission);
   }
 
-  @SimpleEvent(description = "Bacaan dimulai (CallReadText): persiapan "
+  @SimpleEvent(description = "Bacaan dimulai (ReadText): persiapan "
       + "(tampilkan loading).")
   public void ReadStarted(String path) {
     Shared.fire(this, "ReadStarted", path);
   }
 
-  @SimpleEvent(description = "Hasil CallReadText: success pertama, path "
+  @SimpleEvent(description = "Hasil ReadText: success pertama, path "
       + "absolut, fileName paling belakang, content = isi file.")
   public void GotText(boolean success, String path,
       String fileName, String content) {
     Shared.fire(this, "GotText", Boolean.valueOf(success), path, fileName, content);
   }
 
-  @SimpleEvent(description = "Salin/pindah dimulai: path sumber + tujuan + "
-      + "nama file + isMoved.")
-  public void CopyOrMoveStarted(String fromPath, String toPath,
+  @SimpleEvent(description = "Hasil RequestFileSize: path + nama file + size "
+      + "(angka hasil konversi, -1 = tidak ada/gagal/unit tak dikenal) + unit "
+      + "satuannya apa.")
+  public void GotFileSize(String path, String fileName, double size,
+      String unit) {
+    Shared.fire(this, "GotFileSize", path, fileName,
+        Double.valueOf(size), unit);
+  }
+
+  @SimpleEvent(description = "1 file akan mulai disalin/dipindah: path sumber + path "
+      + "tujuan final + nama file + isMoved.")
+  public void CopyOrMovedFileStarted(String fromPath, String toPath,
       String fileName, boolean isMoved) {
-    Shared.fire(this, "CopyOrMoveStarted", fromPath,
-        toPath, fileName, Boolean.valueOf(isMoved));
+    Shared.fire(this, "CopyOrMovedFileStarted", fromPath, toPath, fileName,
+        Boolean.valueOf(isMoved));
   }
 
-  @SimpleEvent(description = "Progres salin/pindah: persen 0-100 + byte "
-      + "total & berjalan.")
-  public void CopyOrMoveProgressChanged(int progress, long byteTotal,
-      long byteProgress) {
-    Shared.fire(this, "CopyOrMoveProgressChanged",
-        Integer.valueOf(progress), Long.valueOf(byteTotal),
-        Long.valueOf(byteProgress));
+  @SimpleEvent(description = "Progres 1 file: persen 0-100 (live tiap ada perubahan) + "
+      + "nama file.")
+  public void CopyOrMovedFileProgressChanged(int progress, String fileName) {
+    Shared.fire(this, "CopyOrMovedFileProgressChanged",
+        Integer.valueOf(progress), fileName);
   }
 
-  @SimpleEvent(description = "Salin/pindah selesai: success + path + nama "
-      + "file + isDuplicated (true = tujuan sudah ada, tidak ditimpa, "
-      + "rename manual).")
-  public void CopyOrMoveFinished(boolean success, String path,
-      String fileName, boolean isDuplicated) {
-    Shared.fire(this, "CopyOrMoveFinished",
-        Boolean.valueOf(success), path, fileName,
-        Boolean.valueOf(isDuplicated));
+  @SimpleEvent(description = "1 file selesai: success + nama file + path sumber + path "
+      + "tujuan final + pesan (alasan bila gagal / Cancelled).")
+  public void CopyOrMovedFileFinished(boolean success, String fileName,
+      String fromPath, String toPath, String message) {
+    Shared.fire(this, "CopyOrMovedFileFinished",
+        Boolean.valueOf(success), fileName, fromPath, toPath, message);
   }
 
-  @SimpleEvent(description = "Batch salin dimulai: total file + folder "
-      + "tujuan. (API v3-v8.)")
-  public void CopyBatchStarted(int total, String destFolder) {
-    Shared.fire(this, "CopyBatchStarted",
-        Integer.valueOf(total), destFolder);
+  @SimpleEvent(description = "1 file dalam antrian akan mulai: SEMUA list sumber + SEMUA "
+      + "list tujuan rencana + index mulai-1 + total + SEMUA nama file.")
+  public void CopyOrMovedBatchFilesStarted(YailList fromListPath, YailList toListPath,
+      int index, int count, YailList filenames) {
+    Shared.fire(this, "CopyOrMovedBatchFilesStarted", fromListPath, toListPath,
+        Integer.valueOf(index), Integer.valueOf(count), filenames);
   }
 
-  @SimpleEvent(description = "Progres batch salin: index mulai-1 + total + "
-      + "nama file + persen file.")
-  public void CopyBatchProgressChanged(int index, int total, String fileName,
-      int filePercent) {
-    Shared.fire(this, "CopyBatchProgressChanged",
-        Integer.valueOf(index), Integer.valueOf(total), fileName,
-        Integer.valueOf(filePercent));
+  @SimpleEvent(description = "Progres 1 file dalam antrian: persen 0-100 (live tiap ada "
+      + "perubahan) + nama file + index.")
+  public void CopyOrMovedBatchFilesProgressChanged(int progress, String fileName,
+      int index) {
+    Shared.fire(this, "CopyOrMovedBatchFilesProgressChanged",
+        Integer.valueOf(progress), fileName, Integer.valueOf(index));
   }
 
-  @SimpleEvent(description = "Batch salin selesai: success + scope (kosong, "
-      + "scope dihapus v13) + folder + berhasil + gagal + pesan.")
-  public void CopyBatchFinished(boolean success, String scope,
-      String destFolder, int doneCount, int failCount, String message) {
-    Shared.fire(this, "CopyBatchFinished",
-        Boolean.valueOf(success), scope, destFolder,
-        Integer.valueOf(doneCount), Integer.valueOf(failCount), message);
+  @SimpleEvent(description = "1 file dalam antrian selesai: success + nama file + path "
+      + "sumber + path tujuan final + index + pesan (alasan bila gagal / Cancelled). "
+      + "Antrian selalu index 1..count; selesai semua = Finished dengan index == count.")
+  public void CopyOrMovedBatchFilesFinished(boolean success, String fileName,
+      String fromPath, String toPath, int index, String message) {
+    Shared.fire(this, "CopyOrMovedBatchFilesFinished",
+        Boolean.valueOf(success), fileName, fromPath, toPath,
+        Integer.valueOf(index), message);
   }
 
-  @SimpleEvent(description = "Batch pindah dimulai: total file + folder "
-      + "tujuan. (API v3-v8.)")
-  public void MoveBatchStarted(int total, String destFolder) {
-    Shared.fire(this, "MoveBatchStarted",
-        Integer.valueOf(total), destFolder);
-  }
-
-  @SimpleEvent(description = "Progres batch pindah: index mulai-1 + total + "
-      + "nama file + persen file.")
-  public void MoveBatchProgressChanged(int index, int total, String fileName,
-      int filePercent) {
-    Shared.fire(this, "MoveBatchProgressChanged",
-        Integer.valueOf(index), Integer.valueOf(total), fileName,
-        Integer.valueOf(filePercent));
-  }
-
-  @SimpleEvent(description = "Batch pindah selesai: success + scope (kosong, "
-      + "scope dihapus v13) + folder + berhasil + gagal + pesan.")
-  public void MoveBatchFinished(boolean success, String scope,
-      String destFolder, int doneCount, int failCount, String message) {
-    Shared.fire(this, "MoveBatchFinished",
-        Boolean.valueOf(success), scope, destFolder,
-        Integer.valueOf(doneCount), Integer.valueOf(failCount), message);
-  }
-
-  @SimpleEvent(description = "Hasil CallSetStoragePermission File (HANYA izin "
+  @SimpleEvent(description = "Hasil SetStoragePermission File (HANYA izin "
       + "storage File - tidak menembak untuk izin tools lain): success + izin + "
       + "pesan + permanentlyDenied. success=true = beres (lanjut). false + "
       + "permanentlyDenied=false = user menolak (boleh tanya lagi) ATAU Settings "

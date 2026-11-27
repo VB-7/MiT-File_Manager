@@ -1,6 +1,6 @@
 # Fv7 Tools Manager
 
-Ekstensi App Inventor (`.aix`) — **14 komponen dalam 1 paket** (`com.fv7.tools`) untuk membangun aplikasi file manager, downloader, pemutar media, UI dinamis, penjadwal, dan notifikasi — semuanya bekerja dengan **sistem id** sehingga banyak pekerjaan bisa jalan bareng tanpa tabrakan.
+Ekstensi App Inventor (`.aix`) — **16 komponen dalam 1 paket** (`com.fv7.tools`) untuk membangun aplikasi file manager, downloader, pemutar media, UI dinamis, penjadwal, dan notifikasi — semuanya bekerja dengan **sistem id** sehingga banyak pekerjaan bisa jalan bareng tanpa tabrakan.
 
 **Unduh file `.aix` terbaru:** halaman [Releases](https://github.com/VB-7/MiT-File_Manager/releases) — buka rilis paling atas, link download ada di paling atas deskripsi rilis (file dilampirkan di chat rilis bila tersedia).
 
@@ -21,6 +21,8 @@ Ekstensi App Inventor (`.aix`) — **14 komponen dalam 1 paket** (`com.fv7.tools
 - [Tools_File](#tools-file)
 - [Tools_Image](#tools-image)
 - [Tools_Layout](#tools-layout)
+- [Tools_Pdf](#tools-pdf)
+- [Tools_PdfView](#tools-pdfview)
 - [Tools_Sheet](#tools-sheet)
 - [Tools_Style](#tools-style)
 - [Tools_Task](#tools-task)
@@ -31,7 +33,7 @@ Ekstensi App Inventor (`.aix`) — **14 komponen dalam 1 paket** (`com.fv7.tools
 
 ### Projek apa ini?
 
-Fv7 Tools Manager adalah kumpulan 14 ekstensi App Inventor yang saling terhubung: File, Downloader, Compress (ZIP), Audio, Video, Image, Core (komponen dinamis), Layout, Style, Sheet (bottom-sheet + toast + notifikasi), Task (penjadwal + alarm), Base (fondasi utilitas + id), Webview (browser ber-id), dan AdBlock (mesin filter global). Satu file `.aix`, satu paket, satu sistem id.
+Fv7 Tools Manager adalah kumpulan 16 ekstensi App Inventor yang saling terhubung: File, Downloader, Compress (ZIP), Audio, Video, Image, Core (komponen dinamis), Layout, Style, Sheet (bottom-sheet + toast + notifikasi), Task (penjadwal + alarm), Base (fondasi utilitas + id), Webview (browser ber-id), AdBlock (mesin filter global), Pdf (baca/render PDF), dan PdfView (penampil PDF ber-id). Satu file `.aix`, satu paket, satu sistem id.
 
 ### Untuk apa?
 
@@ -75,6 +77,7 @@ Operasi file otomatis meminta izin sebelum jalan (sudah granted = lanjut tanpa d
 
 ## Riwayat versi
 
+- **v33** — komponen baru `Tools_Pdf` v1 + `Tools_PdfView` v1 (16 komponen total): baca teks per halaman/seluruhnya + judul/penulis/ukuran halaman + render halaman jadi PNG/JPG (`RenderScale` 25–800%, sisi maks 4096, parser murni-Java tanpa library); viewer ber-id `CreatePdfView(container, id)` (di Screen = mandiri, di arrangement = mengikuti wadah), swipe + `NextPage/PrevPage/GoToPage`, `SetZoom/SetZoomEnabled`, event opsional `PdfViewCreated/PdfOpened/PageChanged/PdfViewClosed`. Rombak salin/pindah (File v27→v28): `CopyOrMovedFile(FromPath,ToPath,IsMoved,AskIfDuplicate)` (To fleksibel: folder = nama ikut asal, path file = rename) + `CopyOrMovedBatchFiles(FromPaths,ToFolder,IsMoved,AskIfDuplicate)` (satu folder, antrean sekuensial 1..N, dialog duplikat English Yes=timpa/No=rename/Cancel + "Apply to all files"); 6 event per-file baru (Started/ProgressChanged live/Finished + Index). Ukuran file: `FileSize` ganti `GetFileSize(path,unit)` (sync, tanpa Auto) + `RequestFileSize(path,unit/"Auto")` + event `GotFileSize(path,fileName,size,unit)`; helper merah baru `SizeUnit` (B..YB, 1024); Base v26→v27 (`GetSizeUnits`, `ConvertFileSize`). Torrent otomatis (Downloader v25→v26): magnet:/tautan .torrent langsung unduh isi (tanpa blok baru). Helper pdf (`FileCategory` Pdf + properti `TypePdf`; document tetap mencakup pdf). Webview v9→v10 + AdBlock v10→v11: mesin AdBlock statik penuh, Webview delegasi (57 blok + 7 event AdBlock di Webview). BREAKING: proyek lama pakai `CopyOrMoveFile/CopyFile/MoveFile/CopyList/MoveList`, 9 event batch lama (`CopyOrMove*/CopyBatch*/MoveBatch*`), dan `FileSize` lama harus pasang ulang.
 - **v32** — hapus total awalan `Call` di SEMUA 14 tools (File v26→v27, Webview v7→v8, Video v24→v25, Audio v24→v25, Image v25→v26, AdBlock v8→v9, Base v25→v26, Downloader v24→v25, Compress v22→v23, Core v22→v23, Layout v23→v24, Sheet v24→v25, Style v24→v25, Task v24→v25): `Download`, `PlayAudio`, `Unzip`, `ShowToast`, `ScheduleAlarm`, `CreateDynamicButton`, `AnimateFade`, `MakeDirectory`, `SaveFile`, `ReadText`, `RequestPermission`, `RefreshAdBlock`, dsb (60+ blok; pengecualian tabrakan di Webview jadi `LoadHtmlById`/`EvaluateJavascriptById`). BREAKING terbesar: proyek lama pakai nama `Call*` harus pasang ulang semua. Plug-and-play AdBlock (AdBlock v9→v10, Webview v8→v9): cukup SET `BlockAds` di bawah `CreateWebview` — data kosong = otomatis unduh semua penyedia untuk semua tipe (Host/Rules/White/Cosmetic, interval Auto); tiap tipe bisa pilih `Semua` (27 sumber sekaligus) atau 1 penyedia; interval opsional; event `Got*`/`AdBlockUpdated` opsional; pencegat tap-link + request tetap otomatis (hormat whitelist).
 - **v31** — rapikan nama blok (File v25→v26, Webview v6→v7, Video v23→v24, Audio v23→v24, Image v24→v25, AdBlock v7→v8, Base v24→v25): keluarga salin/pindah lepas awalan `Call` (`CopyOrMoveFile`, `CopyFile`, `MoveFile`, `CopyList`/`MoveList` void — terbaca "call [Tools_File1] CopyFile", tanpa "evaluate but ignore result"); 7 cek boolean jadi `Is*` (Webview `CanGoBack/CanGoForward/CanGoBackOrForward`→`IsGoBackAvailable/IsGoForwardAvailable/IsGoBackOrForwardAvailable`, Video `GetVideoLooping`→`IsVideoLooping`, Audio `GetAudioLooping`→`IsAudioLooping`, Image `GetSliderFit`→`IsSliderFit`, AdBlock `HasAdBlock`→`IsAdBlockAvailable`); teks whatsnew Base disesuaikan. BREAKING: proyek lama pakai 12 nama lama harus pasang ulang.
 - **v30** — restorasi batch salin/pindah (File v24→v25): `CopyList(fromPaths, toFolder)` / `MoveList(fromPaths, toFolder)` (boolean; fromPaths = list atau teks koma) + 6 event batch asli v3–v8 (`CopyBatchStarted/ProgressChanged/Finished`, `MoveBatchStarted/ProgressChanged/Finished`; scope = kosong karena scope dihapus v13). Per-file tetap lewat `CopyOrMove*`; batch pakai slot `copyormove` yang sama (satu job per saat) + bisa dibatalkan via `SetCancelCopyOrMove`.
@@ -1570,17 +1573,24 @@ Hasil GuessFileName: url asal + fileName tebakan + mimeType (kosong bila tak dik
 
 ## Tools_File
 
-> Tools_File (sistem draft): awalan Is = boolean (colok ke if), awalan Call = async + hasil lewat event, awalan Set = tanpa feedback. Semua path otomatis di-root ke /storage/emulated/0 ("/Download/a.jpg" jadi "/storage/emulated/0/Download/a.jpg"; absolut apa adanya). Salin/pindah digabung satu blok CopyOrMoveFile (isMove) + info duplikat. (v17 2026-11-17: penomoran versi. v16: gate izin otomatis 16 operasi + blok pintar CallEnsure*/Is* + 10 Helper Permission + all-files access Android 11+.)
+> Tools_File (sistem draft): awalan Is = boolean (colok ke if), awalan Call = async + hasil lewat event, awalan Set = tanpa feedback. Semua path otomatis di-root ke /storage/emulated/0 ("/Download/a.jpg" jadi "/storage/emulated/0/Download/a.jpg"; absolut apa adanya). Salin/pindah: CopyOrMovedFile (1 file, To fleksibel folder/file) + CopyOrMovedBatchFiles (banyak file, 1 folder, antrean 1..N) + dialog duplikat (AskIfDuplicate). Ukuran: GetFileSize/RequestFileSize + GotFileSize + helper SizeUnit. (v33: rombak salin/pindah 5->2 + ukuran; v17 2026-11-17: penomoran versi. v16: gate izin otomatis 16 operasi + blok pintar CallEnsure*/Is* + 10 Helper Permission + all-files access Android 11+.)
 
 Versi anotasi: **17**. Jumlah blok: 46 fungsi, 26 properti, 20 event.
 
 ### Fungsi (Tools_File)
 
-#### `CopyOrMoveFile`
+#### `CopyOrMovedFile`
 
-CALL: salin ATAU pindah file (isMove=true = pindah). Path otomatis di-root /storage/emulated/0. Nama tujuan boleh beda. Bila tujuan SUDAH ADA: tidak disalin, Finished(success=true, isDuplicated=true) -> rename manual ala contoh. Asset hanya bisa jadi sumber. Satu job per saat.
+CALL: salin ATAU pindah 1 file. `ToPath` fleksibel (folder = nama ikut asal, path file = rename). `AskIfDuplicate` = true tampilkan dialog (Yes=timpa, No=rename otomatis, Cancel=hentikan). Hasil lewat `CopyOrMovedFileStarted/ProgressChanged(live)/Finished`.
 
-- **Input:** `fromFileName` (teks), `toFileName` (teks), `isMove` (boolean)
+- **Input:** `fromPath` (teks), `toPath` (teks), `isMoved` (boolean), `askIfDuplicate` (boolean)
+- **Return:** void
+
+#### `CopyOrMovedBatchFiles`
+
+CALL: salin ATAU pindah BANYAK file ke SATU folder (antrean sekuensial 1..N, tanpa loop manual). Dialog duplikat + centang "Apply to all files". Hasil per file lewat `CopyOrMovedBatchFilesStarted/ProgressChanged(live)/Finished`.
+
+- **Input:** `fromPaths` (list/teks koma), `toFolder` (teks), `isMoved` (boolean), `askIfDuplicate` (boolean)
 - **Return:** void
 
 #### `CreateEmptyFile`
@@ -1681,12 +1691,19 @@ CALL: jadikan directory hidden (nama jadi .nama). Sudah hidden = success. Hasil 
 - **Input:** `directory` (teks)
 - **Return:** void
 
-#### `FileSize`
+#### `GetFileSize`
 
-Ukuran file dalam byte. Folder = total isi rekursif. path seperti IsFileOrDirectoryExists.
+Ukuran file, langsung terkonversi (colok, tanpa Auto). Folder = total isi rekursif. -1 = tidak ada/unit tak dikenal.
 
-- **Input:** `path` (teks)
+- **Input:** `path` (teks), `unit` (Helper SizeUnit: B..YB)
 - **Return:** angka
+
+#### `RequestFileSize`
+
+CALL: ukuran file lewat event (untuk Auto). Hasil lewat `GotFileSize(path, fileName, size, unit)`.
+
+- **Input:** `path` (teks), `unit` (teks: B..YB atau "Auto")
+- **Return:** void
 
 #### `FileTypeOf`
 
@@ -2719,6 +2736,48 @@ SATU-SATUNYA error Tools_Layout. component = nama operasi (bandingkan dengan blo
 Layout dinamis jadi: id + nama tipe.
 
 - **Parameter:** `id` (angka), `typeName` (teks)
+
+## Tools_Pdf
+
+> Tools_Pdf: baca PDF tanpa library luar (parser murni-Java): teks per halaman / seluruhnya, judul, penulis, ukuran halaman, render halaman jadi gambar PNG/JPG. Buka via OpenPdf(path / //asset / file:), tutup via ClosePdf. Untuk tampil interaktif pakai Tools_PdfView.
+
+Versi anotasi: **1**. Jumlah blok: 12 fungsi, 2 properti, 3 event.
+
+### Fungsi (Tools_Pdf)
+
+- `OpenPdf(path)` — CALL: buka PDF. Hasil lewat `PdfOpened(success, pageCount, title, author, message)`.
+- `GetPageText(page)` / `GetAllText(separator)` — teks halaman / gabungan (sync, colok).
+- `GetPageCount()` / `GetPdfTitle()` / `GetPdfAuthor()` / `GetPageSize(page)` — info sync.
+- `RenderPage(page, imageName, folder)` — CALL: render jadi PNG/JPG (ikut ekstensi). Skala via properti `RenderScale` (25–800, default 200). Hasil lewat `PageRendered(success, page, savePath, message)`.
+- `ClosePdf()` / `IsPdfOpen()` / properti `OpPdf` + `LastError(OpPdf)`.
+
+### Event (Tools_Pdf)
+
+- `PdfOpened(success, pageCount, title, author, message)` — hasil OpenPdf.
+- `PageRendered(success, page, savePath, message)` — hasil RenderPage.
+- `ErrorOccurred(component, id, message)` — PDF terkunci / korup / batas 120 MB.
+
+## Tools_PdfView
+
+> Tools_PdfView: penampil PDF ber-id (paket dengan Tools_Pdf). `CreatePdfView(container, id)` — wadah arrangement = mengikuti wadah, langsung di Screen = mandiri fullscreen. Navigasi swipe (saat zoom 100) + blok. Zoom pinch + blok. Multi-id jalan bareng. Semua event opsional (tanpa handler tetap jalan default). Mesin PdfRenderer bawaan Android (offline).
+
+Versi anotasi: **1**. Jumlah blok: 20 fungsi, 2 properti, 4 event.
+
+### Fungsi (Tools_PdfView)
+
+- `CreatePdfViewId()` / `CreatePdfView(container, id)` / `RemovePdfView(id)` / `SetClearPdfViews()` — id + tampil (hasil create/remove lewat `PdfViewCreated`/`PdfViewClosed`).
+- `GetPdfViewIds()` / `CurrentPdfViewId()` / `GetFirst/Last/PreviousPdfViewId(id)` / `IsPdfViewIdActive(id)` — kelola id (URUT PEMBUATAN).
+- `OpenPdf(id, path)` — CALL: buka dokumen (mulai halaman 1, zoom 100). Hasil lewat `PdfOpened(success, id, pageCount, message)`.
+- `ClosePdf(id)` / `IsPdfOpen(id)` / `GetPageCount(id)` / `GetCurrentPage(id)` — sync.
+- `NextPage(id)` / `PrevPage(id)` (hijau) / `GoToPage(id, page)` — navigasi, pindah via `PageChanged(id, page, pageCount)`.
+- `SetZoom(id, percent)` (50–400) / `GetZoom(id)` / `SetZoomEnabled(id, enabled)` / `IsZoomEnabled(id)` — zoom.
+
+### Event (Tools_PdfView)
+
+- `PdfViewCreated(success, id, message)` — view jadi, boleh OpenPdf.
+- `PdfOpened(success, id, pageCount, message)` — dokumen kebuka.
+- `PageChanged(id, page, pageCount)` — untuk label "3/20".
+- `PdfViewClosed(success, id, message)` — view dihapus.
 
 ## Tools_Sheet
 

@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.Context;
 
 import com.google.appinventor.components.annotations.DesignerComponent;
+import com.google.appinventor.components.annotations.Options;
 import com.google.appinventor.components.annotations.PropertyCategory;
 import com.google.appinventor.components.annotations.SimpleEvent;
 import com.google.appinventor.components.annotations.SimpleFunction;
@@ -18,13 +19,15 @@ import com.google.appinventor.components.runtime.PermissionResultHandler;
 import com.google.appinventor.components.runtime.util.YailList;
 import com.google.appinventor.components.runtime.util.JsonUtil;
 
+import com.fv7.tools.helpers.SizeUnit;
+
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.List;
 
 @DesignerComponent(
-    version = 25,
+    version = 27,
     description = "Fondasi Tools: id pool global + util Tag untuk id komponen "
         + "LUAR (auto-konversi teks angka: \"5\" = 5) + util dasar (JSON, URI, "
         + "waktu, byte, mime). Butuh id? CreateUniqueId (global, reservasi "
@@ -34,7 +37,7 @@ import java.util.List;
         + "di komponen pemiliknya masing-masing, bukan di sini. Konvensi "
         + "awalan: Is = boolean (colok ke if), Call = async + hasil lewat "
         + "event, Set = tanpa feedback, Get = nilai balik sinkron. Izin generik "
-        + "(manual + luar): CallRequestPermission(s) + IsPermissionGranted + "
+        + "(manual + luar): RequestPermission(s) + IsPermissionGranted + "
         + "GetGranted/DeniedPermissions + 10 Pilihan izin + GotPermission.",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
@@ -332,14 +335,14 @@ public class Tools_Base extends AndroidNonvisibleComponent {
       + "mutusin allow/deny) + GotPermission. permanentlyDenied=false = user "
       + "menolak (boleh tanya lagi); true = permanen (aktifkan manual di "
       + "Setelan). Tanpa return.")
-  public void CallRequestPermission(final String permission) {
+  public void RequestPermission(final String permission) {
     requestOne(Shared.clean(permission));
   }
 
   @SimpleFunction(description = "CALL: minta BANYAK izin sekaligus (list; contoh "
       + "langsung colok list permission dari event luar). GotPermission "
       + "ditembak PER IZIN (satu bentuk hasil). Entri kosong dilewati.")
-  public void CallRequestPermissions(final YailList permissions) {
+  public void RequestPermissions(final YailList permissions) {
     if (permissions == null) {
       return;
     }
@@ -403,7 +406,7 @@ public class Tools_Base extends AndroidNonvisibleComponent {
     return out;
   }
 
-  @SimpleEvent(description = "Hasil CallRequestPermission(s) Base (HANYA untuk "
+  @SimpleEvent(description = "Hasil RequestPermission(s) Base (HANYA untuk "
       + "izin yang diminta via Base - tidak menembak untuk izin tools lain): "
       + "success + izin + pesan + permanentlyDenied. success=true = beres "
       + "(lanjut). false + permanentlyDenied=false = user menolak (boleh "
@@ -416,7 +419,7 @@ public class Tools_Base extends AndroidNonvisibleComponent {
   }
 
   @SimpleProperty(description = "Pilihan read-only: izin kamera (CADANGAN - belum ada "
-      + "bloknya). Colok ke CallRequestPermission(s) / IsPermissionGranted "
+      + "bloknya). Colok ke RequestPermission(s) / IsPermissionGranted "
       + "di sini (tanpa ketik string).",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionCamera() {
@@ -425,28 +428,28 @@ public class Tools_Base extends AndroidNonvisibleComponent {
 
   @SimpleProperty(description = "Pilihan read-only: izin mikrofon, rekam "
       + "suara (CADANGAN - belum ada bloknya). Colok ke "
-      + "CallRequestPermission(s) / IsPermissionGranted di sini.",
+      + "RequestPermission(s) / IsPermissionGranted di sini.",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionMicrophone() {
     return "android.permission.RECORD_AUDIO";
   }
 
   @SimpleProperty(description = "Pilihan read-only: izin baca storage. "
-      + "Colok ke CallRequestPermission(s) / IsPermissionGranted di sini.",
+      + "Colok ke RequestPermission(s) / IsPermissionGranted di sini.",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionReadStorage() {
     return "android.permission.READ_EXTERNAL_STORAGE";
   }
 
   @SimpleProperty(description = "Pilihan read-only: izin tulis storage. "
-      + "Colok ke CallRequestPermission(s) / IsPermissionGranted di sini.",
+      + "Colok ke RequestPermission(s) / IsPermissionGranted di sini.",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionWriteStorage() {
     return "android.permission.WRITE_EXTERNAL_STORAGE";
   }
 
   @SimpleProperty(description = "Pilihan read-only: izin notifikasi "
-      + "(Android 13+). Colok ke CallRequestPermission(s) / "
+      + "(Android 13+). Colok ke RequestPermission(s) / "
       + "IsPermissionGranted di sini.",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionNotifications() {
@@ -454,7 +457,7 @@ public class Tools_Base extends AndroidNonvisibleComponent {
   }
 
   @SimpleProperty(description = "Pilihan read-only: izin baca gambar "
-      + "(Android 13+). Colok ke CallRequestPermission(s) / "
+      + "(Android 13+). Colok ke RequestPermission(s) / "
       + "IsPermissionGranted di sini.",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionReadImages() {
@@ -462,7 +465,7 @@ public class Tools_Base extends AndroidNonvisibleComponent {
   }
 
   @SimpleProperty(description = "Pilihan read-only: izin baca video "
-      + "(Android 13+). Colok ke CallRequestPermission(s) / "
+      + "(Android 13+). Colok ke RequestPermission(s) / "
       + "IsPermissionGranted di sini.",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionReadVideo() {
@@ -470,7 +473,7 @@ public class Tools_Base extends AndroidNonvisibleComponent {
   }
 
   @SimpleProperty(description = "Pilihan read-only: izin baca audio "
-      + "(Android 13+). Colok ke CallRequestPermission(s) / "
+      + "(Android 13+). Colok ke RequestPermission(s) / "
       + "IsPermissionGranted di sini.",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionReadAudio() {
@@ -478,7 +481,7 @@ public class Tools_Base extends AndroidNonvisibleComponent {
   }
 
   @SimpleProperty(description = "Pilihan read-only: izin lokasi akurat (CADANGAN - "
-      + "belum ada bloknya). Colok ke CallRequestPermission(s) / "
+      + "belum ada bloknya). Colok ke RequestPermission(s) / "
       + "IsPermissionGranted di sini.",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionLocationFine() {
@@ -486,7 +489,7 @@ public class Tools_Base extends AndroidNonvisibleComponent {
   }
 
   @SimpleProperty(description = "Pilihan read-only: izin lokasi kasar (CADANGAN - "
-      + "belum ada bloknya). Colok ke CallRequestPermission(s) / "
+      + "belum ada bloknya). Colok ke RequestPermission(s) / "
       + "IsPermissionGranted di sini.",
       category = PropertyCategory.BEHAVIOR)
   public String PermissionLocationCoarse() {
@@ -560,6 +563,30 @@ public class Tools_Base extends AndroidNonvisibleComponent {
     return Shared.convertBytes(bytes);
   }
 
+  @SimpleFunction(description = "Daftar satuan ukuran yang diterima blok ukuran "
+      + "(urut kecil-besar: B..YB). Colok ke Spinner.Elements untuk UI converter.")
+  public YailList GetSizeUnits() {
+    ArrayList<String> l = new ArrayList<String>();
+    for (int i = 0; i < Shared.SIZE_UNITS.length; i = i + 1) {
+      l.add(Shared.SIZE_UNITS[i]);
+    }
+    return YailList.makeList(l);
+  }
+
+  @SimpleFunction(description = "Konversi ukuran antar satuan (basis 1024). "
+      + "Cth: ConvertFileSize(1, GB, MB) = 1024. Hasil dibulatkan 2 desimal. "
+      + "Satuan tak dikenal = -1. Soket terima teks UI (Spinner.Selection).")
+  public double ConvertFileSize(double value,
+      @Options(SizeUnit.class) String fromUnit,
+      @Options(SizeUnit.class) String toUnit) {
+    int fi = Shared.sizeUnitIndex(fromUnit);
+    int ti = Shared.sizeUnitIndex(toUnit);
+    if (fi < 0 || ti < 0) {
+      return -1;
+    }
+    return Shared.convertSizeValue(value, fi, ti);
+  }
+
   @SimpleFunction(description = "Tebak mime dari nama file/ekstensi. Tidak perlu file-nya ada.")
   public String GetMimeType(String fileName) {
     return Shared.mimeFor(fileName);
@@ -574,11 +601,21 @@ public class Tools_Base extends AndroidNonvisibleComponent {
   @SimpleFunction(description = "Catatan update paket Tools (dibaca lewat blok, "
       + "karena panel info extension tidak bisa diubah manual).")
   public String GetWhatsNew() {
-    return "v23 2026-11-21: REDESAIN IZIN (breaking, blok lama merah): Base = hub "
-        + "generik (CallRequestPermission(s) + IsPermissionGranted + "
+    return "v33 2026-11-27: KOMPONEN BARU Tools_Pdf v1 + Tools_PdfView v1 "
+        + "(16 komponen). Pdf: teks per halaman/semua + judul/penulis/ukuran "
+        + "halaman + render PNG/JPG (parser murni-Java). PdfView ber-id: "
+        + "CreatePdfView + swipe/navigasi + zoom + 4 event opsional. BREAKING "
+        + "File (v27->v28): salin/pindah 5->2 (CopyOrMovedFile + "
+        + "CopyOrMovedBatchFiles + dialog duplikat) + FileSize->GetFileSize/"
+        + "RequestFileSize/GotFileSize + helper SizeUnit; Base (v26->v27): "
+        + "GetSizeUnits + ConvertFileSize; Downloader (v25->v26): torrent "
+        + "otomatis; Webview (v9->v10) + AdBlock (v10->v11): mesin statik. "
+        + "Blok lama yang dihapus harus pasang ulang. "
+        + "v23 2026-11-21: REDESAIN IZIN (breaking, blok lama merah): Base = hub "
+        + "generik (RequestPermission(s) + IsPermissionGranted + "
         + "GetGranted/DeniedPermissions + 10 Pilihan izin + GotPermission); File = "
-        + "CallSetStoragePermission; Sheet = CallSetNotificationPermission; Task = "
-        + "CallSetExactAlarmPermission; Call lama + helper File dihapus; GotPermission "
+        + "SetStoragePermission; Sheet = SetNotificationPermission; Task = "
+        + "SetExactAlarmPermission; Call lama + helper File dihapus; GotPermission "
         + "4-param (permanentlyDenied = user vs permanen); operasi File/Compress/"
         + "Downloader/Image/Style gate mandiri. "
         + "v22 2026-11-20: File +GetFileHash(path, algorithm) hash isi "
@@ -594,20 +631,20 @@ public class Tools_Base extends AndroidNonvisibleComponent {
         + "posisi SetSliderRememberPosition; IsImageLoading; SliderCreated pakai "
         + "sliderId; batas Exif dicatat; cache URL 80MB). Downloader "
         + "+GetDownloadAttempts. Sheet +GetSheetHeight + beda daftar/Aktif. File "
-        + "GetFileName rujuk CallGuessFileName. Fasad LastError gabungan 12 "
+        + "GetFileName rujuk GuessFileName. Fasad LastError gabungan 12 "
         + "pemilik. RENCANA: reserves kamera/mic/lokasi jadi blok nyata; 6 uji "
         + "HP (pemilik). "
         + "v20 2026-11-20: RILIS BREAKING (pengguna tunggal = pemilik; "
         + "proyek lama wajib pasang ulang blok yang di-rename). HAPUS: 72 "
         + "cermin per-tipe Tools_Base (diet 99->31 blok); IsAudioPlaying/"
         + "IsVideoPlaying; GetPendingTaskIds; Downloader.GetFileName (pakai "
-        + "CallGuessFileName); SaveTagId->RegisterTagId; ReleaseId->"
+        + "GuessFileName); SaveTagId->RegisterTagId; ReleaseId->"
         + "SetForceReleaseId; ClearTag/ClearVars/ClearTaskExtras->SetClearTag/"
         + "SetClearVars/SetClearTaskExtras; File GetPermission->"
-        + "CallRequestPermission; CallSetAlarm/CallSetRepeatingAlarm->"
-        + "CallScheduleAlarm/CallScheduleRepeatingAlarm (+CallScheduleDailyAt); "
-        + "Sheet SetShowToast/SetShowNotification->CallShowToast/"
-        + "CallSetNotification (+event ToastShown/NotificationShown); "
+        + "RequestPermission; CallSetAlarm/CallSetRepeatingAlarm->"
+        + "ScheduleAlarm/ScheduleRepeatingAlarm (+ScheduleDailyAt); "
+        + "Sheet SetShowToast/SetShowNotification->ShowToast/"
+        + "SetNotification (+event ToastShown/NotificationShown); "
         + "RegisterSheet pecah: RegisterSheet(id,content)+SetSheetStyle (+"
         + "ShowSimpleSheet, CreateNotificationId); Layout GetLayout(id)+"
         + "GetLayoutAs(type,id), param layout->type di 9 blok (+IsLayoutGone, "
@@ -616,15 +653,15 @@ public class Tools_Base extends AndroidNonvisibleComponent {
         + "Direction* + background KHUSUS lokal/asset (BUKAN URL); "
         + "Compress ListZipContents->GetZipEntries + percent 0-100 + cancel "
         + "hapus ZIP sebagian; File success jadi #1 di 10 event + "
-        + "IsCopyOrMoveBusy + CopyFile/MoveFile + CallAppendFile + GetLastModified/"
+        + "IsCopyOrMoveBusy + CopyFile/MoveFile + AppendFile + GetLastModified/"
         + "IsFileReadable; Core Set* diam->lapor ErrorOccurred + "
-        + "InvokeDynamic->CallInvokeDynamic + GetDynamicType/16 Type*/"
+        + "InvokeDynamic->InvokeDynamic + GetDynamicType/16 Type*/"
         + "IsDynamicVisible; Image slider TANPA batas jumlah + cache URL 50MB "
         + "MD5 (+SetClearImageCache) + IsSliderAutoPlay/GetSliderInterval/"
         + "GetImageCount; Task IsTaskPaused/GetTaskElapsed/GetTaskRemaining + "
         + "AlarmsRestored; Audio/Video IsAudioPaused/IsVideoPaused + "
         + "SetForward/Backward*By + volume/loop/speed per-id + 4 designer "
-        + "props; Downloader IsDownloadPaused + Get* + CallRetryDownload. "
+        + "props; Downloader IsDownloadPaused + Get* + RetryDownload. "
         + "ALIAS pindah (tetap jalan): tipe file 'vidio'->video. RENCANA v21: "
         + "paket migrasi event besar (CoreClicked dkk); reserves kamera/mic/"
         + "lokasi di File (dicadangkan 2026-11-20) jadi blok nyata. "
@@ -643,8 +680,8 @@ public class Tools_Base extends AndroidNonvisibleComponent {
         + "GetImageWidth/Height +IsImageVisible (BREAKING: proyek lama yang "
         + "pakai create di atas wajib pasang ulang bloknya); + Tools_All_in_One "
         + "(fasad 460 blok 12 tools + ikon, event dicerminkan via bus)). "
-        + "v17 2026-11-17: CallDownload 4 pintu (http/data:/content:/file:); "
-        + "CallGuessFileName + FileNameGuessed; versi anotasi 17 + catatan "
+        + "v17 2026-11-17: Download 4 pintu (http/data:/content:/file:); "
+        + "GuessFileName + FileNameGuessed; versi anotasi 17 + catatan "
         + "update per komponen. v16: gate izin otomatis 16 operasi storage; "
         + "IsAllFilesAccessGranted/OpenAllFilesAccessSettings; "
         + "Is/CallEnsure*Permission + 10 blok Permission; "

@@ -5,6 +5,8 @@ import com.google.appinventor.components.common.OptionList;
 /**
  * Kategori file untuk GetFilesByType/GetExtensionsForType. Nilai = nama
  * kategori kanonik (alias Indonesia/Inggris tetap bisa via blok teks).
+ * pdf = sub-tipe dari document (filter khusus pdf saja; document tetap
+ * mencakup pdf seperti dulu).
  */
 public enum FileCategory implements OptionList<String> {
   Image("image"),
@@ -13,6 +15,7 @@ public enum FileCategory implements OptionList<String> {
   Text("text"),
   Archive("archive"),
   Document("document"),
+  Pdf("pdf"),
   Apk("apk"),
   Unknown("unknown");
 

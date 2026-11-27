@@ -87,7 +87,7 @@ import java.util.List;
 import java.util.Map;
 
 @DesignerComponent(
-    version = 9,
+    version = 10,
     description = "Tools_Webview: webview ber-id ala Sunny Gupta v13 (blueprint "
         + "dicuri + disempurnakan, bukan fork). ID NUMBER dua arah (masuk/keluar "
         + "number, tanpa +0), simpan URUT PEMBUATAN + Current/Previous/First/"

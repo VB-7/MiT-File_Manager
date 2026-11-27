@@ -29,6 +29,7 @@ public final class Ids {
   public static final String SLIDER = "Slider";
   public static final String TASK = "Task";
   public static final String WEBVIEW = "Webview";
+  public static final String PDFVIEW = "PdfView";
   public static final String RESERVED = "Reserved";
 
   private static final Set<Integer> claimed = new LinkedHashSet<Integer>();
@@ -50,6 +51,7 @@ public final class Ids {
     sets.put(SLIDER, new LinkedHashSet<Integer>());
     sets.put(TASK, new LinkedHashSet<Integer>());
     sets.put(WEBVIEW, new LinkedHashSet<Integer>());
+    sets.put(PDFVIEW, new LinkedHashSet<Integer>());
     sets.put(RESERVED, new LinkedHashSet<Integer>());
     actives.put(DOWNLOAD, new LinkedHashSet<Integer>());
     actives.put(IMAGE, new LinkedHashSet<Integer>());
@@ -61,6 +63,7 @@ public final class Ids {
     actives.put(SLIDER, new LinkedHashSet<Integer>());
     actives.put(TASK, new LinkedHashSet<Integer>());
     actives.put(WEBVIEW, new LinkedHashSet<Integer>());
+    actives.put(PDFVIEW, new LinkedHashSet<Integer>());
     currents.put(DOWNLOAD, Integer.valueOf(-1));
     currents.put(IMAGE, Integer.valueOf(-1));
     currents.put(AUDIO, Integer.valueOf(-1));
@@ -71,6 +74,7 @@ public final class Ids {
     currents.put(SLIDER, Integer.valueOf(-1));
     currents.put(TASK, Integer.valueOf(-1));
     currents.put(WEBVIEW, Integer.valueOf(-1));
+    currents.put(PDFVIEW, Integer.valueOf(-1));
   }
 
   private Ids() {
@@ -85,7 +89,8 @@ public final class Ids {
         && !AUDIO.equals(type) && !VIDEO.equals(type)
         && !CORE.equals(type) && !LAYOUT.equals(type)
         && !SHEET.equals(type) && !SLIDER.equals(type)
-        && !TASK.equals(type) && !WEBVIEW.equals(type);
+        && !TASK.equals(type) && !WEBVIEW.equals(type)
+        && !PDFVIEW.equals(type);
   }
 
   private static Integer lastOfSet(LinkedHashSet<Integer> s) {
@@ -153,6 +158,7 @@ public final class Ids {
     sets.get(SLIDER).remove(k);
     sets.get(TASK).remove(k);
     sets.get(WEBVIEW).remove(k);
+    sets.get(PDFVIEW).remove(k);
     sets.get(RESERVED).remove(k);
     actives.get(DOWNLOAD).remove(k);
     actives.get(IMAGE).remove(k);
@@ -164,6 +170,7 @@ public final class Ids {
     actives.get(SLIDER).remove(k);
     actives.get(TASK).remove(k);
     actives.get(WEBVIEW).remove(k);
+    actives.get(PDFVIEW).remove(k);
     fixCurrent(DOWNLOAD);
     fixCurrent(IMAGE);
     fixCurrent(AUDIO);
@@ -174,6 +181,7 @@ public final class Ids {
     fixCurrent(SLIDER);
     fixCurrent(TASK);
     fixCurrent(WEBVIEW);
+    fixCurrent(PDFVIEW);
   }
 
   public static synchronized boolean isBusy(int id) {
@@ -264,6 +272,7 @@ public final class Ids {
         && !sets.get(CORE).contains(k) && !sets.get(LAYOUT).contains(k)
         && !sets.get(SHEET).contains(k) && !sets.get(SLIDER).contains(k)
         && !sets.get(TASK).contains(k) && !sets.get(WEBVIEW).contains(k)
+        && !sets.get(PDFVIEW).contains(k)
         && !sets.get(RESERVED).contains(k)) {
       claimed.remove(k);
     }
