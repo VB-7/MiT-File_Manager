@@ -666,7 +666,7 @@ public class Tools_AdBlock extends AndroidNonvisibleComponent {
     }
   }
 
-  private ArrayList<String> readPrefLines(String key) {
+  private static ArrayList<String> readPrefLines(String key) {
     ArrayList<String> out = new ArrayList<String>();
     try {
       SharedPreferences p = adCtx.getSharedPreferences(PREFS,
