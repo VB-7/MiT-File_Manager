@@ -2038,16 +2038,17 @@ public class Tools_File extends AndroidNonvisibleComponent
         String u = Shared.clean(unit);
         long bytes = me.rawFileBytes(path);
         final String fP = Shared.clean(path);
-        final String fN;
+        String fNt;
         try {
           if (me.wantAsset(fP)) {
-            fN = Shared.fileNameOf(Shared.assetName(fP));
+            fNt = Shared.fileNameOf(Shared.assetName(fP));
           } else {
-            fN = Shared.fileNameOf(fP);
+            fNt = Shared.fileNameOf(fP);
           }
         } catch (Exception e) {
-          fN = "";
+          fNt = "";
         }
+        final String fN = fNt;
         if (bytes < 0) {
           final String uu = u;
           me.fireOnUi(new Runnable() {
