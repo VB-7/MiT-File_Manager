@@ -1751,7 +1751,7 @@ final class PdfParser {
         p = skipWs(p);
         while (p < data.length) {
           if (matchAt(p, "trailer")) {
-            Val v = parseValue(p + 7, 0);
+            Val v = parseValue(data, p + 7, 0);
             if (v.val instanceof Map) {
               mergeTrailer((Map<String, Object>) v.val);
             }
