@@ -75,6 +75,7 @@ Operasi file otomatis meminta izin sebelum jalan (sudah granted = lanjut tanpa d
 
 ## Riwayat versi
 
+- **v32** — hapus total awalan `Call` di SEMUA 14 tools (File v26→v27, Webview v7→v8, Video v24→v25, Audio v24→v25, Image v25→v26, AdBlock v8→v9, Base v25→v26, Downloader v24→v25, Compress v22→v23, Core v22→v23, Layout v23→v24, Sheet v24→v25, Style v24→v25, Task v24→v25): `Download`, `PlayAudio`, `Unzip`, `ShowToast`, `ScheduleAlarm`, `CreateDynamicButton`, `AnimateFade`, `MakeDirectory`, `SaveFile`, `ReadText`, `RequestPermission`, `RefreshAdBlock`, dsb (60+ blok; pengecualian tabrakan di Webview jadi `LoadHtmlById`/`EvaluateJavascriptById`). BREAKING terbesar: proyek lama pakai nama `Call*` harus pasang ulang semua. Plug-and-play AdBlock (AdBlock v9→v10, Webview v8→v9): cukup SET `BlockAds` di bawah `CreateWebview` — data kosong = otomatis unduh semua penyedia untuk semua tipe (Host/Rules/White/Cosmetic, interval Auto); tiap tipe bisa pilih `Semua` (27 sumber sekaligus) atau 1 penyedia; interval opsional; event `Got*`/`AdBlockUpdated` opsional; pencegat tap-link + request tetap otomatis (hormat whitelist).
 - **v31** — rapikan nama blok (File v25→v26, Webview v6→v7, Video v23→v24, Audio v23→v24, Image v24→v25, AdBlock v7→v8, Base v24→v25): keluarga salin/pindah lepas awalan `Call` (`CopyOrMoveFile`, `CopyFile`, `MoveFile`, `CopyList`/`MoveList` void — terbaca "call [Tools_File1] CopyFile", tanpa "evaluate but ignore result"); 7 cek boolean jadi `Is*` (Webview `CanGoBack/CanGoForward/CanGoBackOrForward`→`IsGoBackAvailable/IsGoForwardAvailable/IsGoBackOrForwardAvailable`, Video `GetVideoLooping`→`IsVideoLooping`, Audio `GetAudioLooping`→`IsAudioLooping`, Image `GetSliderFit`→`IsSliderFit`, AdBlock `HasAdBlock`→`IsAdBlockAvailable`); teks whatsnew Base disesuaikan. BREAKING: proyek lama pakai 12 nama lama harus pasang ulang.
 - **v30** — restorasi batch salin/pindah (File v24→v25): `CopyList(fromPaths, toFolder)` / `MoveList(fromPaths, toFolder)` (boolean; fromPaths = list atau teks koma) + 6 event batch asli v3–v8 (`CopyBatchStarted/ProgressChanged/Finished`, `MoveBatchStarted/ProgressChanged/Finished`; scope = kosong karena scope dihapus v13). Per-file tetap lewat `CopyOrMove*`; batch pakai slot `copyormove` yang sama (satu job per saat) + bisa dibatalkan via `SetCancelCopyOrMove`.
 - **v29** — Helper merah massal + multi-picker (File v23→v24, Layout v22→v23, AdBlock v6→v7, Style v23→v24): `OpenMultiFilePicker(mimeType)` → event `AfterMultiFilePicked(success, uris, paths, fileNames)` (3 list sejajar; pilih beberapa sekaligus); Helper baru `PickMimeType` (All/audio/video/image/text/pdf/zip/apk) untuk kedua picker, `FileCategory` (image/audio/video/text/archive/document/apk/unknown) untuk `GetFilesByType`/`GetExtensionsForType`, `LayoutType` (Vertical/Horizontal/VerticalScroll/HorizontalScroll) untuk 10 blok type Layout, `AdBlockUpdateMode` (Manual/TiapBuka/Harian/Mingguan/Auto) untuk properti mode, `ScriptletName` (popup/antiadblock/overlay/redirect/privacy) untuk Set/IsScriptletEnabled, `SlideDirection` (left/right/top/bottom) untuk `CallAnimateSlideIn`. Soket tetap bisa diisi teks bebas (alias lama tetap jalan). Blok Type*/Permission* hijau lama dipertahankan.
@@ -104,7 +105,7 @@ Versi anotasi: **1**. Jumlah blok: 28 fungsi, 3 event, 1 properti.
 
 ### Fungsi (Tools_AdBlock)
 
-- `CallRefreshAdBlock` — CALL: download + gabung SEMUA sumber + pisah ke 4 ember. Hasil lewat `AdBlockUpdated`, progres lewat `AdBlockProgressChanged`.
+- `RefreshAdBlock` — CALL: download + gabung SEMUA sumber + pisah ke 4 ember. Hasil lewat `AdBlockUpdated`, progres lewat `AdBlockProgressChanged`.
 - `SetAdBlockSources(sources)` — SET: ganti sumber download (list ATAU teks multi-separator `,`/newline/`;`). Kosong = kembali ke 27 bawaan.
 - `SetAdBlockUpdateMode(mode)` — SET: Manual / TiapBuka / Harian / Mingguan / Auto. Salah ketik via `ErrorOccurred`.
 - `SetAdBlockEnabled(enabled)` / `IsAdBlockEnabled()` — nyala/mati mesin global.
@@ -125,7 +126,7 @@ Versi anotasi: **17**. Jumlah blok: 20 fungsi, 5 properti, 4 event.
 
 ### Fungsi (Tools_Audio)
 
-#### `CallPlayAudio`
+#### `PlayAudio`
 
 CALL: Putar audio ber-id (background, tanpa tampilan). Bisa jalan bareng (satu id = satu audio). path file (/Download/..., absolut apa adanya), file:/// absolut, atau http(s) URL (streaming). id dari CreateAudioId / Tools_Base CreateUniqueId (reservasi diadopsi). Tampilan (Slider/Label) bikin sendiri dari AudioStarted/ProgressChanged/Finished. Sukses menembak AudioStarted; gagal via ErrorOccurred.
 
@@ -134,7 +135,7 @@ CALL: Putar audio ber-id (background, tanpa tampilan). Bisa jalan bareng (satu i
 
 #### `CreateAudioId`
 
-Buat id audio unik baru (Number, siap pakai ke CallPlayAudio).
+Buat id audio unik baru (Number, siap pakai ke PlayAudio).
 
 - **Input:** tidak ada
 - **Return:** angka
@@ -260,7 +261,7 @@ SET: Lompat audio ke posisi (ms). Bisa dipasang ke Slider. (per id)
 
 #### `SetStopAudio`
 
-SET: Hentikan audio (per id). Putar lagi via CallPlayAudio.
+SET: Hentikan audio (per id). Putar lagi via PlayAudio.
 
 - **Input:** `id` (angka)
 - **Return:** void
@@ -306,7 +307,7 @@ Lompatan Maju/Mundur dalam detik (default 10).
 
 #### `AudioFinished`
 
-Audio selesai (tidak loop). Putar lagi via CallPlayAudio.
+Audio selesai (tidak loop). Putar lagi via PlayAudio.
 
 - **Parameter:** `id` (angka)
 
@@ -366,7 +367,7 @@ Buat id unik baru di tag ini (Number, angka terkecil yang belum dipakai, langsun
 
 #### `CreateUniqueId`
 
-Buat id unik global baru (Number). Reservasi otomatis, siap pakai ke CallDownload / CallShowImage / CallPlayAudio / CallPlayVideoIn (reservasi otomatis diadopsi). Urutan pembuatan = urutan list.
+Buat id unik global baru (Number). Reservasi otomatis, siap pakai ke Download / ShowImage / PlayAudio / PlayVideoIn (reservasi otomatis diadopsi). Urutan pembuatan = urutan list.
 
 - **Input:** tidak ada
 - **Return:** angka
@@ -1054,14 +1055,14 @@ Versi anotasi: **17**. Jumlah blok: 7 fungsi, 2 properti, 7 event.
 
 ### Fungsi (Tools_Compress)
 
-#### `CallUnzip`
+#### `Unzip`
 
 CALL: ekstrak ZIP ke folder. Struktur folder di dalam ZIP dijaga. Batalkan via SetCancelZip. Pantau via UnzipStarted/ProgressChanged/Finished.
 
 - **Input:** `zipPath` (teks), `destFolder` (teks)
 - **Return:** void
 
-#### `CallZipFiles`
+#### `ZipFiles`
 
 CALL: bikin ZIP dari BANYAK file sekaligus (tanpa loop). paths = list path sumber. destZip = path file zip tujuan. Mulai = menembak Started; gagal via ErrorOccurred. Pantau via ZipStarted/ProgressChanged/Finished. Satu proses ZIP per saat.
 
@@ -1171,35 +1172,35 @@ Versi anotasi: **17**. Jumlah blok: 20 fungsi, 1 properti, 5 event.
 
 ### Fungsi (Tools_Core)
 
-#### `CallCreateDynamicButton`
+#### `CreateDynamicButton`
 
 CALL: Jalan pintas: bikin Button dinamis ber-id lengkap dengan teks, warna, ukuran font, tebal, visibilitas. Sama seperti Create + Set berulang, tapi satu blok.
 
 - **Input:** `container` (component), `id` (angka), `text` (teks), `textColor` (angka), `backgroundColor` (angka), `fontSize` (angka), `bold` (boolean), `visible` (boolean)
 - **Return:** void
 
-#### `CallCreateDynamicComponent`
+#### `CreateDynamicComponent`
 
 Bikin komponen MIT dinamis ber-id ke dalam layout (Arrangement MIT / dinamis). typeName: Button, Label, TextBox, Image, CheckBox, Switch, Slider, Spinner, ListView, DatePicker, TimePicker, HorizontalArrangement, VerticalArrangement, HorizontalScrollArrangement, VerticalScrollArrangement. id = penanda (minta ke CreateDynamicId, reservasi otomatis diadopsi). Sukses menembak ComponentCreated; klik/longklik menembak CoreClicked/CoreLongClicked; gagal via ErrorOccurred.
 
 - **Input:** `typeName` (teks), `container` (component), `id` (angka)
 - **Return:** void
 
-#### `CallCreateDynamicImage`
+#### `CreateDynamicImage`
 
 CALL: Jalan pintas: bikin Image (gambar MIT) dinamis ber-id dengan picture + visibilitas. Isi picture seperti Image.Picture biasa (path/asset/URL).
 
 - **Input:** `container` (component), `id` (angka), `picturePath` (teks), `visible` (boolean)
 - **Return:** void
 
-#### `CallCreateDynamicLabel`
+#### `CreateDynamicLabel`
 
 CALL: Jalan pintas: bikin Label dinamis ber-id lengkap dengan teks, warna, ukuran font, tebal, visibilitas.
 
 - **Input:** `container` (component), `id` (angka), `text` (teks), `textColor` (angka), `backgroundColor` (angka), `fontSize` (angka), `bold` (boolean), `visible` (boolean)
 - **Return:** void
 
-#### `CallCreateDynamicTextBox`
+#### `CreateDynamicTextBox`
 
 CALL: Jalan pintas: bikin TextBox dinamis ber-id lengkap dengan hint, warna, ukuran font, tebal, visibilitas.
 
@@ -1354,27 +1355,27 @@ SATU-SATUNYA error Tools_Core. component = nama operasi (bandingkan dengan blok 
 
 ## Tools_Downloader
 
-> Tools_Downloader: unduh paralel ber-id (pause/resume/cancel per id, Started/ProgressChanged/Finished) + unduh batch list URL. Id dikelola Tools_Base (CreateUniqueId) atau CreateDownloadId. List id URUT PEMBUATAN. (v17 2026-11-17: CallDownload 4 pintu http/data:/content:/file:; blok mandiri CallGuessFileName + event FileNameGuessed; v16: gate izin otomatis + SetDownloadNotification.)
+> Tools_Downloader: unduh paralel ber-id (pause/resume/cancel per id, Started/ProgressChanged/Finished) + unduh batch list URL. Id dikelola Tools_Base (CreateUniqueId) atau CreateDownloadId. List id URUT PEMBUATAN. (v17 2026-11-17: Download 4 pintu http/data:/content:/file:; blok mandiri GuessFileName + event FileNameGuessed; v16: gate izin otomatis + SetDownloadNotification.)
 
 Versi anotasi: **17**. Jumlah blok: 22 fungsi, 1 properti, 7 event.
 
 ### Fungsi (Tools_Downloader)
 
-#### `CallDownload`
+#### `Download`
 
-CALL: unduh ke folder (otomatis di-root /storage/emulated/0; absolut apa adanya). url = http(s) ATAU data:URL (base64/url-encoded, mis. data:image/png;base64,...) ATAU content: URI Android (dari file picker) ATAU file: URL / path lokal (disalin). blob: TIDAK didukung (itu objek browser; ubah dulu jadi base64 via JavaScript, lalu kirim sebagai data:URL atau ke CallSaveBase64ToFile). fileName kosong = nama otomatis. id = angka bebas yang belum dipakai (minta ke Tools_Base CreateUniqueId atau CreateDownloadId). Hasil lewat DownloadStarted/ProgressChanged/Finished (bawa id).
+CALL: unduh ke folder (otomatis di-root /storage/emulated/0; absolut apa adanya). url = http(s) ATAU data:URL (base64/url-encoded, mis. data:image/png;base64,...) ATAU content: URI Android (dari file picker) ATAU file: URL / path lokal (disalin). blob: TIDAK didukung (itu objek browser; ubah dulu jadi base64 via JavaScript, lalu kirim sebagai data:URL atau ke SaveBase64ToFile). fileName kosong = nama otomatis. id = angka bebas yang belum dipakai (minta ke Tools_Base CreateUniqueId atau CreateDownloadId). Hasil lewat DownloadStarted/ProgressChanged/Finished (bawa id).
 
 - **Input:** `url` (teks), `fileName` (teks), `folder` (teks), `id` (angka)
 - **Return:** void
 
-#### `CallDownloadList`
+#### `DownloadList`
 
-CALL: unduh BANYAK URL sekaligus (tanpa loop manual). fileNames boleh kosong (= otomatis semua). folder seperti CallDownload. Tanpa return: pantau tiap id lewat DownloadStarted/DownloadProgressChanged/DownloadFinished. Ringkasan lewat DownloadBatchFinished. Satu batch per saat.
+CALL: unduh BANYAK URL sekaligus (tanpa loop manual). fileNames boleh kosong (= otomatis semua). folder seperti Download. Tanpa return: pantau tiap id lewat DownloadStarted/DownloadProgressChanged/DownloadFinished. Ringkasan lewat DownloadBatchFinished. Satu batch per saat.
 
 - **Input:** `urls` (any), `fileNames` (any), `folder` (teks)
 - **Return:** void
 
-#### `CallGuessFileName`
+#### `GuessFileName`
 
 CALL: tebak nama file dari URL saja (1 input, mandiri — bisa disandingkan komponen lain, mis. Web bawaan MIT untuk rename). http(s) = ambil header asli server (ikuti redirect); data:/content:/file:/path = tebak lokal tanpa internet. Hasil lewat FileNameGuessed (url + fileName + mimeType).
 
@@ -1383,7 +1384,7 @@ CALL: tebak nama file dari URL saja (1 input, mandiri — bisa disandingkan komp
 
 #### `CreateDownloadId`
 
-Buat id unduhan unik baru (Number, siap pakai ke CallDownload). Urutan pembuatan menentukan urutan list.
+Buat id unduhan unik baru (Number, siap pakai ke Download). Urutan pembuatan menentukan urutan list.
 
 - **Input:** tidak ada
 - **Return:** angka
@@ -1439,7 +1440,7 @@ Fallback polling untuk event Started/Progress/Finished: status unduhan ber-id. S
 
 #### `GetFileName`
 
-GET: nama file dari URL, mime, dan content-disposition (dipakai otomatis bila fileName CallDownload dikosongkan).
+GET: nama file dari URL, mime, dan content-disposition (dipakai otomatis bila fileName Download dikosongkan).
 
 - **Input:** `url` (teks), `mimeType` (teks), `contentDisposition` (teks)
 - **Return:** teks
@@ -1495,7 +1496,7 @@ SET: batalkan unduhan berjalan (per id). File sebagian dihapus. Tanpa feedback.
 
 #### `SetDownloadNotification`
 
-SET: tampilkan progres unduhan di bar notifikasi Android (per id, otomatis: nama file + persen). show=true = tampil + update tiap Started/Progress/Finished; show=false = matikan + hapus notif id itu. Pasang sesudah CallDownload, atau di dalam event DownloadStarted/ProgressChanged (id sudah terdaftar; di Finished kurang relevan). Tiap id hasil CallDownloadList bisa dipasang satu-satu, agar sistem bisa bedakan Download vs DownloadList. Android 13+ butuh izin POST_NOTIFICATIONS (minta via blok GetPermission Tools_File). Tanpa feedback.
+SET: tampilkan progres unduhan di bar notifikasi Android (per id, otomatis: nama file + persen). show=true = tampil + update tiap Started/Progress/Finished; show=false = matikan + hapus notif id itu. Pasang sesudah Download, atau di dalam event DownloadStarted/ProgressChanged (id sudah terdaftar; di Finished kurang relevan). Tiap id hasil DownloadList bisa dipasang satu-satu, agar sistem bisa bedakan Download vs DownloadList. Android 13+ butuh izin POST_NOTIFICATIONS (minta via blok GetPermission Tools_File). Tanpa feedback.
 
 - **Input:** `id` (angka), `show` (boolean)
 - **Return:** void
@@ -1563,47 +1564,47 @@ SATU-SATUNYA error Tools_Downloader. component = nama operasi (bandingkan dengan
 
 #### `FileNameGuessed`
 
-Hasil CallGuessFileName: url asal + fileName tebakan + mimeType (kosong bila tak diketahui).
+Hasil GuessFileName: url asal + fileName tebakan + mimeType (kosong bila tak diketahui).
 
 - **Parameter:** `url` (teks), `fileName` (teks), `mimeType` (teks)
 
 ## Tools_File
 
-> Tools_File (sistem draft): awalan Is = boolean (colok ke if), awalan Call = async + hasil lewat event, awalan Set = tanpa feedback. Semua path otomatis di-root ke /storage/emulated/0 ("/Download/a.jpg" jadi "/storage/emulated/0/Download/a.jpg"; absolut apa adanya). Salin/pindah digabung satu blok CallCopyOrMoveFile (isMove) + info duplikat. (v17 2026-11-17: penomoran versi. v16: gate izin otomatis 16 operasi + blok pintar CallEnsure*/Is* + 10 Helper Permission + all-files access Android 11+.)
+> Tools_File (sistem draft): awalan Is = boolean (colok ke if), awalan Call = async + hasil lewat event, awalan Set = tanpa feedback. Semua path otomatis di-root ke /storage/emulated/0 ("/Download/a.jpg" jadi "/storage/emulated/0/Download/a.jpg"; absolut apa adanya). Salin/pindah digabung satu blok CopyOrMoveFile (isMove) + info duplikat. (v17 2026-11-17: penomoran versi. v16: gate izin otomatis 16 operasi + blok pintar CallEnsure*/Is* + 10 Helper Permission + all-files access Android 11+.)
 
 Versi anotasi: **17**. Jumlah blok: 46 fungsi, 26 properti, 20 event.
 
 ### Fungsi (Tools_File)
 
-#### `CallCopyOrMoveFile`
+#### `CopyOrMoveFile`
 
 CALL: salin ATAU pindah file (isMove=true = pindah). Path otomatis di-root /storage/emulated/0. Nama tujuan boleh beda. Bila tujuan SUDAH ADA: tidak disalin, Finished(success=true, isDuplicated=true) -> rename manual ala contoh. Asset hanya bisa jadi sumber. Satu job per saat.
 
 - **Input:** `fromFileName` (teks), `toFileName` (teks), `isMove` (boolean)
 - **Return:** void
 
-#### `CallCreateEmptyFile`
+#### `CreateEmptyFile`
 
 CALL: buat file kosong (folder induk dibuat otomatis). Sudah ada = success. Hasil lewat EmptyFileCreated.
 
 - **Input:** `path` (teks)
 - **Return:** void
 
-#### `CallDeleteFile`
+#### `DeleteFile`
 
 CALL: hapus file/folder (folder rekursif). Tidak ada = success. Hasil lewat FileDeleted.
 
 - **Input:** `path` (teks)
 - **Return:** void
 
-#### `CallDeleteList`
+#### `DeleteList`
 
 CALL: hapus BANYAK path sekaligus (tanpa loop manual). paths = list / teks koma. Hasil lewat FileListDeleted (total + terhapus).
 
 - **Input:** `paths` (any)
 - **Return:** void
 
-#### `CallDeleteNomediaFile`
+#### `DeleteNomediaFile`
 
 CALL: hapus file .nomedia di folder. Tidak ada = success. Hasil lewat NomediaFileDeleted.
 
@@ -1624,56 +1625,56 @@ CALL: pastikan izin tulis storage beres (tanpa input apa pun) — hasil lewat Go
 - **Input:** tidak ada
 - **Return:** void
 
-#### `CallMakeDirectory`
+#### `MakeDirectory`
 
 CALL: buat folder (termasuk induknya). Sudah ada = success. Hasil lewat DirectoryCreated.
 
 - **Input:** `folder` (teks)
 - **Return:** void
 
-#### `CallMakeNomediaFile`
+#### `MakeNomediaFile`
 
 CALL: buat file .nomedia di dalam folder (sembunyikan dari galeri/musik). Hasil lewat NomediaFileCreated.
 
 - **Input:** `folder` (teks)
 - **Return:** void
 
-#### `CallReadText`
+#### `ReadText`
 
 CALL: baca file teks (UTF-8) di background. Hasil lewat GotText (content = isi file). Mulai lewat ReadStarted.
 
 - **Input:** `path` (teks)
 - **Return:** void
 
-#### `CallRenameFile`
+#### `RenameFile`
 
 CALL: ganti nama FILE (tanpa pindah folder). newName = nama saja. Hasil lewat FileRenamed (path = nama baru).
 
 - **Input:** `path` (teks), `newName` (teks)
 - **Return:** void
 
-#### `CallRenameFolder`
+#### `RenameFolder`
 
 CALL: ganti nama FOLDER (tanpa pindah). newName = nama saja. Hasil lewat FolderRenamed.
 
 - **Input:** `path` (teks), `newName` (teks)
 - **Return:** void
 
-#### `CallSaveBase64ToFile`
+#### `SaveBase64ToFile`
 
 CALL: simpan base64 LANGSUNG ke storage (tanpa validasi gambar, lebih cepat). Hasil lewat Base64FileSaved. Polling: GetLastBase64FilePath.
 
 - **Input:** `base64` (teks), `path` (teks)
 - **Return:** void
 
-#### `CallSaveFile`
+#### `SaveFile`
 
 CALL: tulis teks ke file (UTF-8). append=true = sambung di akhir. Hasil lewat FileSaved.
 
 - **Input:** `path` (teks), `content` (teks), `append` (boolean)
 - **Return:** void
 
-#### `CallSetHiddenDirectory`
+#### `SetHiddenDirectory`
 
 CALL: jadikan directory hidden (nama jadi .nama). Sudah hidden = success. Hasil lewat DirectoryHidden.
 
@@ -1787,7 +1788,7 @@ True bila aplikasi boleh tulis SEMUA file bersama. Android 11+ = 'Akses semua fi
 
 #### `IsBusy`
 
-True bila ada salinan/pindahan CallCopyOrMoveFile yang masih berjalan.
+True bila ada salinan/pindahan CopyOrMoveFile yang masih berjalan.
 
 - **Input:** tidak ada
 - **Return:** boolean
@@ -2097,7 +2098,7 @@ Hasil OpenFile: success + pesan.
 
 #### `Base64FileSaved`
 
-Hasil CallSaveBase64ToFile: path + success + message + needPermission.
+Hasil SaveBase64ToFile: path + success + message + needPermission.
 
 - **Parameter:** `path` (teks), `success` (boolean), `message` (teks), `needPermission` (teks)
 
@@ -2121,19 +2122,19 @@ Salin/pindah dimulai: path sumber + tujuan + nama file + isMoved.
 
 #### `DirectoryCreated`
 
-Hasil CallMakeDirectory: path + success + message + needPermission.
+Hasil MakeDirectory: path + success + message + needPermission.
 
 - **Parameter:** `path` (teks), `success` (boolean), `message` (teks), `needPermission` (teks)
 
 #### `DirectoryHidden`
 
-Hasil CallSetHiddenDirectory: path + success + message + needPermission (isi = izin yang harus diminta bila gagal karena izin).
+Hasil SetHiddenDirectory: path + success + message + needPermission (isi = izin yang harus diminta bila gagal karena izin).
 
 - **Parameter:** `path` (teks), `success` (boolean), `message` (teks), `needPermission` (teks)
 
 #### `EmptyFileCreated`
 
-Hasil CallCreateEmptyFile: path + success + message + needPermission.
+Hasil CreateEmptyFile: path + success + message + needPermission.
 
 - **Parameter:** `path` (teks), `success` (boolean), `message` (teks), `needPermission` (teks)
 
@@ -2145,31 +2146,31 @@ SATU-SATUNYA error Tools_File. component = nama operasi (bandingkan dengan blok 
 
 #### `FileDeleted`
 
-Hasil CallDeleteFile: path + success + message + needPermission.
+Hasil DeleteFile: path + success + message + needPermission.
 
 - **Parameter:** `path` (teks), `success` (boolean), `message` (teks), `needPermission` (teks)
 
 #### `FileListDeleted`
 
-Hasil CallDeleteList: success + total + terhapus + message + needPermission.
+Hasil DeleteList: success + total + terhapus + message + needPermission.
 
 - **Parameter:** `success` (boolean), `total` (angka), `deleted` (angka), `message` (teks), `needPermission` (teks)
 
 #### `FileRenamed`
 
-Hasil CallRenameFile: path (nama baru) + success + message + needPermission.
+Hasil RenameFile: path (nama baru) + success + message + needPermission.
 
 - **Parameter:** `path` (teks), `success` (boolean), `message` (teks), `needPermission` (teks)
 
 #### `FileSaved`
 
-Hasil CallSaveFile: path + success + message + needPermission.
+Hasil SaveFile: path + success + message + needPermission.
 
 - **Parameter:** `path` (teks), `success` (boolean), `message` (teks), `needPermission` (teks)
 
 #### `FolderRenamed`
 
-Hasil CallRenameFolder: path (nama baru) + success + message + needPermission.
+Hasil RenameFolder: path (nama baru) + success + message + needPermission.
 
 - **Parameter:** `path` (teks), `success` (boolean), `message` (teks), `needPermission` (teks)
 
@@ -2181,25 +2182,25 @@ Hasil GetPermission: success + izin + pesan. Pasang need_permission dari event l
 
 #### `GotText`
 
-Hasil CallReadText: success pertama, path absolut, fileName paling belakang, content = isi file.
+Hasil ReadText: success pertama, path absolut, fileName paling belakang, content = isi file.
 
 - **Parameter:** `success` (boolean), `path` (teks), `fileName` (teks), `content` (teks)
 
 #### `NomediaFileCreated`
 
-Hasil CallMakeNomediaFile: path + success + message + needPermission.
+Hasil MakeNomediaFile: path + success + message + needPermission.
 
 - **Parameter:** `path` (teks), `success` (boolean), `message` (teks), `needPermission` (teks)
 
 #### `NomediaFileDeleted`
 
-Hasil CallDeleteNomediaFile: path + success + message + needPermission.
+Hasil DeleteNomediaFile: path + success + message + needPermission.
 
 - **Parameter:** `path` (teks), `success` (boolean), `message` (teks), `needPermission` (teks)
 
 #### `ReadStarted`
 
-Bacaan dimulai (CallReadText): persiapan (tampilkan loading).
+Bacaan dimulai (ReadText): persiapan (tampilkan loading).
 
 - **Parameter:** `path` (teks)
 
@@ -2211,21 +2212,21 @@ Versi anotasi: **17**. Jumlah blok: 35 fungsi, 3 properti, 10 event.
 
 ### Fungsi (Tools_Image)
 
-#### `CallBase64ToPicture`
+#### `Base64ToPicture`
 
 CALL: decode base64 jadi gambar di cache. Path hasil langsung bisa dipasang ke Image.Picture. Hasil lewat AfterPictureBase64Ready. Satu proses per saat.
 
 - **Input:** `base64` (teks)
 - **Return:** void
 
-#### `CallCreateImageSlider`
+#### `CreateImageSlider`
 
 CALL: bikin slider gambar ber-id (geser kanan-kiri bila horizontal=true, atas-bawah bila false — lebih dari Iago/Boson yang cuma kiri-kanan). Isi via SetSliderImages. Geser menembak SliderChanged; baca kapan saja via GetSliderIndex.
 
 - **Input:** `container` (component), `id` (angka), `horizontal` (boolean)
 - **Return:** void
 
-#### `CallShowImage`
+#### `ShowImage`
 
 CALL: tampilkan gambar ber-id ke layout (Arrangement MIT / dinamis). Bisa jalan bareng (satu id = satu gambar). source kosong = pakai path (otomatis di-root /storage/emulated/0). source bisa: path file, file:/// absolut, http(s) URL (di-cache otomatis), atau base64 (mentah / data:...). id = penanda (minta ke CreateImageId / Tools_Base CreateUniqueId, reservasi otomatis diadopsi). Sukses menembak ImageShown; gagal via ErrorOccurred.
 
@@ -2234,14 +2235,14 @@ CALL: tampilkan gambar ber-id ke layout (Arrangement MIT / dinamis). Bisa jalan 
 
 #### `CreateImageId`
 
-Buat id gambar unik baru (Number, siap pakai ke CallShowImage).
+Buat id gambar unik baru (Number, siap pakai ke ShowImage).
 
 - **Input:** tidak ada
 - **Return:** angka
 
 #### `CreateSliderId`
 
-Buat id slider unik baru (Number, siap pakai ke CallCreateImageSlider).
+Buat id slider unik baru (Number, siap pakai ke CreateImageSlider).
 
 - **Input:** tidak ada
 - **Return:** angka
@@ -2483,7 +2484,7 @@ Nama operasi Slider (untuk if di ErrorOccurred).
 
 #### `AfterPictureBase64Ready`
 
-Hasil CallBase64ToPicture: success pertama, path absolut (cache), fileName paling belakang. Path siap ke Image.Picture.
+Hasil Base64ToPicture: success pertama, path absolut (cache), fileName paling belakang. Path siap ke Image.Picture.
 
 - **Parameter:** `success` (boolean), `path` (teks), `fileName` (teks), `message` (teks)
 
@@ -2507,7 +2508,7 @@ Gambar ber-id di-long-klik: id.
 
 #### `ImageShown`
 
-Hasil CallShowImage: gambar ber-id tampil. id + path tampil.
+Hasil ShowImage: gambar ber-id tampil. id + path tampil.
 
 - **Parameter:** `id` (angka), `path` (teks)
 
@@ -2549,28 +2550,28 @@ Versi anotasi: **17**. Jumlah blok: 17 fungsi, 5 properti, 2 event.
 
 ### Fungsi (Tools_Layout)
 
-#### `CallCreateHorizontalLayout`
+#### `CreateHorizontalLayout`
 
 CALL: Bikin HorizontalArrangement dinamis ber-id di dalam layout induk.
 
 - **Input:** `container` (component), `id` (angka)
 - **Return:** void
 
-#### `CallCreateHorizontalScrollLayout`
+#### `CreateHorizontalScrollLayout`
 
 CALL: Bikin HorizontalScrollArrangement dinamis ber-id (bisa scroll kiri-kanan) di dalam layout induk.
 
 - **Input:** `container` (component), `id` (angka)
 - **Return:** void
 
-#### `CallCreateVerticalLayout`
+#### `CreateVerticalLayout`
 
 CALL: Bikin VerticalArrangement dinamis ber-id di dalam layout induk. Sukses menembak LayoutCreated; gagal via ErrorOccurred.
 
 - **Input:** `container` (component), `id` (angka)
 - **Return:** void
 
-#### `CallCreateVerticalScrollLayout`
+#### `CreateVerticalScrollLayout`
 
 CALL: Bikin VerticalScrollArrangement dinamis ber-id (bisa scroll atas-bawah) di dalam layout induk.
 
@@ -2727,14 +2728,14 @@ Versi anotasi: **17**. Jumlah blok: 20 fungsi, 9 properti, 3 event.
 
 ### Fungsi (Tools_Sheet)
 
-#### `CallDismissSheet`
+#### `DismissSheet`
 
-CALL: Tutup sheet ber-id (animasi keluar). Hasil lewat SheetHidden (registrasi tetap, bisa CallShowSheet lagi).
+CALL: Tutup sheet ber-id (animasi keluar). Hasil lewat SheetHidden (registrasi tetap, bisa ShowSheet lagi).
 
 - **Input:** `id` (angka)
 - **Return:** void
 
-#### `CallShowSheet`
+#### `ShowSheet`
 
 CALL: Tampilkan sheet ber-id (animasi geser naik otomatis). Hasil lewat SheetShown.
 
@@ -2942,13 +2943,13 @@ SATU-SATUNYA error Tools_Sheet (Sheet, Toast, Notification). component = nama op
 
 #### `SheetHidden`
 
-Sheet ber-id tertutup (back/luar/Dismiss): id. Registrasi tetap, tampilkan lagi via CallShowSheet.
+Sheet ber-id tertutup (back/luar/Dismiss): id. Registrasi tetap, tampilkan lagi via ShowSheet.
 
 - **Parameter:** `id` (angka)
 
 #### `SheetShown`
 
-Sheet ber-id tampil (hasil CallShowSheet): id.
+Sheet ber-id tampil (hasil ShowSheet): id.
 
 - **Parameter:** `id` (angka)
 
@@ -2960,28 +2961,28 @@ Versi anotasi: **17**. Jumlah blok: 25 fungsi, 8 properti, 3 event.
 
 ### Fungsi (Tools_Style)
 
-#### `CallAnimateFade`
+#### `AnimateFade`
 
 CALL: Animasi fade: startPercent ke endPercent (0-100). Mis. 0->100 muncul, 100->0 hilang. Menembak AnimationStarted/AnimationEnded.
 
 - **Input:** `comp` (component), `durationMs` (angka), `startPercent` (angka), `endPercent` (angka)
 - **Return:** void
 
-#### `CallAnimateRotation`
+#### `AnimateRotation`
 
 CALL: Animasi putar (derajat, searah jarum jam). durationMs mis. 300.
 
 - **Input:** `comp` (component), `durationMs` (angka), `degrees` (angka)
 - **Return:** void
 
-#### `CallAnimateScale`
+#### `AnimateScale`
 
 CALL: Animasi skala: ke toXPercent/toYPercent (100 = normal). durationMs mis. 300.
 
 - **Input:** `comp` (component), `durationMs` (angka), `toXPercent` (angka), `toYPercent` (angka)
 - **Return:** void
 
-#### `CallAnimateSlideIn`
+#### `AnimateSlideIn`
 
 CALL: Animasi geser-masuk: direction = left/right/top/bottom. durationMs mis. 300.
 
@@ -3221,49 +3222,49 @@ Versi anotasi: **17**. Jumlah blok: 50 fungsi, 4 properti, 6 event.
 
 ### Fungsi (Tools_Task)
 
-#### `CallCancelAllTasks`
+#### `CancelAllTasks`
 
 CALL: Batalkan SEMUA tugas dalam-aplikasi (alarm sistem tidak ikut; pakai CallCancelAllAlarms bila perlu). Tiap tugas yang jalan menembak TaskCancelled.
 
 - **Input:** tidak ada
 - **Return:** void
 
-#### `CallCancelTask`
+#### `CancelTask`
 
 CALL: Batalkan tugas ber-id (jadwal dalam-aplikasi saja). Hasil lewat TaskCancelled.
 
 - **Input:** `id` (angka)
 - **Return:** void
 
-#### `CallCheckStartupAlarm`
+#### `CheckStartupAlarm`
 
 CALL: WAJIB dipanggil di Screen.Initialize (dan timer bila perlu): cek apakah aplikasi dibuka oleh alarm Tools_Task. Tanpa return: bila dibuka oleh alarm dan datanya baru, menembak AlarmFired.
 
 - **Input:** tidak ada
 - **Return:** void
 
-#### `CallRestoreAlarms`
+#### `RestoreAlarms`
 
 CALL: Pasang ulang SEMUA alarm tersimpan (mis. habis reboot: panggil di Screen.Initialize). Tanpa return.
 
 - **Input:** tidak ada
 - **Return:** void
 
-#### `CallScheduleAt`
+#### `ScheduleAt`
 
 CALL: Jadwalkan tugas pada jam epoch mili-detik (lihat NowMillis). Lewat = langsung jalan.
 
 - **Input:** `id` (angka), `epochMillis` (angka), `payload` (teks)
 - **Return:** void
 
-#### `CallScheduleOnce`
+#### `ScheduleOnce`
 
 CALL: Jadwalkan tugas sekali jalan: id + jeda mili-detik + payload teks (JSON via Tools_Base bila perlu). Menembak TaskStarted lalu TaskFinished. Sukses menembak Started; gagal via ErrorOccurred.
 
 - **Input:** `id` (angka), `delayMillis` (angka), `payload` (teks)
 - **Return:** void
 
-#### `CallScheduleRepeating`
+#### `ScheduleRepeating`
 
 CALL: Jadwalkan tugas berulang: id + jeda awal + interval + jumlah ulang (mis. 5) atau -1 = selamanya + payload. Tiap tick menembak TaskTick; selesai menembak TaskFinished.
 
@@ -3475,7 +3476,7 @@ Fallback polling untuk event ErrorOccurred: pesan error terakhir operasi ini (ko
 
 #### `NowMillis`
 
-Waktu sekarang epoch mili-detik (untuk CallScheduleAt/SetAlarm).
+Waktu sekarang epoch mili-detik (untuk ScheduleAt/SetAlarm).
 
 - **Input:** tidak ada
 - **Return:** angka
@@ -3647,7 +3648,7 @@ Versi anotasi: **17**. Jumlah blok: 21 fungsi, 7 properti, 4 event.
 
 ### Fungsi (Tools_Video)
 
-#### `CallPlayVideoIn`
+#### `PlayVideoIn`
 
 Putar video ber-id di dalam layout (Arrangement MIT / dinamis). Bisa jalan bareng (satu id = satu video). path file (/Download/..., absolut apa adanya), atau http(s) URL (streaming). id dari CreateVideoId / Tools_Base CreateUniqueId. Atur tinggi arrangement (mis. 300px) agar video kelihatan. Double-tap: kiri = mundur, kanan = maju, tengah = pause/resume. Sukses menembak VideoStarted; gagal via ErrorOccurred.
 
@@ -3656,7 +3657,7 @@ Putar video ber-id di dalam layout (Arrangement MIT / dinamis). Bisa jalan baren
 
 #### `CreateVideoId`
 
-Buat id video unik baru (Number, siap pakai ke CallPlayVideoIn).
+Buat id video unik baru (Number, siap pakai ke PlayVideoIn).
 
 - **Input:** tidak ada
 - **Return:** angka
@@ -3855,7 +3856,7 @@ SATU-SATUNYA error Tools_Video.
 
 #### `VideoFinished`
 
-Video selesai (tidak loop). Putar lagi via CallPlayVideoIn.
+Video selesai (tidak loop). Putar lagi via PlayVideoIn.
 
 - **Parameter:** `id` (angka)
 
@@ -3883,9 +3884,9 @@ Versi anotasi: **1**. Jumlah blok: 45 fungsi, 19 event, 1 properti.
 
 ### Fungsi (Tools_Webview)
 
-- `CreateWebView(container, id)` — pintu Sunny: buat + tampilkan webview kosong (MATCH_PARENT, `about:blank`). Ukuran via `SetWebviewSize`, link via `GoToUrl(id, url)` (terima URL/`www`/`//aset`/path file/HTML/`data:base64`) atau `GoToUrlWithHeaders(id, url, header)`. (v27: `CallShowWebview`, `GoToUrl` current, `GoToUrl2`, `SetWebviewSource`, `LoadWithHeaders` current, `SetVisibility`, `RemoveWebviewId` DIHAPUS — gateway final 9 blok + LoadHtml/CallLoadHtml.)
+- `CreateWebView(container, id)` — pintu Sunny: buat + tampilkan webview kosong (MATCH_PARENT, `about:blank`). Ukuran via `SetWebviewSize`, link via `GoToUrl(id, url)` (terima URL/`www`/`//aset`/path file/HTML/`data:base64`) atau `GoToUrlWithHeaders(id, url, header)`. (v27: `CallShowWebview`, `GoToUrl` current, `GoToUrl2`, `SetWebviewSource`, `LoadWithHeaders` current, `SetVisibility`, `RemoveWebviewId` DIHAPUS — gateway final 9 blok + LoadHtml/LoadHtmlById.)
 - `SetWebviewVisible(id, visible)` / `RemoveWebView(id)` / `LoadInNewWindow(id)` / `PauseWebView`+`ResumeWebView` (hijau) / properti hijau `WebView` (set current) — navigasi lain: `SetWebviewSize`, `ReloadWebview`, `GoBack`/`GoForward` (hijau).
-- `CallEvaluateJavascript(id, script)` — CALL: hasil string lewat `AfterJavascriptEvaluated`.
+- `EvaluateJavascriptById(id, script)` — CALL: hasil string lewat `AfterJavascriptEvaluated`.
 - `SetWebviewString` / `GetWebviewString` — jembatan string JS <-> MIT.
 - `SetWebviewAdBlock(id, use)` / `IsWebviewAdBlock(id)` — ikut mesin AdBlock global atau tidak.
 - `GetWebviewIds/Active/Current/First/Last/Previous` — id URUT PEMBUATAN.

@@ -7,6 +7,7 @@ import com.google.appinventor.components.common.OptionList;
  * Nilai = kunci nama (URL dipetakan di Tools_AdBlock; tampil nama, bukan link).
  */
 public enum AdBlockProviderHost implements OptionList<String> {
+  Semua("Semua"),
   PeterLowe("PeterLowe"),
   PeterLoweNoHtml("PeterLoweNoHtml"),
   OneHostsLite("OneHostsLite"),

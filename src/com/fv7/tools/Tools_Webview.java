@@ -3,6 +3,7 @@ package com.fv7.tools;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.net.http.SslError;
@@ -56,6 +57,7 @@ import com.google.appinventor.components.annotations.SimpleEvent;
 import com.google.appinventor.components.annotations.SimpleFunction;
 import com.google.appinventor.components.annotations.SimpleObject;
 import com.google.appinventor.components.annotations.SimpleProperty;
+import com.google.appinventor.components.annotations.Options;
 import com.google.appinventor.components.annotations.UsesPermissions;
 import com.google.appinventor.components.common.ComponentCategory;
 import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
@@ -66,8 +68,17 @@ import com.google.appinventor.components.runtime.util.YailList;
 import com.google.appinventor.components.runtime.util.AsynchUtil;
 import com.google.appinventor.components.runtime.util.JsonUtil;
 import com.google.appinventor.components.runtime.util.YailDictionary;
+import com.fv7.tools.helpers.AdBlockInterval;
+import com.fv7.tools.helpers.AdBlockProviderCosmetic;
+import com.fv7.tools.helpers.AdBlockProviderHost;
+import com.fv7.tools.helpers.AdBlockProviderRule;
+import com.fv7.tools.helpers.AdBlockProviderWhite;
+import com.fv7.tools.helpers.AdBlockType;
+import com.fv7.tools.helpers.ScriptletName;
+import com.fv7.tools.helpers.AdBlockUpdateMode;
 
 import java.io.ByteArrayInputStream;
+import java.io.File;
 import java.io.InputStream;
 import java.net.URLConnection;
 import java.util.ArrayList;
@@ -76,7 +87,7 @@ import java.util.List;
 import java.util.Map;
 
 @DesignerComponent(
-    version = 7,
+    version = 9,
     description = "Tools_Webview: webview ber-id ala Sunny Gupta v13 (blueprint "
         + "dicuri + disempurnakan, bukan fork). ID NUMBER dua arah (masuk/keluar "
         + "number, tanpa +0), simpan URUT PEMBUATAN + Current/Previous/First/"
@@ -84,8 +95,10 @@ import java.util.Map;
         + "(current-based tetap current-based). WebViewClient/WebChromeClient, "
         + "JS bridge AppInventor, upload file, download event, izin, "
         + "geolokasi, dialog JS, SSL, HTTP-auth, deep-link, asset MIT. "
-        + "AdBlock OTOMATIS via Tools_AdBlock (network + whitelist + "
-        + "cosmetic injeksi + scriptlet popup/antiadblock/overlay/redirect). "
+        + "AdBlock TERGABUNG di sini (network + whitelist + cosmetic "
+        + "injeksi + scriptlet popup/antiadblock/overlay/redirect): cukup "
+        + "Set sekali, semua webview otomatis terlindungi. Tools_AdBlock "
+        + "lama tetap jalan (kompatibilitas proyek lama). "
         + "Input fleksibel: list ATAU teks. Konvensi: Is = "
         + "boolean, Call = async + event, Set = diam (gagal via ErrorOccurred), "
         + "Get = sync.",
@@ -163,6 +176,8 @@ public class Tools_Webview extends AndroidNonvisibleComponent
     super(container.$form());
     this.context = container.$context();
     this.activity = container.$context();
+    Tools_AdBlock.ensureAdInit(container.$context());
+    Tools_AdBlock.adListen(this);
   }
 
   // ================= internal =================
@@ -1651,7 +1666,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
 
   @SimpleFunction(description = "CALL: load string HTML mentah ke webview "
       + "ber-id. Tanpa return; selesai via PageLoaded.")
-  public void CallLoadHtml(final int id, final String html) {
+  public void LoadHtmlById(final int id, final String html) {
     final WebView w = viewOf(id);
     if (w == null) {
       Shared.err(this, "Webview", id, "id tidak ada");
@@ -1835,7 +1850,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
   @SimpleFunction(description = "CALL: jalankan JavaScript di webview ber-id. "
       + "Hasil string (JSON-quoted) lewat AfterJavascriptEvaluated(id, "
       + "result).")
-  public void CallEvaluateJavascript(final int id, final String script) {
+  public void EvaluateJavascriptById(final int id, final String script) {
     final WebView w = viewOf(id);
     if (w == null) {
       Shared.err(this, "Webview", id, "id tidak ada");
@@ -2323,6 +2338,774 @@ public class Tools_Webview extends AndroidNonvisibleComponent
       Ids.unregister(Ids.WEBVIEW, id);
       Shared.err(this, "Webview", id, m == null ? "gagal tampil" : m);
     }
+    // Plug-and-play: bila AdBlock global sudah nyala tapi data masih kosong,
+    // mulai unduh cakupan otomatis (event opsional, proteksi jalan sendiri).
+    Tools_AdBlock.ensureCoverage(null);
+  }
+
+
+  // ================= AdBlock (mesin gabung: 1x set, semua id otomatis) =================
+
+  @SimpleProperty(description = "Mode update (Manual/TiapBuka/Harian/"
+      + "Mingguan/Auto).")
+  public String AdBlockUpdateMode() {
+    return Tools_AdBlock.updateMode;
+  }
+
+  @SimpleProperty(description = "SET hijau: mode update (Manual / TiapBuka / "
+      + "Harian / Mingguan / Auto-ikut-pembuat). Auto = hormati `! Expires:` "
+      + "tiap list, fallback Harian. Salah via ErrorOccurred.")
+  public void AdBlockUpdateMode(@Options(AdBlockUpdateMode.class) String mode) {
+    String t = mode == null ? "" : mode.trim().toLowerCase();
+    boolean known = t.equals("manual") || t.equals("tiapbuka")
+        || t.equals("tiap buka") || t.equals("setiap buka")
+        || t.equals("onopen") || t.equals("harian") || t.equals("daily")
+        || t.equals("hari") || t.equals("mingguan") || t.equals("weekly")
+        || t.equals("minggu") || t.equals("auto") || t.equals("otomatis")
+        || t.equals("ikut pembuat");
+    if (!known) {
+      Shared.err(this, "AdBlock", 0,
+          "mode tidak dikenal: " + (mode == null ? "" : mode));
+      return;
+    }
+    Tools_AdBlock.updateMode = Tools_AdBlock.normMode(mode);
+    Tools_AdBlock.savePrefs();
+  }
+
+  @SimpleFunction(description = "Mode update sekarang (Manual/TiapBuka/Harian/"
+      + "Mingguan/Auto). Sama isi dengan properti AdBlockUpdateMode.")
+  public String GetAdBlockUpdateMode() {
+    return Tools_AdBlock.updateMode;
+  }
+
+  @SimpleProperty(description = "True bila mesin AdBlock global sedang nyala. "
+      + "Sama isi dengan properti BlockAds.")
+  public boolean AdBlock() {
+    return Tools_AdBlock.enabled;
+  }
+
+  @SimpleFunction(description = "True bila mesin AdBlock global sedang "
+      + "nyala. Sama isi dengan properti AdBlock.")
+  public boolean IsAdBlockEnabled() {
+    return Tools_AdBlock.enabled;
+  }
+
+  @SimpleFunction(description = "CALL: download + gabung SEMUA sumber (27 bawaan "
+      + "atau custom via SetAdBlockSources) + pisah ke 4 ember. Hasil lewat "
+      + "AdBlockUpdated(success, totalHost, totalRule, totalWhite, "
+      + "totalCosmetic, message). Progres lewat AdBlockProgressChanged "
+      + "(done, total). Satu refresh per saat; sibuk via ErrorOccurred.")
+  public void RefreshAdBlock() {
+    Tools_AdBlock.requestRefresh(this);
+  }
+
+  @SimpleFunction(description = "True bila ada refresh yang sedang jalan.")
+  public boolean IsAdBlockRefreshing() {
+    synchronized (Tools_AdBlock.lock) {
+      return Tools_AdBlock.refreshing;
+    }
+  }
+
+  @SimpleProperty(description = "Sumber download aktif (list URL). Bawaan = "
+      + "27 URL bila belum di-custom.")
+  public List<String> AdBlockSources() {
+    return Tools_AdBlock.activeSources();
+  }
+
+  @SimpleFunction(description = "Sumber download aktif (list URL). Sama isi "
+      + "dengan properti AdBlockSources.")
+  public List<String> GetAdBlockSources() {
+    return Tools_AdBlock.activeSources();
+  }
+
+  @SimpleProperty(description = "SET hijau: ganti sumber download (list ATAU "
+      + "teks multi-separator \",\"/newline/\";\"). Kosong = kembali ke 27 "
+      + "bawaan. Lalu panggil RefreshAdBlock.")
+  public void AdBlockSources(Object sources) {
+    try {
+      ArrayList<String> list = Tools_AdBlock.toStrList(sources);
+      SharedPreferences p = Tools_AdBlock.adCtx.getSharedPreferences(
+          Tools_AdBlock.PREFS, Context.MODE_PRIVATE);
+      if (list.isEmpty()) {
+        p.edit().putString(Tools_AdBlock.K_CUSTOM, "").apply();
+      } else {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < list.size(); i = i + 1) {
+          if (i > 0) {
+            sb.append('\n');
+          }
+          sb.append(list.get(i));
+        }
+        p.edit().putString(Tools_AdBlock.K_CUSTOM, sb.toString()).apply();
+      }
+    } catch (Exception e) {
+      String m = e.getMessage();
+      Shared.err(this, "AdBlock", 0, m == null ? "sumber gagal" : m);
+    }
+  }
+
+  @SimpleProperty(description = "SET: tambah 1 URL langganan filter "
+      + "(http/https) ke daftar custom (bawaan ikut tersimpan). Berlaku "
+      + "di refresh berikut. Tanpa feedback.")
+  public void AddAdBlockSource(String url) {
+    try {
+      String u = url == null ? "" : url.trim();
+      if (!u.startsWith("http://") && !u.startsWith("https://")) {
+        Shared.err(this, "AdBlock", 0, "URL harus http/https");
+        return;
+      }
+      ArrayList<String> cur = new ArrayList<String>(Tools_AdBlock.activeSources());
+      if (cur.contains(u)) {
+        Shared.err(this, "AdBlock", 0, "URL sudah ada");
+        return;
+      }
+      cur.add(u);
+      StringBuilder sb = new StringBuilder();
+      for (int i = 0; i < cur.size(); i = i + 1) {
+        if (i > 0) {
+          sb.append('\n');
+        }
+        sb.append(cur.get(i));
+      }
+      SharedPreferences p = Tools_AdBlock.adCtx.getSharedPreferences(Tools_AdBlock.PREFS,
+          Context.MODE_PRIVATE);
+      p.edit().putString(Tools_AdBlock.K_CUSTOM, sb.toString()).apply();
+    } catch (Exception e) {
+      String m = e.getMessage();
+      Shared.err(this, "AdBlock", 0, m == null ? "sumber gagal" : m);
+    }
+  }
+
+  @SimpleFunction(description = "SET: buang 1 URL dari daftar custom. "
+      + "Aturan yang sudah masuk ember tetap sampai ClearAdBlockerData. "
+      + "Tanpa feedback.")
+  public void RemoveAdBlockSource(String url) {
+    try {
+      String u = url == null ? "" : url.trim();
+      ArrayList<String> cur = new ArrayList<String>(Tools_AdBlock.activeSources());
+      if (!cur.remove(u)) {
+        return;
+      }
+      StringBuilder sb = new StringBuilder();
+      for (int i = 0; i < cur.size(); i = i + 1) {
+        if (i > 0) {
+          sb.append('\n');
+        }
+        sb.append(cur.get(i));
+      }
+      SharedPreferences p = Tools_AdBlock.adCtx.getSharedPreferences(Tools_AdBlock.PREFS,
+          Context.MODE_PRIVATE);
+      p.edit().putString(Tools_AdBlock.K_CUSTOM, sb.toString()).apply();
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  @SimpleFunction(description = "Refresh terakhir (ms epoch). 0 = belum "
+      + "pernah. Tersimpan permanen (tahan tutup aplikasi).")
+  public long GetAdBlockLastUpdate() {
+    synchronized (Tools_AdBlock.lock) {
+      return Tools_AdBlock.lastUpdate;
+    }
+  }
+
+  @SimpleFunction(description = "Sisa ms menuju refresh terjadwal. -1 = "
+      + "Manual/TiapBuka (tak terjadwal); 0 = jatuh tempo / belum pernah.")
+  public long GetAdBlockNextUpdateIn() {
+    synchronized (Tools_AdBlock.lock) {
+      if (Tools_AdBlock.MODE_MANUAL.equals(Tools_AdBlock.updateMode)
+          || Tools_AdBlock.MODE_TIAPBUKA.equals(Tools_AdBlock.updateMode)) {
+        return -1;
+      }
+      if (Tools_AdBlock.lastUpdate <= 0) {
+        return 0;
+      }
+      long rem = (Tools_AdBlock.lastUpdate + Tools_AdBlock.updateIntervalMs(Tools_AdBlock.updateMode))
+          - System.currentTimeMillis();
+      return rem < 0 ? 0 : rem;
+    }
+  }
+
+  @SimpleFunction(description = "Ringkasan jadwal update sebagai teks "
+      + "(mode, terakhir, berikutnya). Jadwal ikut tersimpan walau aplikasi "
+      + "ditutup.")
+  public String GetAdBlockUpdateInfo() {
+    synchronized (Tools_AdBlock.lock) {
+      StringBuilder sb = new StringBuilder();
+      sb.append("mode=").append(Tools_AdBlock.updateMode).append("; ");
+      if (Tools_AdBlock.lastUpdate <= 0) {
+        sb.append("terakhir=belum pernah; ");
+      } else {
+        sb.append("terakhir=").append(Tools_AdBlock.ageText(
+            System.currentTimeMillis() - Tools_AdBlock.lastUpdate)).append(" lalu; ");
+      }
+      if (Tools_AdBlock.MODE_MANUAL.equals(Tools_AdBlock.updateMode)) {
+        sb.append("berikutnya=-");
+      } else if (Tools_AdBlock.MODE_TIAPBUKA.equals(Tools_AdBlock.updateMode)) {
+        sb.append("berikutnya=tiap buka");
+      } else {
+        long rem = (Tools_AdBlock.lastUpdate + Tools_AdBlock.updateIntervalMs(Tools_AdBlock.updateMode))
+            - System.currentTimeMillis();
+        if (rem <= 0) {
+          sb.append("berikutnya=jatuh tempo");
+        } else {
+          sb.append("berikutnya=").append(Tools_AdBlock.ageText(rem)).append(" lagi");
+        }
+      }
+      return sb.toString();
+    }
+  }
+
+  @SimpleFunction(description = "SET: hapus SEMUA hasil (hosts/rules/whitelist/"
+      + "cosmetic + cache file). Koleksi manual tetap. Tanpa feedback.")
+  public void SetClearAdBlock() {
+    synchronized (Tools_AdBlock.lock) {
+      Tools_AdBlock.hosts.clear();
+      Tools_AdBlock.netRules.clear();
+      Tools_AdBlock.whitelist.clear();
+      Tools_AdBlock.cosmetics.clear();
+    }
+    try {
+      File d = Tools_AdBlock.cacheDir();
+      if (d != null) {
+        File[] fs = d.listFiles();
+        if (fs != null) {
+          for (int i = 0; i < fs.length; i = i + 1) {
+            try {
+              fs[i].delete();
+            } catch (Exception e) {
+              // abaikan
+            }
+          }
+        }
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+    Tools_AdBlock.retainManualInStores();
+    Tools_AdBlock.reapplyManual();
+    Tools_AdBlock.persistCache();
+    Tools_AdBlock.persistStoresIfReady();
+  }
+
+  @SimpleProperty(description = "SET: tambah host manual (list ATAU teks "
+      + "multi-separator). Blok yang normalisasi. Tanpa feedback.")
+  public void AddAdBlockHosts(Object hostsIn) {
+    ArrayList<String> list = Tools_AdBlock.toStrList(hostsIn);
+    synchronized (Tools_AdBlock.lock) {
+      for (int i = 0; i < list.size(); i = i + 1) {
+        String d = Tools_AdBlock.lowerHost(list.get(i));
+        if (Tools_AdBlock.looksDomain(d) && !Tools_AdBlock.hosts.contains(d)) {
+          Tools_AdBlock.hosts.add(d);
+        }
+      }
+    }
+    Tools_AdBlock.persistCache();
+  }
+
+  @SimpleFunction(description = "Semua host (URUT MASUK, duplikat dibuang). "
+      + "Kosong = belum refresh.")
+  public List<String> GetAdBlockHosts() {
+    synchronized (Tools_AdBlock.lock) {
+      ArrayList<String> out = new ArrayList<String>();
+      for (String h : Tools_AdBlock.hosts) {
+        if (!h.startsWith("@@:")) {
+          out.add(h);
+        }
+      }
+      return out;
+    }
+  }
+
+  @SimpleFunction(description = "Host sebagai 1 teks newline (langsung colok "
+      + "Sunny.AdHosts + format umum download internet).")
+  public String GetAdBlockHostsText() {
+    synchronized (Tools_AdBlock.lock) {
+      StringBuilder sb = new StringBuilder();
+      for (String h : Tools_AdBlock.hosts) {
+        if (h.startsWith("@@:")) {
+          continue;
+        }
+        if (sb.length() > 0) {
+          sb.append('\n');
+        }
+        sb.append(h);
+      }
+      return sb.toString();
+    }
+  }
+
+  @SimpleFunction(description = "Jumlah host (tanpa marker internal).")
+  public int GetAdBlockHostCount() {
+    synchronized (Tools_AdBlock.lock) {
+      int n = 0;
+      for (String h : Tools_AdBlock.hosts) {
+        if (!h.startsWith("@@:")) {
+          n = n + 1;
+        }
+      }
+      return n;
+    }
+  }
+
+  @SimpleFunction(description = "Host pada nomor urut index (1 = pertama masuk). "
+      + "Kosong bila di luar.")
+  public String GetAdBlockHostAt(int index) {
+    synchronized (Tools_AdBlock.lock) {
+      int i = 1;
+      for (String h : Tools_AdBlock.hosts) {
+        if (h.startsWith("@@:")) {
+          continue;
+        }
+        if (i == index) {
+          return h;
+        }
+        i = i + 1;
+      }
+    }
+    return "";
+  }
+
+  @SimpleFunction(description = "True bila host ini diblokir (cocok persis "
+      + "atau subdomain).")
+  public boolean IsAdBlockHost(String host) {
+    return Tools_AdBlock.hostBlocked(Tools_AdBlock.lowerHost(host == null ? "" : host));
+  }
+
+  @SimpleFunction(description = "Semua network rule mentah (URUT MASUK).")
+  public List<String> GetAdBlockRules() {
+    synchronized (Tools_AdBlock.lock) {
+      return new ArrayList<String>(Tools_AdBlock.netRules);
+    }
+  }
+
+  @SimpleFunction(description = "Rules sebagai 1 teks newline (langsung colok "
+      + "Sunny.AddFilterRules).")
+  public String GetAdBlockRulesText() {
+    synchronized (Tools_AdBlock.lock) {
+      StringBuilder sb = new StringBuilder();
+      for (int i = 0; i < Tools_AdBlock.netRules.size(); i = i + 1) {
+        if (i > 0) {
+          sb.append('\n');
+        }
+        sb.append(Tools_AdBlock.netRules.get(i));
+      }
+      return sb.toString();
+    }
+  }
+
+  @SimpleFunction(description = "Jumlah network rule.")
+  public int GetAdBlockRuleCount() {
+    synchronized (Tools_AdBlock.lock) {
+      return Tools_AdBlock.netRules.size();
+    }
+  }
+
+  @SimpleFunction(description = "Rule pada nomor urut index (1 = pertama). "
+      + "Kosong bila di luar.")
+  public String GetAdBlockRuleAt(int index) {
+    synchronized (Tools_AdBlock.lock) {
+      if (index >= 1 && index <= Tools_AdBlock.netRules.size()) {
+        return Tools_AdBlock.netRules.get(index - 1);
+      }
+    }
+    return "";
+  }
+
+  @SimpleFunction(description = "Total request yang DIBLOKIR sejak nyala.")
+  public long GetBlockedRequestsCount() {
+    synchronized (Tools_AdBlock.lock) {
+      return Tools_AdBlock.blockedCount;
+    }
+  }
+
+  @SimpleFunction(description = "Total request yang DIIZINKAN sejak nyala.")
+  public long GetAllowedRequestsCount() {
+    synchronized (Tools_AdBlock.lock) {
+      return Tools_AdBlock.allowedCount;
+    }
+  }
+
+  @SimpleFunction(description = "Ringkasan cache: hosts/rules/white/cosmetic "
+      + "+ blocked/allowed.")
+  public String GetAdBlockerStats() {
+    synchronized (Tools_AdBlock.lock) {
+      return "hosts=" + Tools_AdBlock.hosts.size() + " rules=" + Tools_AdBlock.netRules.size()
+          + " white=" + Tools_AdBlock.whitelist.size() + " cos=" + Tools_AdBlock.cosmetics.size()
+          + " blocked=" + Tools_AdBlock.blockedCount + " allowed=" + Tools_AdBlock.allowedCount;
+    }
+  }
+
+  @SimpleFunction(description = "Rincian cache per baris (hosts, rules, "
+      + "whitelist, cosmetic, blocked, allowed).")
+  public String GetAdBlockerDetailedStats() {
+    synchronized (Tools_AdBlock.lock) {
+      return "hosts: " + Tools_AdBlock.hosts.size() + "\n"
+          + "rules: " + Tools_AdBlock.netRules.size() + "\n"
+          + "whitelist: " + Tools_AdBlock.whitelist.size() + "\n"
+          + "cosmetic: " + Tools_AdBlock.cosmetics.size() + "\n"
+          + "blocked: " + Tools_AdBlock.blockedCount + "\n"
+          + "allowed: " + Tools_AdBlock.allowedCount;
+    }
+  }
+
+  @SimpleFunction(description = "True bila URL ini DIBLOKIR mesin gabungan "
+      + "(whitelist dicek dulu). Ini yang dipakai webview tiap request.")
+  public boolean IsAdBlocked(String url) {
+    return Tools_AdBlock.shouldBlock(url == null ? "" : url);
+  }
+
+  @SimpleFunction(description = "Semua whitelist/exception mentah (@@...).")
+  public List<String> GetAdBlockWhitelist() {
+    synchronized (Tools_AdBlock.lock) {
+      return new ArrayList<String>(Tools_AdBlock.whitelist);
+    }
+  }
+
+  @SimpleFunction(description = "Whitelist sebagai 1 teks newline.")
+  public String GetAdBlockWhitelistText() {
+    synchronized (Tools_AdBlock.lock) {
+      StringBuilder sb = new StringBuilder();
+      for (int i = 0; i < Tools_AdBlock.whitelist.size(); i = i + 1) {
+        if (i > 0) {
+          sb.append('\n');
+        }
+        sb.append(Tools_AdBlock.whitelist.get(i));
+      }
+      return sb.toString();
+    }
+  }
+
+  @SimpleFunction(description = "Jumlah whitelist.")
+  public int GetAdBlockWhitelistCount() {
+    synchronized (Tools_AdBlock.lock) {
+      return Tools_AdBlock.whitelist.size();
+    }
+  }
+
+  @SimpleFunction(description = "True bila URL/host ini di-whitelist (@@).")
+  public boolean IsWhitelisted(String url) {
+    String h = Tools_AdBlock.hostOfUrl(url == null ? "" : url);
+    return Tools_AdBlock.hostWhitelisted(h);
+  }
+
+  @SimpleFunction(description = "CALL: pasang langganan Host. Pilih SATU " +
+      "penyedia ATAU Semua (= semua penyedia sekaligus). Interval opsional, " +
+      "kosong = Auto. Sekali set = semua webview otomatis terlindungi. " +
+      "Event GotAdBlockHost opsional (tak wajib dipasang).")
+  public void SetAdBlockHost(@Options(AdBlockProviderHost.class) String provider,
+      @Options(AdBlockInterval.class) String interval) {
+    Tools_AdBlock.requestTypeSet(this, "host", provider, interval);
+  }
+
+  @SimpleFunction(description = "CALL: pasang langganan Rules. Pilih SATU " +
+      "penyedia ATAU Semua (= semua penyedia sekaligus). Interval opsional, " +
+      "kosong = Auto. Event GotAdBlockRules opsional.")
+  public void SetAdBlockRules(@Options(AdBlockProviderRule.class) String provider,
+      @Options(AdBlockInterval.class) String interval) {
+    Tools_AdBlock.requestTypeSet(this, "rule", provider, interval);
+  }
+
+  @SimpleFunction(description = "CALL: pasang langganan Whitelist. Pilih " +
+      "SATU penyedia ATAU Semua (= semua penyedia sekaligus). Interval " +
+      "opsional, kosong = Auto. Event GotAdBlockWhite opsional.")
+  public void SetAdBlockWhite(@Options(AdBlockProviderWhite.class) String provider,
+      @Options(AdBlockInterval.class) String interval) {
+    Tools_AdBlock.requestTypeSet(this, "white", provider, interval);
+  }
+
+  @SimpleFunction(description = "CALL: pasang langganan Cosmetic. Pilih " +
+      "SATU penyedia ATAU Semua (= semua penyedia sekaligus). Interval " +
+      "opsional, kosong = Auto. Event GotAdBlockCosmetic opsional.")
+  public void SetAdBlockCosmetic(@Options(AdBlockProviderCosmetic.class) String provider,
+      @Options(AdBlockInterval.class) String interval) {
+    Tools_AdBlock.requestTypeSet(this, "cosmetic", provider, interval);
+  }
+
+  @SimpleFunction(description = "True bila data tipe ada (All = keempatnya ada).")
+  public boolean IsAdBlockAvailable(@Options(AdBlockType.class) String type) {
+    try {
+      String tp = Tools_AdBlock.normType(type);
+      if ("all".equals(tp)) {
+        synchronized (Tools_AdBlock.lock) {
+          return !Tools_AdBlock.hostLines.isEmpty() && !Tools_AdBlock.ruleLines.isEmpty()
+              && !Tools_AdBlock.whiteLines.isEmpty() && !Tools_AdBlock.cosmeticLines.isEmpty();
+        }
+      }
+      ArrayList<String> s = Tools_AdBlock.storeFor(tp);
+      if (s == null) {
+        return false;
+      }
+      synchronized (Tools_AdBlock.lock) {
+        return !s.isEmpty();
+      }
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
+  @SimpleFunction(description = "True bila tipe sudah ter-update (ada + " +
+      "masih segar ikut intervalnya). All = keempatnya segar.")
+  public boolean IsAdBlockUpdated(@Options(AdBlockType.class) String type) {
+    try {
+      String tp = Tools_AdBlock.normType(type);
+      if ("all".equals(tp)) {
+        return Tools_AdBlock.typeFresh("host") && Tools_AdBlock.typeFresh("rule")
+            && Tools_AdBlock.typeFresh("white") && Tools_AdBlock.typeFresh("cosmetic");
+      }
+      if ("".equals(tp)) {
+        return false;
+      }
+      return Tools_AdBlock.typeFresh(tp);
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
+  @SimpleFunction(description = "True bila tipe sedang download update. " +
+      "All = salah satu sedang jalan.")
+  public boolean IsAdBlockUpdating(@Options(AdBlockType.class) String type) {
+    try {
+      String tp = Tools_AdBlock.normType(type);
+      synchronized (Tools_AdBlock.lock) {
+        if ("all".equals(tp)) {
+          return Tools_AdBlock.refreshingHost || Tools_AdBlock.refreshingRule || Tools_AdBlock.refreshingWhite
+              || Tools_AdBlock.refreshingCosmetic;
+        }
+        if ("host".equals(tp)) {
+          return Tools_AdBlock.refreshingHost;
+        }
+        if ("rule".equals(tp)) {
+          return Tools_AdBlock.refreshingRule;
+        }
+        if ("white".equals(tp)) {
+          return Tools_AdBlock.refreshingWhite;
+        }
+        if ("cosmetic".equals(tp)) {
+          return Tools_AdBlock.refreshingCosmetic;
+        }
+        return false;
+      }
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
+  @SimpleFunction(description = "Isi data tipe sebagai teks (separator " +
+      "antar baris; kosong = newline; ketik \n = newline). All = gabungan " +
+      "keempatnya.")
+  public String GetAdBlockType(@Options(AdBlockType.class) String type,
+      String separator) {
+    try {
+      String tp = Tools_AdBlock.normType(type);
+      String sep = separator == null ? "" : separator;
+      if (sep.length() == 0) {
+        sep = "\n";
+      }
+      sep = sep.replace("\\n", "\n");
+      if ("all".equals(tp)) {
+        return Tools_AdBlock.storeText("host") + sep + Tools_AdBlock.storeText("rule") + sep
+            + Tools_AdBlock.storeText("white") + sep + Tools_AdBlock.storeText("cosmetic");
+      }
+      if ("".equals(tp)) {
+        return "";
+      }
+      return Tools_AdBlock.storeText(tp);
+    } catch (Exception e) {
+      return "";
+    }
+  }
+
+  @SimpleFunction(description = "SET: tambah teks kustom ke tipe (All = " +
+      "ikut isi barisnya). Masuk koleksi, langsung aktif, tahan hapus data. " +
+      "Tanpa feedback.")
+  public void AddAdBlockString(@Options(AdBlockType.class) String type,
+      String text) {
+    try {
+      String tp = Tools_AdBlock.normType(type);
+      if ("".equals(tp) || text == null) {
+        return;
+      }
+      String[] lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n");
+      ArrayList<String> add = new ArrayList<String>();
+      synchronized (Tools_AdBlock.lock) {
+        for (int i = 0; i < lines.length; i = i + 1) {
+          String s = lines[i].trim();
+          if (!Tools_AdBlock.usableManualLine(s) || Tools_AdBlock.manual.contains(s)) {
+            continue;
+          }
+          Tools_AdBlock.manual.add(s);
+          if ("all".equals(tp)) {
+            Tools_AdBlock.routeToStore(s);
+          } else {
+            ArrayList<String> st = Tools_AdBlock.storeFor(tp);
+            if (st != null && !st.contains(s)) {
+              st.add(s);
+            }
+          }
+          add.add(s);
+        }
+      }
+      for (int i = 0; i < add.size(); i = i + 1) {
+        Tools_AdBlock.classifyLine(add.get(i));
+      }
+      if (!add.isEmpty()) {
+        Tools_AdBlock.persistIfReady();
+        Tools_AdBlock.persistStoresIfReady();
+        Tools_AdBlock.saveManualIfReady();
+      }
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  @SimpleFunction(description = "CALL: ganti interval tipe saat mesin " +
+      "sudah jalan. Sukses = tipe itu langsung di-refresh (tanpa duplikat); " +
+      "hasil via event AdBlockIntervalChanged. All = keempatnya.")
+  public void SetAdBlockInterval(@Options(AdBlockType.class) String type,
+      @Options(AdBlockInterval.class) String interval) {
+    try {
+      Tools_AdBlock.requestIntervalChange(this, type, interval);
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  @SimpleProperty(description = "SET: simpan 1 aturan manual (host / rule "
+      + "ABP / @@whitelist / ##cosmetic) ke koleksi + langsung aktif. Tahan "
+      + "refresh & hapus data. Tanpa feedback.")
+  public void AddManualRule(String rule) {
+    try {
+      ArrayList<String> one = new ArrayList<String>();
+      one.add(rule == null ? "" : rule);
+      Tools_AdBlock.addManualLines(one);
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  @SimpleProperty(description = "SET: simpan banyak aturan manual (list ATAU "
+      + "teks multi-separator) ke koleksi + langsung aktif. Tahan refresh & "
+      + "hapus data. Tanpa feedback.")
+  public void AddManualRules(Object rulesIn) {
+    try {
+      Tools_AdBlock.addManualLines(Tools_AdBlock.toStrList(rulesIn));
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  @SimpleFunction(description = "SET: buang 1 aturan dari koleksi manual (+ "
+      + "efeknya di ember bila tak dipakai langganan lain). Tanpa feedback.")
+  public void RemoveManualRule(String rule) {
+    try {
+      Tools_AdBlock.removeManualLine(rule == null ? "" : rule);
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  @SimpleFunction(description = "Koleksi manual mentah (URUT MASUK).")
+  public List<String> GetManualRules() {
+    synchronized (Tools_AdBlock.lock) {
+      return new ArrayList<String>(Tools_AdBlock.manual);
+    }
+  }
+
+  @SimpleFunction(description = "Koleksi manual sebagai 1 teks newline.")
+  public String GetManualRulesText() {
+    synchronized (Tools_AdBlock.lock) {
+      StringBuilder sb = new StringBuilder();
+      for (int i = 0; i < Tools_AdBlock.manual.size(); i = i + 1) {
+        if (i > 0) {
+          sb.append('\n');
+        }
+        sb.append(Tools_AdBlock.manual.get(i));
+      }
+      return sb.toString();
+    }
+  }
+
+  @SimpleFunction(description = "Jumlah koleksi manual.")
+  public int GetManualRuleCount() {
+    synchronized (Tools_AdBlock.lock) {
+      return Tools_AdBlock.manual.size();
+    }
+  }
+
+  @SimpleFunction(description = "SET: buang SEMUA koleksi manual (+ efeknya "
+      + "di ember). Langganan + cache tetap. Tanpa feedback.")
+  public void ClearManualRules() {
+    try {
+      Tools_AdBlock.clearManualAll();
+    } catch (Exception e) {
+      // abaikan
+    }
+  }
+
+  @SimpleFunction(description = "Semua cosmetic selector mentah (domain##sel). "
+      + "Dipakai webview injeksi JS saat PageLoaded.")
+  public List<String> GetAdBlockCosmetics() {
+    synchronized (Tools_AdBlock.lock) {
+      return new ArrayList<String>(Tools_AdBlock.cosmetics);
+    }
+  }
+
+  @SimpleFunction(description = "Cosmetic sebagai 1 teks newline.")
+  public String GetAdBlockCosmeticsText() {
+    synchronized (Tools_AdBlock.lock) {
+      StringBuilder sb = new StringBuilder();
+      for (int i = 0; i < Tools_AdBlock.cosmetics.size(); i = i + 1) {
+        if (i > 0) {
+          sb.append('\n');
+        }
+        sb.append(Tools_AdBlock.cosmetics.get(i));
+      }
+      return sb.toString();
+    }
+  }
+
+  @SimpleFunction(description = "Jumlah cosmetic selector.")
+  public int GetAdBlockCosmeticCount() {
+    synchronized (Tools_AdBlock.lock) {
+      return Tools_AdBlock.cosmetics.size();
+    }
+  }
+
+  @SimpleFunction(description = "True bila scriptlet ini sedang nyala "
+      + "(popup/antiadblock/overlay/redirect).")
+  public boolean IsScriptletEnabled(@Options(ScriptletName.class) String name) {
+    return Tools_AdBlock.isScriptletOn(name);
+  }
+
+  @SimpleFunction(description = "Daftar nama scriptlet yang tersedia "
+      + "(popup, antiadblock, overlay, redirect). URUT TETAP.")
+  public List<String> GetScriptletNames() {
+    ArrayList<String> out = new ArrayList<String>();
+    for (int i = 0; i < Tools_AdBlock.SCRIPTLET_NAMES.length; i = i + 1) {
+      out.add(Tools_AdBlock.SCRIPTLET_NAMES[i]);
+    }
+    return out;
+  }
+
+  @SimpleFunction(description = "SET: nyala/mati satu scriptlet global (nama: "
+      + "popup, antiadblock, overlay, redirect, privacy. bebas kapital). "
+      + "popup = cegat window.open tanpa gestur; antiadblock = jinakkan "
+      + "detektor generik; overlay = sapu div fixed raksasa; redirect = "
+      + "cabut meta-refresh; privacy = acak sidik kanvas + samarkan "
+      + "navigator (ala Brave Shields). Disuntik tiap halaman mulai dimuat. "
+      + "Nama tidak dikenal via ErrorOccurred.")
+  public void SetScriptletEnabled(@Options(ScriptletName.class) String name, boolean on) {
+    if (!Tools_AdBlock.setScriptlet(name, on)) {
+      Shared.err(this, "AdBlock", 0,
+          "scriptlet tidak dikenal: " + (name == null ? "" : name));
+    }
+  }
+
+  @SimpleProperty(description = "Nama operasi AdBlock (untuk if di "
+      + "ErrorOccurred).", category = PropertyCategory.BEHAVIOR)
+  public String OpAdBlock() {
+    return "AdBlock";
   }
 
   @SimpleProperty(description = "Id current (dipakai semua blok tanpa id). "
@@ -2468,7 +3251,7 @@ public class Tools_Webview extends AndroidNonvisibleComponent
       Shared.err(this, "Webview", 0, "tidak ada current (SetWebView dulu)");
       return;
     }
-    CallEvaluateJavascript(id, script);
+    EvaluateJavascriptById(id, script);
   }
 
   @SimpleFunction(description = "True bila CURRENT bisa mundur sekian "
@@ -3877,7 +4660,11 @@ public class Tools_Webview extends AndroidNonvisibleComponent
   }
 
   @SimpleProperty(description = "SET: nyala/mati gerbang AdBlock global "
-      + "(AND dengan SetWebviewAdBlock per-id).",
+      + "(AND dengan SetWebviewAdBlock per-id). CUKUP nyalakan ini, pasang "
+      + "di bawah CreateWebview: data kosong = OTOMATIS unduh semua "
+      + "penyedia (semua tipe, interval Auto) di background. Semua webview "
+      + "langsung terlindungi; event Got*/AdBlockUpdated opsional, tak "
+      + "wajib dipasang.",
       category = PropertyCategory.BEHAVIOR)
   public void BlockAds(boolean block) {
     Tools_AdBlock.setEnabled(block);
@@ -4945,6 +5732,57 @@ public class Tools_Webview extends AndroidNonvisibleComponent
       + "video-grabber (dedupe 3 detik).")
   public void MediaFound(int id, String url) {
     Shared.fire(this, "MediaFound", Integer.valueOf(id), url);
+  }
+
+  @SimpleEvent(description = "Opsional: refresh selesai (success + total " +
+      "tiap ember + message). Tak wajib dipasang; proteksi jalan sendiri.")
+  public void AdBlockUpdated(boolean success, int totalHost, int totalRule,
+      int totalWhite, int totalCosmetic, String message) {
+    Shared.fire(this, "AdBlockUpdated", Boolean.valueOf(success),
+        Integer.valueOf(totalHost), Integer.valueOf(totalRule),
+        Integer.valueOf(totalWhite), Integer.valueOf(totalCosmetic), message);
+  }
+
+  @SimpleEvent(description = "Progres refresh: done/total sumber (1-based).")
+  public void AdBlockProgressChanged(int done, int total) {
+    Shared.fire(this, "AdBlockProgressChanged",
+        Integer.valueOf(done), Integer.valueOf(total));
+  }
+
+  @SimpleEvent(description = "Opsional: host selesai dimuat (sukses + " +
+      "total + isi). Tak wajib dipasang.")
+  public void GotAdBlockHost(boolean success, int totalHost, String host) {
+    Shared.fire(this, "GotAdBlockHost", Boolean.valueOf(success),
+        Integer.valueOf(totalHost), host);
+  }
+
+  @SimpleEvent(description = "Opsional: rules selesai dimuat (sukses + " +
+      "total + isi). Tak wajib dipasang.")
+  public void GotAdBlockRules(boolean success, int totalRule, String rule) {
+    Shared.fire(this, "GotAdBlockRules", Boolean.valueOf(success),
+        Integer.valueOf(totalRule), rule);
+  }
+
+  @SimpleEvent(description = "Opsional: whitelist selesai dimuat (sukses " +
+      "+ total + isi). Tak wajib dipasang.")
+  public void GotAdBlockWhite(boolean success, int totalWhite, String white) {
+    Shared.fire(this, "GotAdBlockWhite", Boolean.valueOf(success),
+        Integer.valueOf(totalWhite), white);
+  }
+
+  @SimpleEvent(description = "Opsional: cosmetic selesai dimuat (sukses " +
+      "+ total + isi). Tak wajib dipasang.")
+  public void GotAdBlockCosmetic(boolean success, int totalCosmetic,
+      String cosmetic) {
+    Shared.fire(this, "GotAdBlockCosmetic", Boolean.valueOf(success),
+        Integer.valueOf(totalCosmetic), cosmetic);
+  }
+
+  @SimpleEvent(description = "Ganti interval selesai: sukses + tipe " +
+      "(All/Host/Rule/White/Cosmetic). Tipe itu langsung di-refresh.")
+  public void AdBlockIntervalChanged(boolean success, String type) {
+    Shared.fire(this, "AdBlockIntervalChanged", Boolean.valueOf(success),
+        type);
   }
 
   @SimpleEvent(description = "SATU-SATUNYA error Tools_Webview. component = "
